@@ -59,9 +59,12 @@
             touch $out
           '';
           generated-rkyv-boundary = pkgs.runCommand "schema-rust-next-generated-rkyv-boundary" { } ''
-            grep -R "rkyv::to_bytes" ${src}/tests/emission.rs >/dev/null
-            grep -R "rkyv::from_bytes" ${src}/tests/emission.rs >/dev/null
+            grep -R "encode_signal_frame" ${src}/tests/emission.rs >/dev/null
+            grep -R "decode_signal_frame" ${src}/tests/emission.rs >/dev/null
             grep -R "rkyv::Archive" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub enum InputRoute" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub enum OutputRoute" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub fn encode_signal_frame" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             touch $out
           '';
           generated-nota-boundary = pkgs.runCommand "schema-rust-next-generated-nota-boundary" { } ''

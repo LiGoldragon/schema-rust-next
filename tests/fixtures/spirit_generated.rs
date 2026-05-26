@@ -497,3 +497,161 @@ pub mod short_header {
     pub const OUTPUT_RECORD_ACCEPTED: u64 = 0x0100000000000000;
     pub const OUTPUT_RECORDS_OBSERVED: u64 = 0x0101000000000000;
 }
+
+const SIGNAL_SHORT_HEADER_BYTE_COUNT: usize = 8;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SignalFrameError {
+    ArchiveEncode,
+    ArchiveDecode,
+    FrameTooShort { found: usize },
+    UnknownHeader { surface: &'static str, header: u64 },
+    HeaderMismatch { expected: u64, found: u64 },
+}
+
+impl std::fmt::Display for SignalFrameError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ArchiveEncode => formatter.write_str("failed to encode rkyv archive"),
+            Self::ArchiveDecode => formatter.write_str("failed to decode rkyv archive"),
+            Self::FrameTooShort { found } => {
+                write!(formatter, "signal frame too short: {found} bytes")
+            }
+            Self::UnknownHeader { surface, header } => {
+                write!(formatter, "unknown {surface} short header 0x{header:016X}")
+            }
+            Self::HeaderMismatch { expected, found } => write!(
+                formatter,
+                "decoded payload header mismatch: expected 0x{expected:016X}, found 0x{found:016X}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for SignalFrameError {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InputRoute {
+    Record,
+    Observe,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OutputRoute {
+    RecordAccepted,
+    RecordsObserved,
+}
+
+impl Input {
+    pub fn route(&self) -> InputRoute {
+        match self {
+            Self::Record(_) => InputRoute::Record,
+            Self::Observe(_) => InputRoute::Observe,
+        }
+    }
+
+    pub fn short_header(&self) -> u64 {
+        match self {
+            Self::Record(_) => short_header::INPUT_RECORD,
+            Self::Observe(_) => short_header::INPUT_OBSERVE,
+        }
+    }
+
+    pub fn route_from_short_header(header: u64) -> Result<InputRoute, SignalFrameError> {
+        match header {
+            short_header::INPUT_RECORD => Ok(InputRoute::Record),
+            short_header::INPUT_OBSERVE => Ok(InputRoute::Observe),
+            _ => Err(SignalFrameError::UnknownHeader {
+                surface: "Input",
+                header,
+            }),
+        }
+    }
+
+    pub fn encode_signal_frame(&self) -> Result<Vec<u8>, SignalFrameError> {
+        let archive =
+            rkyv::to_bytes::<rkyv::rancor::Error>(self).map_err(|_| SignalFrameError::ArchiveEncode)?;
+        let mut frame = Vec::with_capacity(SIGNAL_SHORT_HEADER_BYTE_COUNT + archive.len());
+        frame.extend_from_slice(&self.short_header().to_le_bytes());
+        frame.extend_from_slice(&archive);
+        Ok(frame)
+    }
+
+    pub fn decode_signal_frame(frame: &[u8]) -> Result<(InputRoute, Self), SignalFrameError> {
+        if frame.len() < SIGNAL_SHORT_HEADER_BYTE_COUNT {
+            return Err(SignalFrameError::FrameTooShort { found: frame.len() });
+        }
+        let mut header_bytes = [0_u8; SIGNAL_SHORT_HEADER_BYTE_COUNT];
+        header_bytes.copy_from_slice(&frame[..SIGNAL_SHORT_HEADER_BYTE_COUNT]);
+        let header = u64::from_le_bytes(header_bytes);
+        let route = Self::route_from_short_header(header)?;
+        let value =
+            rkyv::from_bytes::<Self, rkyv::rancor::Error>(&frame[SIGNAL_SHORT_HEADER_BYTE_COUNT..])
+                .map_err(|_| SignalFrameError::ArchiveDecode)?;
+        let expected = value.short_header();
+        if expected != header {
+            return Err(SignalFrameError::HeaderMismatch {
+                expected,
+                found: header,
+            });
+        }
+        Ok((route, value))
+    }
+}
+
+impl Output {
+    pub fn route(&self) -> OutputRoute {
+        match self {
+            Self::RecordAccepted(_) => OutputRoute::RecordAccepted,
+            Self::RecordsObserved(_) => OutputRoute::RecordsObserved,
+        }
+    }
+
+    pub fn short_header(&self) -> u64 {
+        match self {
+            Self::RecordAccepted(_) => short_header::OUTPUT_RECORD_ACCEPTED,
+            Self::RecordsObserved(_) => short_header::OUTPUT_RECORDS_OBSERVED,
+        }
+    }
+
+    pub fn route_from_short_header(header: u64) -> Result<OutputRoute, SignalFrameError> {
+        match header {
+            short_header::OUTPUT_RECORD_ACCEPTED => Ok(OutputRoute::RecordAccepted),
+            short_header::OUTPUT_RECORDS_OBSERVED => Ok(OutputRoute::RecordsObserved),
+            _ => Err(SignalFrameError::UnknownHeader {
+                surface: "Output",
+                header,
+            }),
+        }
+    }
+
+    pub fn encode_signal_frame(&self) -> Result<Vec<u8>, SignalFrameError> {
+        let archive =
+            rkyv::to_bytes::<rkyv::rancor::Error>(self).map_err(|_| SignalFrameError::ArchiveEncode)?;
+        let mut frame = Vec::with_capacity(SIGNAL_SHORT_HEADER_BYTE_COUNT + archive.len());
+        frame.extend_from_slice(&self.short_header().to_le_bytes());
+        frame.extend_from_slice(&archive);
+        Ok(frame)
+    }
+
+    pub fn decode_signal_frame(frame: &[u8]) -> Result<(OutputRoute, Self), SignalFrameError> {
+        if frame.len() < SIGNAL_SHORT_HEADER_BYTE_COUNT {
+            return Err(SignalFrameError::FrameTooShort { found: frame.len() });
+        }
+        let mut header_bytes = [0_u8; SIGNAL_SHORT_HEADER_BYTE_COUNT];
+        header_bytes.copy_from_slice(&frame[..SIGNAL_SHORT_HEADER_BYTE_COUNT]);
+        let header = u64::from_le_bytes(header_bytes);
+        let route = Self::route_from_short_header(header)?;
+        let value =
+            rkyv::from_bytes::<Self, rkyv::rancor::Error>(&frame[SIGNAL_SHORT_HEADER_BYTE_COUNT..])
+                .map_err(|_| SignalFrameError::ArchiveDecode)?;
+        let expected = value.short_header();
+        if expected != header {
+            return Err(SignalFrameError::HeaderMismatch {
+                expected,
+                found: header,
+            });
+        }
+        Ok((route, value))
+    }
+}

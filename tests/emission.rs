@@ -24,6 +24,13 @@ fn emits_rust_source_as_a_separate_artifact() {
     );
     assert!(generated.code.as_str().contains("rkyv::Archive"));
     assert!(generated.code.as_str().contains("pub mod short_header"));
+    assert!(generated.code.as_str().contains("pub enum InputRoute"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub fn encode_signal_frame")
+    );
 }
 
 #[test]
@@ -42,6 +49,8 @@ fn compiled_fixture_is_usable_rust() {
         generated::short_header::INPUT_OBSERVE,
         0x0001_0000_0000_0000
     );
+    assert_eq!(input.route(), generated::InputRoute::Record);
+    assert_eq!(input.short_header(), generated::short_header::INPUT_RECORD);
 }
 
 #[test]
@@ -77,4 +86,23 @@ fn generated_signal_input_round_trips_from_nota_to_rkyv_bytes() {
         rkyv::from_bytes::<generated::Input, rkyv::rancor::Error>(&bytes).expect("decode input");
 
     assert_eq!(decoded, input);
+}
+
+#[test]
+fn generated_signal_frame_methods_round_trip_and_triage_route() {
+    let input = "(Record ([schema] Constraint [schema owns signal frames] Maximum))"
+        .parse::<generated::Input>()
+        .expect("parse generated input");
+
+    let frame = input.encode_signal_frame().expect("encode signal frame");
+    let (route, decoded) =
+        generated::Input::decode_signal_frame(&frame).expect("decode signal frame");
+
+    assert_eq!(route, generated::InputRoute::Record);
+    assert_eq!(decoded, input);
+    assert_eq!(
+        generated::Input::route_from_short_header(generated::short_header::INPUT_OBSERVE)
+            .expect("observe route"),
+        generated::InputRoute::Observe
+    );
 }

@@ -60,6 +60,8 @@ impl RustEmitter {
         }
 
         writer.emit_short_headers(asschema.surfaces());
+        writer.blank();
+        writer.emit_signal_frame_support(asschema.surfaces());
         RustCode(writer.finish())
     }
 }
@@ -412,6 +414,155 @@ impl RustWriter {
                 self.line(format!("    pub const {constant}: u64 = 0x{value:016X};"));
             }
         }
+        self.line("}");
+    }
+
+    fn emit_signal_frame_support(&mut self, surfaces: &[RootSurface]) {
+        self.line("const SIGNAL_SHORT_HEADER_BYTE_COUNT: usize = 8;");
+        self.blank();
+        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
+        self.line("pub enum SignalFrameError {");
+        self.line("    ArchiveEncode,");
+        self.line("    ArchiveDecode,");
+        self.line("    FrameTooShort { found: usize },");
+        self.line("    UnknownHeader { surface: &'static str, header: u64 },");
+        self.line("    HeaderMismatch { expected: u64, found: u64 },");
+        self.line("}");
+        self.blank();
+        self.line("impl std::fmt::Display for SignalFrameError {");
+        self.line(
+            "    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
+        );
+        self.line("        match self {");
+        self.line("            Self::ArchiveEncode => formatter.write_str(\"failed to encode rkyv archive\"),");
+        self.line("            Self::ArchiveDecode => formatter.write_str(\"failed to decode rkyv archive\"),");
+        self.line("            Self::FrameTooShort { found } => write!(formatter, \"signal frame too short: {found} bytes\"),");
+        self.line("            Self::UnknownHeader { surface, header } => write!(formatter, \"unknown {surface} short header 0x{header:016X}\"),");
+        self.line("            Self::HeaderMismatch { expected, found } => write!(formatter, \"decoded payload header mismatch: expected 0x{expected:016X}, found 0x{found:016X}\"),");
+        self.line("        }");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("impl std::error::Error for SignalFrameError {}");
+        self.blank();
+
+        for surface in surfaces {
+            self.emit_route_enum(surface);
+            self.blank();
+        }
+
+        for surface in surfaces {
+            self.emit_signal_frame_impl(surface);
+            self.blank();
+        }
+    }
+
+    fn emit_route_enum(&mut self, surface: &RootSurface) {
+        self.line("#[derive(Clone, Copy, Debug, Eq, PartialEq)]");
+        self.line(format!("pub enum {}Route {{", surface.name));
+        for variant in &surface.variants {
+            self.line(format!("    {},", variant.name));
+        }
+        self.line("}");
+    }
+
+    fn emit_signal_frame_impl(&mut self, surface: &RootSurface) {
+        let route_name = format!("{}Route", surface.name);
+        self.line(format!("impl {} {{", surface.name));
+        self.line(format!("    pub fn route(&self) -> {route_name} {{"));
+        self.line("        match self {");
+        for variant in &surface.variants {
+            match &variant.payload {
+                Some(_) => self.line(format!(
+                    "            Self::{}(_) => {route_name}::{},",
+                    variant.name, variant.name
+                )),
+                None => self.line(format!(
+                    "            Self::{} => {route_name}::{},",
+                    variant.name, variant.name
+                )),
+            }
+        }
+        self.line("        }");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn short_header(&self) -> u64 {");
+        self.line("        match self {");
+        for variant in &surface.variants {
+            let constant = format!(
+                "{}_{}",
+                constant_name(&surface.name),
+                constant_name(&variant.name)
+            );
+            match &variant.payload {
+                Some(_) => self.line(format!(
+                    "            Self::{}(_) => short_header::{constant},",
+                    variant.name
+                )),
+                None => self.line(format!(
+                    "            Self::{} => short_header::{constant},",
+                    variant.name
+                )),
+            }
+        }
+        self.line("        }");
+        self.line("    }");
+        self.blank();
+        self.line(format!(
+            "    pub fn route_from_short_header(header: u64) -> Result<{route_name}, SignalFrameError> {{"
+        ));
+        self.line("        match header {");
+        for variant in &surface.variants {
+            let constant = format!(
+                "{}_{}",
+                constant_name(&surface.name),
+                constant_name(&variant.name)
+            );
+            self.line(format!(
+                "            short_header::{constant} => Ok({route_name}::{}),",
+                variant.name
+            ));
+        }
+        self.line(format!(
+            "            _ => Err(SignalFrameError::UnknownHeader {{ surface: \"{}\", header }}),",
+            surface.name
+        ));
+        self.line("        }");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn encode_signal_frame(&self) -> Result<Vec<u8>, SignalFrameError> {");
+        self.line("        let archive = rkyv::to_bytes::<rkyv::rancor::Error>(self)");
+        self.line("            .map_err(|_| SignalFrameError::ArchiveEncode)?;");
+        self.line("        let mut frame = Vec::with_capacity(SIGNAL_SHORT_HEADER_BYTE_COUNT + archive.len());");
+        self.line("        frame.extend_from_slice(&self.short_header().to_le_bytes());");
+        self.line("        frame.extend_from_slice(&archive);");
+        self.line("        Ok(frame)");
+        self.line("    }");
+        self.blank();
+        self.line(format!(
+            "    pub fn decode_signal_frame(frame: &[u8]) -> Result<({route_name}, Self), SignalFrameError> {{"
+        ));
+        self.line("        if frame.len() < SIGNAL_SHORT_HEADER_BYTE_COUNT {");
+        self.line(
+            "            return Err(SignalFrameError::FrameTooShort { found: frame.len() });",
+        );
+        self.line("        }");
+        self.line("        let mut header_bytes = [0_u8; SIGNAL_SHORT_HEADER_BYTE_COUNT];");
+        self.line(
+            "        header_bytes.copy_from_slice(&frame[..SIGNAL_SHORT_HEADER_BYTE_COUNT]);",
+        );
+        self.line("        let header = u64::from_le_bytes(header_bytes);");
+        self.line("        let route = Self::route_from_short_header(header)?;");
+        self.line("        let value = rkyv::from_bytes::<Self, rkyv::rancor::Error>(&frame[SIGNAL_SHORT_HEADER_BYTE_COUNT..])");
+        self.line("            .map_err(|_| SignalFrameError::ArchiveDecode)?;");
+        self.line("        let expected = value.short_header();");
+        self.line("        if expected != header {");
+        self.line(
+            "            return Err(SignalFrameError::HeaderMismatch { expected, found: header });",
+        );
+        self.line("        }");
+        self.line("        Ok((route, value))");
+        self.line("    }");
         self.line("}");
     }
 }
