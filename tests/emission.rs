@@ -38,3 +38,19 @@ fn compiled_fixture_is_usable_rust() {
         0x0001_0000_0000_0000
     );
 }
+
+#[test]
+fn generated_signal_input_round_trips_through_rkyv_bytes() {
+    let input = generated::Input::Record(generated::Entry {
+        topics: generated::Topics(generated::Topic(String::from("schema"))),
+        kind: generated::Kind::Constraint,
+        description: generated::Description(String::from("component messages use binary rkyv")),
+        magnitude: generated::Magnitude::Maximum,
+    });
+
+    let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&input).expect("archive input");
+    let decoded =
+        rkyv::from_bytes::<generated::Input, rkyv::rancor::Error>(&bytes).expect("decode input");
+
+    assert_eq!(decoded, input);
+}

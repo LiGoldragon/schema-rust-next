@@ -81,7 +81,7 @@ impl RustWriter {
 
     fn emit_newtype(&mut self, declaration: &StructDeclaration) {
         let field = declaration.fields.first().expect("newtype has one field");
-        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line(format!(
             "pub struct {}(pub {});",
             declaration.name,
@@ -90,7 +90,7 @@ impl RustWriter {
     }
 
     fn emit_struct(&mut self, declaration: &StructDeclaration) {
-        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line(format!("pub struct {} {{", declaration.name));
         for field in &declaration.fields {
             self.line(format!(
@@ -103,7 +103,7 @@ impl RustWriter {
     }
 
     fn emit_enum(&mut self, declaration: &EnumDeclaration) {
-        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line(format!("pub enum {} {{", declaration.name));
         for variant in &declaration.variants {
             self.emit_variant(variant);
@@ -112,7 +112,7 @@ impl RustWriter {
     }
 
     fn emit_surface(&mut self, surface: &RootSurface) {
-        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line(format!("pub enum {} {{", surface.name));
         for variant in &surface.variants {
             self.emit_variant(variant);

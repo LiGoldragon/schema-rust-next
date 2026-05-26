@@ -58,6 +58,12 @@
             fi
             touch $out
           '';
+          generated-rkyv-boundary = pkgs.runCommand "schema-rust-next-generated-rkyv-boundary" { } ''
+            grep -R "rkyv::to_bytes" ${src}/tests/emission.rs >/dev/null
+            grep -R "rkyv::from_bytes" ${src}/tests/emission.rs >/dev/null
+            grep -R "rkyv::Archive" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            touch $out
+          '';
           doc = craneLib.cargoDoc (commonArguments // {
             inherit cargoArtifacts;
             RUSTDOCFLAGS = "-D warnings";
