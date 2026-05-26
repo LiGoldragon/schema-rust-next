@@ -10,7 +10,7 @@ source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#6b4364d94
 [[package]]
 name = "schema-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#e2e86177594cfae98fd871bf40864d86a3b24083"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#19591a7a7f5366a3afe7c807c42074b22400e4b5"
 dependencies = [
  "nota-next",
 ]
