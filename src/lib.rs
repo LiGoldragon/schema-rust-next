@@ -24,7 +24,7 @@ pub struct RustEmitter;
 impl RustEmitter {
     pub fn emit_file(&self, asschema: &Asschema) -> GeneratedFile {
         GeneratedFile {
-            path: format!("{}.rs", asschema.identity.component.as_str()),
+            path: format!("{}.rs", asschema.identity().component().as_str()),
             code: self.emit(asschema),
         }
     }
@@ -37,17 +37,17 @@ impl RustEmitter {
         writer.line("pub type Integer = u64;");
         writer.blank();
 
-        for declaration in &asschema.namespace {
+        for declaration in asschema.namespace() {
             writer.emit_type(declaration);
             writer.blank();
         }
 
-        for surface in &asschema.surfaces {
+        for surface in asschema.surfaces() {
             writer.emit_surface(surface);
             writer.blank();
         }
 
-        writer.emit_short_headers(&asschema.surfaces);
+        writer.emit_short_headers(asschema.surfaces());
         RustCode(writer.finish())
     }
 }
