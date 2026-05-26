@@ -16,6 +16,7 @@ path = "src/lib.rs"
 schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "main" }
 
 [dev-dependencies]
+nota-next = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }
 rkyv = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }
 
 [lints.rust]

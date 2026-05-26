@@ -242,6 +242,7 @@ dependencies = [
 name = "schema-rust-next"
 version = "0.1.0"
 dependencies = [
+ "nota-next",
  "rkyv",
  "schema-next",
 ]

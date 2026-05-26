@@ -36,6 +36,8 @@ impl RustEmitter {
         writer.line("pub type Text = String;");
         writer.line("pub type Integer = u64;");
         writer.blank();
+        writer.emit_nota_support();
+        writer.blank();
 
         for declaration in asschema.namespace() {
             writer.emit_type(declaration);
@@ -44,6 +46,16 @@ impl RustEmitter {
 
         for surface in asschema.surfaces() {
             writer.emit_surface(surface);
+            writer.blank();
+        }
+
+        for declaration in asschema.namespace() {
+            writer.emit_nota_type_impl(declaration);
+            writer.blank();
+        }
+
+        for surface in asschema.surfaces() {
+            writer.emit_nota_surface_impl(surface);
             writer.blank();
         }
 
@@ -77,6 +89,96 @@ impl RustWriter {
             TypeDeclaration::Newtype(declaration) => self.emit_newtype(declaration),
             TypeDeclaration::Enum(declaration) => self.emit_enum(declaration),
         }
+    }
+
+    fn emit_nota_support(&mut self) {
+        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
+        self.line("pub enum NotaDecodeError {");
+        self.line("    Parse(String),");
+        self.line("    ExpectedSingleRoot { found: usize },");
+        self.line("    ExpectedDelimited { type_name: &'static str, delimiter: &'static str },");
+        self.line(
+            "    ExpectedRootCount { type_name: &'static str, expected: usize, found: usize },",
+        );
+        self.line("    ExpectedAtom { type_name: &'static str },");
+        self.line("    UnknownVariant { enum_name: &'static str, variant: String },");
+        self.line("    InvalidInteger { value: String },");
+        self.line("}");
+        self.blank();
+        self.line("impl std::fmt::Display for NotaDecodeError {");
+        self.line(
+            "    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
+        );
+        self.line("        match self {");
+        self.line("            Self::Parse(error) => write!(formatter, \"{error}\"),");
+        self.line("            Self::ExpectedSingleRoot { found } => write!(formatter, \"expected exactly one NOTA root object, found {found}\"),");
+        self.line("            Self::ExpectedDelimited { type_name, delimiter } => write!(formatter, \"expected {type_name} to be a {delimiter} block\"),");
+        self.line("            Self::ExpectedRootCount { type_name, expected, found } => write!(formatter, \"expected {type_name} to hold {expected} root objects, found {found}\"),");
+        self.line("            Self::ExpectedAtom { type_name } => write!(formatter, \"expected {type_name} atom\"),");
+        self.line("            Self::UnknownVariant { enum_name, variant } => write!(formatter, \"unknown {enum_name} variant {variant}\"),");
+        self.line("            Self::InvalidInteger { value } => write!(formatter, \"invalid integer {value}\"),");
+        self.line("        }");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("impl std::error::Error for NotaDecodeError {}");
+        self.blank();
+        self.line(
+            "fn parse_nota_root(source: &str) -> Result<nota_next::Block, NotaDecodeError> {",
+        );
+        self.line("    let document = nota_next::Document::parse(source).map_err(|error| NotaDecodeError::Parse(error.to_string()))?;");
+        self.line("    if document.holds_root_objects() != 1 {");
+        self.line("        return Err(NotaDecodeError::ExpectedSingleRoot { found: document.holds_root_objects() });");
+        self.line("    }");
+        self.line("    Ok(document.root_object_at(0).expect(\"root count checked\").clone())");
+        self.line("}");
+        self.blank();
+        self.line("fn expect_children<'a>(");
+        self.line("    block: &'a nota_next::Block,");
+        self.line("    delimiter: nota_next::Delimiter,");
+        self.line("    delimiter_name: &'static str,");
+        self.line("    type_name: &'static str,");
+        self.line("    expected: usize,");
+        self.line(") -> Result<&'a [nota_next::Block], NotaDecodeError> {");
+        self.line("    match block {");
+        self.line("        nota_next::Block::Delimited { delimiter: found, root_objects, .. } if *found == delimiter => {");
+        self.line("            if root_objects.len() != expected {");
+        self.line("                return Err(NotaDecodeError::ExpectedRootCount { type_name, expected, found: root_objects.len() });");
+        self.line("            }");
+        self.line("            Ok(root_objects)");
+        self.line("        }");
+        self.line("        _ => Err(NotaDecodeError::ExpectedDelimited { type_name, delimiter: delimiter_name }),");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("fn parse_text(block: &nota_next::Block) -> Result<Text, NotaDecodeError> {");
+        self.line("    if let Some(text) = block.demote_to_string() {");
+        self.line("        return Ok(text.to_owned());");
+        self.line("    }");
+        self.line("    match block {");
+        self.line("        nota_next::Block::Delimited { delimiter: nota_next::Delimiter::SquareBracket, root_objects, .. } => {");
+        self.line("            root_objects.iter().map(parse_text).collect::<Result<Vec<_>, _>>().map(|parts| parts.join(\" \"))");
+        self.line("        }");
+        self.line("        _ => Err(NotaDecodeError::ExpectedDelimited { type_name: \"Text\", delimiter: \"text atom or square bracket\" }),");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("fn format_text(value: &str) -> String {");
+        self.line("    if value.contains(\"|]\") {");
+        self.line("        format!(\"[{}]\", value.replace(']', \" ]\"))");
+        self.line("    } else if value.chars().any(|character| matches!(character, '[' | ']' | '(' | ')' | '{' | '}' | ';' | '\\n')) {");
+        self.line("        format!(\"[|{}|]\", value)");
+        self.line("    } else {");
+        self.line("        format!(\"[{value}]\")");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line(
+            "fn parse_integer(block: &nota_next::Block) -> Result<Integer, NotaDecodeError> {",
+        );
+        self.line("    let value = block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: \"Integer\" })?;");
+        self.line("    value.parse::<Integer>().map_err(|_| NotaDecodeError::InvalidInteger { value: value.to_owned() })");
+        self.line("}");
     }
 
     fn emit_newtype(&mut self, declaration: &StructDeclaration) {
@@ -129,6 +231,174 @@ impl RustWriter {
         }
     }
 
+    fn emit_nota_type_impl(&mut self, declaration: &TypeDeclaration) {
+        match declaration {
+            TypeDeclaration::Struct(declaration) => self.emit_nota_struct_impl(declaration),
+            TypeDeclaration::Newtype(declaration) => self.emit_nota_newtype_impl(declaration),
+            TypeDeclaration::Enum(declaration) => {
+                self.emit_nota_enum_impl(&declaration.name, &declaration.variants)
+            }
+        }
+    }
+
+    fn emit_nota_newtype_impl(&mut self, declaration: &StructDeclaration) {
+        let field = declaration.fields.first().expect("newtype has one field");
+        self.line(format!("impl {} {{", declaration.name));
+        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
+        self.line(format!(
+            "        Ok(Self({}))",
+            parse_expression(&field.reference, "block")
+        ));
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn to_nota(&self) -> String {");
+        self.line(format!(
+            "        {}",
+            format_expression(&field.reference, "self.0")
+        ));
+        self.line("    }");
+        self.line("}");
+    }
+
+    fn emit_nota_struct_impl(&mut self, declaration: &StructDeclaration) {
+        self.line(format!("impl {} {{", declaration.name));
+        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
+        self.line(format!(
+            "        let children = expect_children(block, nota_next::Delimiter::Parenthesis, \"parenthesis\", \"{}\", {})?;",
+            declaration.name,
+            declaration.fields.len()
+        ));
+        self.line("        Ok(Self {");
+        for (index, field) in declaration.fields.iter().enumerate() {
+            self.line(format!(
+                "            {}: {},",
+                field.name.as_str(),
+                parse_expression(&field.reference, &format!("&children[{index}]"))
+            ));
+        }
+        self.line("        })");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn to_nota(&self) -> String {");
+        self.line("        let fields = [");
+        for field in &declaration.fields {
+            self.line(format!(
+                "            {},",
+                format_expression(&field.reference, &format!("self.{}", field.name.as_str()))
+            ));
+        }
+        self.line("        ];");
+        self.line("        format!(\"({})\", fields.join(\" \"))");
+        self.line("    }");
+        self.line("}");
+    }
+
+    fn emit_nota_enum_impl(&mut self, name: &Name, variants: &[EnumVariant]) {
+        let unit_variants: Vec<_> = variants
+            .iter()
+            .filter(|variant| variant.payload.is_none())
+            .collect();
+        let payload_variants: Vec<_> = variants
+            .iter()
+            .filter(|variant| variant.payload.is_some())
+            .collect();
+        self.line(format!("impl {name} {{"));
+        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
+        self.line("        if let Some(variant) = block.demote_to_string() {");
+        if unit_variants.is_empty() {
+            self.line(format!(
+                "            return Err(NotaDecodeError::UnknownVariant {{ enum_name: \"{name}\", variant: variant.to_owned() }});"
+            ));
+        } else {
+            self.line("            return match variant {");
+            for variant in unit_variants {
+                self.line(format!(
+                    "                \"{}\" => Ok(Self::{}),",
+                    variant.name, variant.name
+                ));
+            }
+            self.line(format!(
+                "                other => Err(NotaDecodeError::UnknownVariant {{ enum_name: \"{name}\", variant: other.to_owned() }}),"
+            ));
+            self.line("            };");
+        }
+        self.line("        }");
+        if payload_variants.is_empty() {
+            self.line(format!(
+                "        Err(NotaDecodeError::ExpectedAtom {{ type_name: \"{name}\" }})"
+            ));
+            self.line("    }");
+            self.blank();
+            self.emit_nota_enum_formatter(name, variants);
+            self.line("}");
+            return;
+        }
+        self.line(format!(
+            "        let children = expect_children(block, nota_next::Delimiter::Parenthesis, \"parenthesis\", \"{name}\", 2)?;"
+        ));
+        self.line("        let variant = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: \"enum variant\" })?;");
+        self.line("        match variant {");
+        for variant in payload_variants {
+            let payload = variant.payload.as_ref().expect("filtered payload");
+            self.line(format!(
+                "            \"{}\" => Ok(Self::{}({})),",
+                variant.name,
+                variant.name,
+                parse_expression(payload, "&children[1]")
+            ));
+        }
+        self.line(format!(
+            "            other => Err(NotaDecodeError::UnknownVariant {{ enum_name: \"{name}\", variant: other.to_owned() }}),"
+        ));
+        self.line("        }");
+        self.line("    }");
+        self.blank();
+        self.emit_nota_enum_formatter(name, variants);
+        self.line("}");
+    }
+
+    fn emit_nota_enum_formatter(&mut self, _name: &Name, variants: &[EnumVariant]) {
+        self.line("    pub fn to_nota(&self) -> String {");
+        self.line("        match self {");
+        for variant in variants {
+            match &variant.payload {
+                Some(payload) => self.line(format!(
+                    "            Self::{}(payload) => format!(\"({} {{}})\", {}),",
+                    variant.name,
+                    variant.name,
+                    format_expression(payload, "payload")
+                )),
+                None => self.line(format!(
+                    "            Self::{} => \"{}\".to_owned(),",
+                    variant.name, variant.name
+                )),
+            }
+        }
+        self.line("        }");
+        self.line("    }");
+    }
+
+    fn emit_nota_surface_impl(&mut self, surface: &RootSurface) {
+        self.emit_nota_enum_impl(&surface.name, &surface.variants);
+        self.blank();
+        self.line(format!("impl std::str::FromStr for {} {{", surface.name));
+        self.line("    type Err = NotaDecodeError;");
+        self.blank();
+        self.line("    fn from_str(source: &str) -> Result<Self, Self::Err> {");
+        self.line("        let root = parse_nota_root(source)?;");
+        self.line("        Self::from_nota_block(&root)");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line(format!("impl std::fmt::Display for {} {{", surface.name));
+        self.line(
+            "    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
+        );
+        self.line("        formatter.write_str(&self.to_nota())");
+        self.line("    }");
+        self.line("}");
+    }
+
     fn emit_short_headers(&mut self, surfaces: &[RootSurface]) {
         self.line("pub mod short_header {");
         for (surface_index, surface) in surfaces.iter().enumerate() {
@@ -143,6 +413,22 @@ impl RustWriter {
             }
         }
         self.line("}");
+    }
+}
+
+fn parse_expression(reference: &TypeReference, block: &str) -> String {
+    match reference.name.as_str() {
+        "Text" => format!("parse_text({block})?"),
+        "Integer" => format!("parse_integer({block})?"),
+        name => format!("{name}::from_nota_block({block})?"),
+    }
+}
+
+fn format_expression(reference: &TypeReference, value: &str) -> String {
+    match reference.name.as_str() {
+        "Text" => format!("format_text(&{value})"),
+        "Integer" => format!("{value}.to_string()"),
+        _ => format!("{value}.to_nota()"),
     }
 }
 

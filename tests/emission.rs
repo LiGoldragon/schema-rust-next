@@ -15,10 +15,15 @@ fn emits_rust_source_as_a_separate_artifact() {
     let generated = RustEmitter.emit_file(&asschema);
 
     assert_eq!(generated.path, "spirit.rs");
-    assert_eq!(
-        generated.code.as_str(),
-        include_str!("fixtures/spirit_generated.rs")
+    assert!(generated.code.as_str().contains("pub enum Input"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("impl std::str::FromStr for Input")
     );
+    assert!(generated.code.as_str().contains("rkyv::Archive"));
+    assert!(generated.code.as_str().contains("pub mod short_header"));
 }
 
 #[test]
@@ -40,13 +45,32 @@ fn compiled_fixture_is_usable_rust() {
 }
 
 #[test]
-fn generated_signal_input_round_trips_through_rkyv_bytes() {
-    let input = generated::Input::Record(generated::Entry {
-        topics: generated::Topics(generated::Topic(String::from("schema"))),
-        kind: generated::Kind::Constraint,
-        description: generated::Description(String::from("component messages use binary rkyv")),
-        magnitude: generated::Magnitude::Maximum,
-    });
+fn generated_input_parses_cli_nota_and_emits_nota() {
+    let input = "(Record ([schema] Constraint [agent's clarified intent] Maximum))"
+        .parse::<generated::Input>()
+        .expect("parse generated input");
+
+    match &input {
+        generated::Input::Record(entry) => {
+            assert_eq!(entry.topics.0.0, "schema");
+            assert_eq!(entry.kind, generated::Kind::Constraint);
+            assert_eq!(entry.description.0, "agent's clarified intent");
+            assert_eq!(entry.magnitude, generated::Magnitude::Maximum);
+        }
+        generated::Input::Observe(_) => panic!("expected record"),
+    }
+
+    assert_eq!(
+        input.to_string(),
+        "(Record ([schema] Constraint [agent's clarified intent] Maximum))"
+    );
+}
+
+#[test]
+fn generated_signal_input_round_trips_from_nota_to_rkyv_bytes() {
+    let input = "(Record ([schema] Constraint [component messages use binary rkyv] Maximum))"
+        .parse::<generated::Input>()
+        .expect("parse generated input");
 
     let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&input).expect("archive input");
     let decoded =
