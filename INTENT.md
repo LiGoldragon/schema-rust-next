@@ -106,6 +106,38 @@ database-marker reply layer (record 935). Record 970 CONSOLIDATES
 records 935 + 963 + 964 + 965 — the emitted Rust per plane reflects
 each plane's role in the flow.
 
+## Schema and emitted Rust mirror each other
+
+Per spirit record 952 (High, 2026-05-27): the naming system between
+schema-emitted code and Rust source **mirrors each other**. *"You
+can use the naming system that way to like a mirror."* The
+colon-path namespace in a schema (e.g. `spirit-next:signal:Frame`)
+maps directly to the Rust module-and-type path
+(`spirit_next::signal::Frame`):
+
+- colon `:` becomes double colon `::`
+- kebab-case crate names become snake_case module names
+- PascalCase type names stay unchanged
+
+Two consequences for this crate's emission discipline:
+
+1. **Emit names identical to the schema's identifier (modulo Rust's
+   case rules).** A schema position named `signal:Frame` emits a
+   Rust type at module path `signal::Frame` — the same identifier
+   in both views.
+2. **The schema and the emitted Rust become navigable from either
+   side.** An agent reading the schema can grep the emitted Rust
+   for the same name; an agent reading the Rust can find the
+   schema definition the same way. The mirror property + the
+   side-by-side file placement (per record 909) means the two
+   surfaces sit together AND read with the same identifiers — one
+   identity in two views.
+
+The mirror is load-bearing for the workspace's introspection
+property (per `~/primary/ESSENCE.md` §"What I am building"): the
+structure of the system is the documentation of itself, and the
+mirror makes both halves of the structure visible.
+
 ## Continuous manifestation
 
 Per spirit record 944 (Maximum, 2026-05-27): this `INTENT.md` is
