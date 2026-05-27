@@ -33,7 +33,7 @@ impl Default for RustEmitter {
 impl RustEmitter {
     pub fn emit_file(&self, asschema: &Asschema) -> GeneratedFile {
         GeneratedFile {
-            path: format!("{}.rs", asschema.identity().component().as_str()),
+            path: RustModulePath::new(asschema.identity().component().clone()).to_file_path(),
             code: self.emit(asschema),
         }
     }
@@ -72,6 +72,40 @@ impl RustEmitter {
         writer.blank();
         writer.emit_signal_frame_support(&asschema.input_and_output());
         RustCode(writer.finish())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RustModulePath {
+    schema_name: Name,
+}
+
+impl RustModulePath {
+    fn new(schema_name: Name) -> Self {
+        Self { schema_name }
+    }
+
+    fn to_file_path(&self) -> String {
+        let mut segments = self.module_segments();
+        let file = segments.pop().unwrap_or_else(|| "lib".to_owned());
+        if segments.is_empty() {
+            format!("schema/{file}.rs")
+        } else {
+            format!("schema/{}/{}.rs", segments.join("/"), file)
+        }
+    }
+
+    fn module_segments(&self) -> Vec<String> {
+        let segments = self.schema_name.namespace_segments();
+        let module_segments = if segments.len() > 1 {
+            &segments[1..]
+        } else {
+            segments.as_slice()
+        };
+        module_segments
+            .iter()
+            .map(|segment| Name::new(*segment).field_name())
+            .collect()
     }
 }
 

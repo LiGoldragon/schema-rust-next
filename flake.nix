@@ -73,6 +73,12 @@
             grep -R "pub fn to_nota" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             touch $out
           '';
+          generated-schema-module-path = pkgs.runCommand "schema-rust-next-generated-schema-module-path" { } ''
+            grep -R "schema/lib.rs" ${src}/tests/emission.rs >/dev/null
+            grep -R "schema/signal/public.rs" ${src}/tests/emission.rs >/dev/null
+            grep -R "struct RustModulePath" ${src}/src/lib.rs >/dev/null
+            touch $out
+          '';
           no-production-free-functions = pkgs.runCommand "schema-rust-next-no-production-free-functions" { } ''
             if grep -R -n -E '^(pub(\([^)]*\))? )?fn ' ${src}/src; then
               echo "production Rust must not use module-level free functions" >&2

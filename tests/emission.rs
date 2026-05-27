@@ -10,11 +10,11 @@ mod generated {
 fn emits_rust_source_as_a_separate_artifact() {
     let source = include_str!("fixtures/spirit-min.schema");
     let asschema = SchemaEngine::default()
-        .lower_source(source, SchemaIdentity::new("spirit", "0.1.0"))
+        .lower_source(source, SchemaIdentity::new("spirit:lib", "0.1.0"))
         .expect("schema lowers");
     let generated = RustEmitter::default().emit_file(&asschema);
 
-    assert_eq!(generated.path, "spirit.rs");
+    assert_eq!(generated.path, "schema/lib.rs");
     assert!(generated.code.as_str().contains("pub enum Input"));
     assert!(
         generated
@@ -35,6 +35,20 @@ fn emits_rust_source_as_a_separate_artifact() {
         generated.code.as_str(),
         include_str!("fixtures/spirit_generated.rs")
     );
+}
+
+#[test]
+fn emitted_path_mirrors_schema_module_identity() {
+    let source = include_str!("fixtures/spirit-min.schema");
+    let asschema = SchemaEngine::default()
+        .lower_source(
+            source,
+            SchemaIdentity::new("spirit-next:signal:public", "0.1.0"),
+        )
+        .expect("schema lowers");
+    let generated = RustEmitter::default().emit_file(&asschema);
+
+    assert_eq!(generated.path, "schema/signal/public.rs");
 }
 
 #[test]
