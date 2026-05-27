@@ -47,6 +47,10 @@
   If dispatch, upgrade, mail acceptance, or SEMA application needs behavior,
   the generated type exposes a trait or method target and the consumer
   implements it on a data-bearing actor or store object.
+- Schemas that declare `NexusInput`/`NexusOutput` emit a `NexusEngine` trait,
+  and schemas that declare `SemaInput`/`SemaOutput` emit a `SemaEngine` trait.
+  Tests and runtime code use those generated plane traits so Nexus takes and
+  returns Nexus schema objects, and SEMA takes and returns SEMA schema objects.
 - Mail identifiers and short headers use the generated scalar floor
   (`Integer`) rather than bespoke primitive widths. This keeps the runtime mail
   support closer to schema-authored nouns while the core mail schema is still

@@ -61,6 +61,54 @@ fn emitted_path_mirrors_schema_module_identity() {
 }
 
 #[test]
+fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
+    let source = "\
+{}
+(Input ((Record Entry) (Observe Query)))
+(Output ((RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport)))
+{
+  NexusInput ((Signal Input) (Sema SemaOutput))
+  NexusOutput ((Sema SemaInput) (Signal Output))
+  SemaInput ((Record Entry) (Observe Query))
+  SemaOutput ((Recorded SemaReceipt) (Observed ObservedRecords) (Missed ErrorReport))
+  Topic [Text]
+  Description [Text]
+  ErrorMessage [Text]
+  RecordIdentifier [Integer]
+  CommitSequence [Integer]
+  StateDigest [Integer]
+  DatabaseMarker [CommitSequence StateDigest]
+  SemaReceipt [RecordIdentifier DatabaseMarker]
+  ObservedRecords [RecordSet DatabaseMarker]
+  ErrorReport [ErrorMessage DatabaseMarker]
+  Entry [Topic Kind Description Magnitude]
+  Query [Topic Kind]
+  RecordSet [Entry]
+  Kind (Decision Principle Correction Clarification Constraint)
+  Magnitude (Minimum VeryLow Low Medium High VeryHigh Maximum)
+}";
+    let asschema = SchemaEngine::default()
+        .lower_source(source, SchemaIdentity::new("spirit:lib", "0.1.0"))
+        .expect("schema lowers");
+    let generated = RustEmitter::default().emit_file(&asschema);
+
+    assert!(generated.code.as_str().contains("pub trait NexusEngine"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("fn execute(&self, input: NexusInput) -> NexusOutput;")
+    );
+    assert!(generated.code.as_str().contains("pub trait SemaEngine"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("fn apply(&mut self, input: SemaInput) -> SemaOutput;")
+    );
+}
+
+#[test]
 fn compiled_fixture_is_usable_rust() {
     let entry = generated::Entry {
         topics: generated::Topics(generated::Topic(String::from("schema"))),

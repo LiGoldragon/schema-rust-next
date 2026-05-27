@@ -73,6 +73,7 @@ impl RustEmitter {
         writer.emit_signal_frame_support(&asschema.input_and_output());
         writer.emit_mail_event_support(&asschema.input_and_output());
         writer.emit_nexus_support(&asschema.input_and_output());
+        writer.emit_schema_plane_trait_support(asschema.namespace());
         writer.emit_upgrade_support();
         RustCode(writer.finish())
     }
@@ -817,6 +818,36 @@ impl RustWriter {
         self.line("}");
         self.blank();
         self.line("impl<Current, Previous> AcceptPrevious<Previous> for Current where Current: UpgradeFrom<Previous> {}");
+    }
+
+    fn emit_schema_plane_trait_support(&mut self, declarations: &[TypeDeclaration]) {
+        if self.has_type(declarations, "NexusInput") && self.has_type(declarations, "NexusOutput") {
+            self.line("pub trait NexusEngine {");
+            self.line("    fn execute(&self, input: NexusInput) -> NexusOutput;");
+            self.line("}");
+            self.blank();
+        }
+        if self.has_type(declarations, "SemaInput") && self.has_type(declarations, "SemaOutput") {
+            self.line("pub trait SemaEngine {");
+            self.line("    fn apply(&mut self, input: SemaInput) -> SemaOutput;");
+            self.line("}");
+            self.blank();
+        }
+    }
+
+    fn has_type(&self, declarations: &[TypeDeclaration], type_name: &str) -> bool {
+        declarations
+            .iter()
+            .any(|declaration| self.type_name(declaration).as_str() == type_name)
+    }
+
+    fn type_name(&self, declaration: &TypeDeclaration) -> Name {
+        match declaration {
+            TypeDeclaration::Struct(declaration) | TypeDeclaration::Newtype(declaration) => {
+                declaration.name.clone()
+            }
+            TypeDeclaration::Enum(declaration) => declaration.name.clone(),
+        }
     }
 
     fn parse_expression(&self, reference: &TypeReference, block: &str) -> String {

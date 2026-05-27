@@ -38,6 +38,14 @@ and `MessageProcessed<Reply>` are the objects the runtime acts on. The emitter
 should create trait and method targets for those objects, not procedural helper
 functions around them.*
 
+*Schema-plane tests use schema-plane traits. When a schema declares
+`SemaInput` and `SemaOutput`, the emitter provides the `SemaEngine` trait so
+the store/state engine takes a SEMA schema object and returns a SEMA schema
+object. When a schema declares `NexusInput` and `NexusOutput`, the emitter
+provides a `NexusEngine` target for execution-plane object flow. Runtime tests
+must invoke those generated trait surfaces rather than primitive or test-local
+commands.*
+
 *Schema version changes drive upgrade surfaces. If a data type has not changed,
 no upgrade code is emitted for it. If it has changed, the generated noun exposes
 an upgrade/accept trait that hand-written runtime code implements, including
