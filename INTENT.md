@@ -95,6 +95,17 @@ Per record 965: Nexus schemas drive ANY layer where code runs on
 typed input and returns typed output — internal IO, external CLI
 calls, AND all UI panels (Mencie is implemented as nexus schemas).
 
+Per record 970 (Maximum, 2026-05-27): the three schema types map
+to the daemon's **THREE EXECUTION CENTERS** — Signal (communication),
+Nexus (execution + mail keeper + translator), SEMA (state). The
+emission target for Nexus schemas includes the mail-keeping surface
+(NexusMail<Payload>, MessageIdentifier, lifecycle hooks); the
+emission target for Signal schemas includes the on_sent hook surface
+(record 963); the emission target for Sema schemas includes the
+database-marker reply layer (record 935). Record 970 CONSOLIDATES
+records 935 + 963 + 964 + 965 — the emitted Rust per plane reflects
+each plane's role in the flow.
+
 ## Continuous manifestation
 
 Per spirit record 944 (Maximum, 2026-05-27): this `INTENT.md` is
