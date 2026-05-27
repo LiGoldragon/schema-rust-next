@@ -35,3 +35,7 @@
   react without polling. `NexusMail<Payload>` represents mail being processed
   by Nexus, and `MessageProcessed<Reply>` carries the processed reply after
   Nexus receives the SEMA or execution outcome.
+- Mail identifiers and short headers use the generated scalar floor
+  (`Integer`) rather than bespoke primitive widths. This keeps the runtime mail
+  support closer to schema-authored nouns while the core mail schema is still
+  emitted by the support surface.

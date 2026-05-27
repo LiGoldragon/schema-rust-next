@@ -642,7 +642,7 @@ impl RustWriter {
 
     fn emit_mail_event_support(&mut self, root_enums: &[&EnumDeclaration]) {
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
-        self.line("pub struct MessageIdentifier(pub u128);");
+        self.line("pub struct MessageIdentifier(pub Integer);");
         self.blank();
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub enum MessageRoot {");
@@ -655,7 +655,7 @@ impl RustWriter {
         self.line("pub struct MessageSent {");
         self.line("    pub identifier: MessageIdentifier,");
         self.line("    pub root: MessageRoot,");
-        self.line("    pub short_header: u64,");
+        self.line("    pub short_header: Integer,");
         self.line("}");
         self.blank();
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");

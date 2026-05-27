@@ -36,6 +36,11 @@ signal root creates a typed `MessageSent` event with the message identifier,
 root schema type, and short header, and the event is pushed through hook methods
 so observers can react without polling.*
 
+*Mail lifecycle support should stay on the schema scalar floor. Generated
+`MessageIdentifier` and `MessageSent.short_header` use `Integer`, not bespoke
+primitive widths, while the mail support surface is being moved toward a shared
+schema-authored core.*
+
 Future forge build logic may eventually turn generated Rust into
 content-addressed crates directly. That is future design; this repo owns the
 current explicit source emission step.

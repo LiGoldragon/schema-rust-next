@@ -75,9 +75,10 @@
             touch $out
           '';
           generated-mail-events = pkgs.runCommand "schema-rust-next-generated-mail-events" { } ''
-            grep -R "pub struct MessageIdentifier" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub struct MessageIdentifier(pub Integer)" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub enum MessageRoot" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub struct MessageSent" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub short_header: Integer" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub struct NexusMail<Payload>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub struct MessageProcessed<Reply>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub trait MessageSentHook" ${src}/tests/fixtures/spirit_generated.rs >/dev/null

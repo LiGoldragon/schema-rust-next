@@ -539,7 +539,7 @@ impl Output {
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct MessageIdentifier(pub u128);
+pub struct MessageIdentifier(pub Integer);
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MessageRoot {
@@ -551,7 +551,7 @@ pub enum MessageRoot {
 pub struct MessageSent {
     pub identifier: MessageIdentifier,
     pub root: MessageRoot,
-    pub short_header: u64,
+    pub short_header: Integer,
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
