@@ -73,6 +73,35 @@
             grep -R "pub fn to_nota" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             touch $out
           '';
+          no-production-free-functions = pkgs.runCommand "schema-rust-next-no-production-free-functions" { } ''
+            if grep -R -n -E '^(pub(\([^)]*\))? )?fn ' ${src}/src; then
+              echo "production Rust must not use module-level free functions" >&2
+              exit 1
+            fi
+            touch $out
+          '';
+          no-production-unit-structs = pkgs.runCommand "schema-rust-next-no-production-unit-structs" { } ''
+            if grep -R -n -E '^struct [A-Za-z][A-Za-z0-9_]*;' ${src}/src; then
+              echo "production Rust must not use unit structs as namespace/method holders" >&2
+              exit 1
+            fi
+            touch $out
+          '';
+          generated-no-free-functions = pkgs.runCommand "schema-rust-next-generated-no-free-functions" { } ''
+            if grep -n -E '^(pub(\([^)]*\))? )?fn ' ${src}/tests/fixtures/spirit_generated.rs; then
+              echo "generated Rust fixture must not use module-level free functions" >&2
+              exit 1
+            fi
+            touch $out
+          '';
+          generated-no-legacy-helper-surface = pkgs.runCommand "schema-rust-next-generated-no-legacy-helper-surface" { } ''
+            ! grep -R "parse_nota_root" ${src}/tests/fixtures/spirit_generated.rs
+            ! grep -R "UnknownHeader { surface" ${src}/tests/fixtures/spirit_generated.rs
+            ! grep -R "pub struct RustEmitter;" ${src}/src
+            grep -R "pub struct NotaSource" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub struct NotaBlock" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            touch $out
+          '';
           doc = craneLib.cargoDoc (commonArguments // {
             inherit cargoArtifacts;
             RUSTDOCFLAGS = "-D warnings";
