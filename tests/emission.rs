@@ -14,7 +14,7 @@ fn emits_rust_source_as_a_separate_artifact() {
         .expect("schema lowers");
     let generated = RustEmitter::default().emit_file(&asschema);
 
-    assert_eq!(generated.path, "schema/lib.rs");
+    assert_eq!(generated.path, "src/schema/lib.rs");
     assert!(generated.code.as_str().contains("pub enum Input"));
     assert!(
         generated
@@ -48,7 +48,7 @@ fn emitted_path_mirrors_schema_module_identity() {
         .expect("schema lowers");
     let generated = RustEmitter::default().emit_file(&asschema);
 
-    assert_eq!(generated.path, "schema/signal/public.rs");
+    assert_eq!(generated.path, "src/schema/signal/public.rs");
 }
 
 #[test]

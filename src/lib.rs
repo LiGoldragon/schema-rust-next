@@ -89,9 +89,9 @@ impl RustModulePath {
         let mut segments = self.module_segments();
         let file = segments.pop().unwrap_or_else(|| "lib".to_owned());
         if segments.is_empty() {
-            format!("schema/{file}.rs")
+            format!("src/schema/{file}.rs")
         } else {
-            format!("schema/{}/{}.rs", segments.join("/"), file)
+            format!("src/schema/{}/{}.rs", segments.join("/"), file)
         }
     }
 
