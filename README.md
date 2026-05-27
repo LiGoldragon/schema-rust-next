@@ -8,7 +8,17 @@ assembled schema in, Rust source text out, compile and test the emitted source,
 then layer macro ergonomics later.
 
 Generated paths mirror crate-local schema modules. An assembled schema identity
-such as `spirit-next:lib` emits to `schema/lib.rs`; an identity such as
-`spirit-next:signal:public` emits to `schema/signal/public.rs`. The first
+such as `spirit-next:lib` emits to `src/schema/lib.rs`; an identity such as
+`spirit-next:signal:public` emits to `src/schema/signal/public.rs`. The first
 namespace segment is the crate boundary and is not repeated inside the crate's
 generated module tree.
+
+The emitted source includes the data types, NOTA conversion methods, rkyv
+derives, short-header signal frames, Nexus traits, Nexus mail lifecycle
+objects, mail-event hooks, and upgrade/accept traits that runtime crates
+implement against.
+
+For development, `cargo run --example emit_schema -- <schema/lib.schema>
+<crate:module> [version]` prints the generated Rust source so a consumer can
+refresh its checked-in `src/schema/<module>.rs` from local schema-next and
+schema-rust-next changes.

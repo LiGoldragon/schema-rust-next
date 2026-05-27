@@ -71,6 +71,9 @@ impl RustEmitter {
         writer.emit_short_headers(&asschema.input_and_output());
         writer.blank();
         writer.emit_signal_frame_support(&asschema.input_and_output());
+        writer.emit_mail_event_support(&asschema.input_and_output());
+        writer.emit_nexus_support(&asschema.input_and_output());
+        writer.emit_upgrade_support();
         RustCode(writer.finish())
     }
 }
@@ -89,9 +92,9 @@ impl RustModulePath {
         let mut segments = self.module_segments();
         let file = segments.pop().unwrap_or_else(|| "lib".to_owned());
         if segments.is_empty() {
-            format!("schema/{file}.rs")
+            format!("src/schema/{file}.rs")
         } else {
-            format!("schema/{}/{}.rs", segments.join("/"), file)
+            format!("src/schema/{}/{}.rs", segments.join("/"), file)
         }
     }
 
@@ -636,6 +639,186 @@ impl RustWriter {
         self.line("    }");
         self.line("}");
     }
+
+    fn emit_mail_event_support(&mut self, root_enums: &[&EnumDeclaration]) {
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
+        self.line("pub struct MessageIdentifier(pub u128);");
+        self.blank();
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
+        self.line("pub enum MessageRoot {");
+        for root_enum in root_enums {
+            self.line(format!("    {},", root_enum.name));
+        }
+        self.line("}");
+        self.blank();
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
+        self.line("pub struct MessageSent {");
+        self.line("    pub identifier: MessageIdentifier,");
+        self.line("    pub root: MessageRoot,");
+        self.line("    pub short_header: u64,");
+        self.line("}");
+        self.blank();
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
+        self.line("pub struct NexusMail<Payload> {");
+        self.line("    pub identifier: MessageIdentifier,");
+        self.line("    pub payload: Payload,");
+        self.line("}");
+        self.blank();
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
+        self.line("pub struct MessageProcessed<Reply> {");
+        self.line("    pub identifier: MessageIdentifier,");
+        self.line("    pub reply: Reply,");
+        self.line("}");
+        self.blank();
+        self.line("pub trait MessageSentHook {");
+        self.line("    type Error;");
+        self.blank();
+        self.line("    fn message_sent(&mut self, event: MessageSent) -> Result<(), Self::Error>;");
+        self.line("}");
+        self.blank();
+        self.line("pub trait MessageProcessedHook<Reply> {");
+        self.line("    type Error;");
+        self.blank();
+        self.line("    fn message_processed(&mut self, event: MessageProcessed<Reply>) -> Result<(), Self::Error>;");
+        self.line("}");
+        self.blank();
+        self.line("impl MessageSent {");
+        self.line("    pub fn push_to<Hook>(&self, hook: &mut Hook) -> Result<(), Hook::Error>");
+        self.line("    where");
+        self.line("        Hook: MessageSentHook,");
+        self.line("    {");
+        self.line("        hook.message_sent(self.clone())");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("impl<Payload> NexusMail<Payload> {");
+        self.line("    pub fn new(identifier: MessageIdentifier, payload: Payload) -> Self {");
+        self.line("        Self { identifier, payload }");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn identifier(&self) -> MessageIdentifier {");
+        self.line("        self.identifier");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn into_payload(self) -> Payload {");
+        self.line("        self.payload");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("impl<Reply> MessageProcessed<Reply> {");
+        self.line("    pub fn new(identifier: MessageIdentifier, reply: Reply) -> Self {");
+        self.line("        Self { identifier, reply }");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn identifier(&self) -> MessageIdentifier {");
+        self.line("        self.identifier");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn into_reply(self) -> Reply {");
+        self.line("        self.reply");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn push_to<Hook>(&self, hook: &mut Hook) -> Result<(), Hook::Error>");
+        self.line("    where");
+        self.line("        Hook: MessageProcessedHook<Reply>,");
+        self.line("        Reply: Clone,");
+        self.line("    {");
+        self.line("        hook.message_processed(self.clone())");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        for root_enum in root_enums {
+            self.line(format!("impl {} {{", root_enum.name));
+            self.line(
+                "    pub fn message_sent(&self, identifier: MessageIdentifier) -> MessageSent {",
+            );
+            self.line("        MessageSent {");
+            self.line("            identifier,");
+            self.line(format!(
+                "            root: MessageRoot::{},",
+                root_enum.name
+            ));
+            self.line("            short_header: self.short_header(),");
+            self.line("        }");
+            self.line("    }");
+            self.line("}");
+            self.blank();
+        }
+    }
+
+    fn emit_nexus_support(&mut self, root_enums: &[&EnumDeclaration]) {
+        for root_enum in root_enums {
+            self.emit_nexus_trait(root_enum);
+            self.blank();
+            self.emit_nexus_dispatch_impl(root_enum);
+            self.blank();
+        }
+    }
+
+    fn emit_nexus_trait(&mut self, root_enum: &EnumDeclaration) {
+        let trait_name = format!("{}Nexus", root_enum.name);
+        self.line(format!("pub trait {trait_name} {{"));
+        self.line("    type Reply;");
+        self.line("    type Error;");
+        self.blank();
+        for variant in &root_enum.variants {
+            let method_name = variant.name.field_name();
+            match &variant.payload {
+                Some(payload) => self.line(format!(
+                    "    fn {method_name}(&self, mail: NexusMail<{}>) -> Result<Self::Reply, Self::Error>;",
+                    self.rust_type(payload)
+                )),
+                None => self.line(format!(
+                    "    fn {method_name}(&self, mail: NexusMail<()>) -> Result<Self::Reply, Self::Error>;"
+                )),
+            }
+        }
+        self.line("}");
+    }
+
+    fn emit_nexus_dispatch_impl(&mut self, root_enum: &EnumDeclaration) {
+        let trait_name = format!("{}Nexus", root_enum.name);
+        self.line(format!("impl {} {{", root_enum.name));
+        self.line("    pub fn dispatch_mail_with_nexus<Nexus>(self, identifier: MessageIdentifier, nexus: &Nexus) -> Result<MessageProcessed<Nexus::Reply>, Nexus::Error>");
+        self.line("    where");
+        self.line(format!("        Nexus: {trait_name},"));
+        self.line("    {");
+        self.line("        let reply = match self {");
+        for variant in &root_enum.variants {
+            let method_name = variant.name.field_name();
+            match &variant.payload {
+                Some(_) => self.line(format!(
+                    "            Self::{}(payload) => nexus.{method_name}(NexusMail::new(identifier, payload)),",
+                    variant.name
+                )),
+                None => self.line(format!(
+                    "            Self::{} => nexus.{method_name}(NexusMail::new(identifier, ())),",
+                    variant.name
+                )),
+            }
+        }
+        self.line("        }?;");
+        self.line("        Ok(MessageProcessed::new(identifier, reply))");
+        self.line("    }");
+        self.line("}");
+    }
+
+    fn emit_upgrade_support(&mut self) {
+        self.line("pub trait UpgradeFrom<Previous>: Sized {");
+        self.line("    type Error;");
+        self.blank();
+        self.line("    fn upgrade_from(previous: Previous) -> Result<Self, Self::Error>;");
+        self.line("}");
+        self.blank();
+        self.line("pub trait AcceptPrevious<Previous>: UpgradeFrom<Previous> {");
+        self.line("    fn accept_previous(previous: Previous) -> Result<Self, Self::Error> {");
+        self.line("        Self::upgrade_from(previous)");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("impl<Current, Previous> AcceptPrevious<Previous> for Current where Current: UpgradeFrom<Previous> {}");
+    }
+
     fn parse_expression(&self, reference: &TypeReference, block: &str) -> String {
         match reference.name.as_str() {
             "Text" => format!("NotaBlock::new({block}).parse_text()?"),

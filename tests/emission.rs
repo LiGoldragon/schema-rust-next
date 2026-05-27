@@ -1,5 +1,6 @@
 use schema_next::{SchemaEngine, SchemaIdentity};
 use schema_rust_next::RustEmitter;
+use std::cell::Cell;
 
 #[allow(dead_code)]
 mod generated {
@@ -14,7 +15,7 @@ fn emits_rust_source_as_a_separate_artifact() {
         .expect("schema lowers");
     let generated = RustEmitter::default().emit_file(&asschema);
 
-    assert_eq!(generated.path, "schema/lib.rs");
+    assert_eq!(generated.path, "src/schema/lib.rs");
     assert!(generated.code.as_str().contains("pub enum Input"));
     assert!(
         generated
@@ -30,6 +31,14 @@ fn emits_rust_source_as_a_separate_artifact() {
             .code
             .as_str()
             .contains("pub fn encode_signal_frame")
+    );
+    assert!(generated.code.as_str().contains("pub trait InputNexus"));
+    assert!(generated.code.as_str().contains("pub struct MessageSent"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub trait UpgradeFrom<Previous>")
     );
     assert_eq!(
         generated.code.as_str(),
@@ -48,7 +57,7 @@ fn emitted_path_mirrors_schema_module_identity() {
         .expect("schema lowers");
     let generated = RustEmitter::default().emit_file(&asschema);
 
-    assert_eq!(generated.path, "schema/signal/public.rs");
+    assert_eq!(generated.path, "src/schema/signal/public.rs");
 }
 
 #[test]
@@ -122,5 +131,199 @@ fn generated_signal_frame_methods_round_trip_and_triage_route() {
         generated::Input::route_from_short_header(generated::short_header::INPUT_OBSERVE)
             .expect("observe route"),
         generated::InputRoute::Observe
+    );
+}
+
+struct MailHook {
+    sent_events: Vec<generated::MessageSent>,
+    processed_events: Vec<generated::MessageProcessed<RuntimeReply>>,
+}
+
+impl MailHook {
+    fn new() -> Self {
+        Self {
+            sent_events: Vec::new(),
+            processed_events: Vec::new(),
+        }
+    }
+}
+
+impl generated::MessageSentHook for MailHook {
+    type Error = RuntimeError;
+
+    fn message_sent(&mut self, event: generated::MessageSent) -> Result<(), Self::Error> {
+        self.sent_events.push(event);
+        Ok(())
+    }
+}
+
+impl generated::MessageProcessedHook<RuntimeReply> for MailHook {
+    type Error = RuntimeError;
+
+    fn message_processed(
+        &mut self,
+        event: generated::MessageProcessed<RuntimeReply>,
+    ) -> Result<(), Self::Error> {
+        self.processed_events.push(event);
+        Ok(())
+    }
+}
+
+#[test]
+fn generated_signal_roots_emit_typed_message_sent_events() {
+    let input = "(Observe ([schema] Principle))"
+        .parse::<generated::Input>()
+        .expect("parse observe input");
+    let event = input.message_sent(generated::MessageIdentifier(42));
+    let mut hook = MailHook::new();
+
+    event.push_to(&mut hook).expect("message sent event pushes");
+
+    assert_eq!(
+        hook.sent_events,
+        vec![generated::MessageSent {
+            identifier: generated::MessageIdentifier(42),
+            root: generated::MessageRoot::Input,
+            short_header: generated::short_header::INPUT_OBSERVE,
+        }],
+    );
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum RuntimeReply {
+    Recorded(String),
+    Observed(String),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum RuntimeError {
+    StateRejected,
+}
+
+struct SpiritNexus {
+    accepted_records: Cell<usize>,
+    last_mail_identifier: Cell<Option<generated::MessageIdentifier>>,
+}
+
+impl SpiritNexus {
+    fn new() -> Self {
+        Self {
+            accepted_records: Cell::new(0),
+            last_mail_identifier: Cell::new(None),
+        }
+    }
+
+    fn accepted_records(&self) -> usize {
+        self.accepted_records.get()
+    }
+}
+
+impl generated::InputNexus for SpiritNexus {
+    type Reply = RuntimeReply;
+    type Error = RuntimeError;
+
+    fn record(
+        &self,
+        mail: generated::NexusMail<generated::Entry>,
+    ) -> Result<Self::Reply, Self::Error> {
+        self.last_mail_identifier.set(Some(mail.identifier()));
+        self.accepted_records.set(self.accepted_records.get() + 1);
+        let payload = mail.into_payload();
+        Ok(RuntimeReply::Recorded(payload.description.0))
+    }
+
+    fn observe(
+        &self,
+        mail: generated::NexusMail<generated::Query>,
+    ) -> Result<Self::Reply, Self::Error> {
+        self.last_mail_identifier.set(Some(mail.identifier()));
+        let payload = mail.into_payload();
+        Ok(RuntimeReply::Observed(payload.topic.0))
+    }
+}
+
+#[test]
+fn generated_input_dispatches_mail_through_schema_emitted_nexus_trait_methods() {
+    assert_eq!(RuntimeError::StateRejected, RuntimeError::StateRejected);
+    let input = "(Record ([schema] Principle [schema objects drive behavior] Maximum))"
+        .parse::<generated::Input>()
+        .expect("parse generated input");
+    let nexus = SpiritNexus::new();
+    let mut hook = MailHook::new();
+
+    let processed = input
+        .dispatch_mail_with_nexus(generated::MessageIdentifier(77), &nexus)
+        .expect("input dispatches through generated nexus trait");
+    processed
+        .push_to(&mut hook)
+        .expect("processed mail event pushes");
+
+    assert_eq!(
+        processed.reply,
+        RuntimeReply::Recorded("schema objects drive behavior".to_owned())
+    );
+    assert_eq!(nexus.accepted_records(), 1);
+    assert_eq!(
+        nexus.last_mail_identifier.get(),
+        Some(generated::MessageIdentifier(77))
+    );
+    assert_eq!(
+        hook.processed_events,
+        vec![generated::MessageProcessed {
+            identifier: generated::MessageIdentifier(77),
+            reply: RuntimeReply::Recorded("schema objects drive behavior".to_owned()),
+        }],
+    );
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PreviousEntry {
+    topic: String,
+    description: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct UpgradeEvent {
+    description: String,
+}
+
+impl generated::UpgradeFrom<PreviousEntry> for generated::Entry {
+    type Error = RuntimeError;
+
+    fn upgrade_from(previous: PreviousEntry) -> Result<Self, Self::Error> {
+        Ok(Self {
+            topics: generated::Topics(generated::Topic(previous.topic)),
+            kind: generated::Kind::Clarification,
+            description: generated::Description(previous.description),
+            magnitude: generated::Magnitude::High,
+        })
+    }
+}
+
+impl UpgradeEvent {
+    fn from_previous_entry(previous: PreviousEntry) -> Result<Self, RuntimeError> {
+        let entry =
+            <generated::Entry as generated::AcceptPrevious<PreviousEntry>>::accept_previous(
+                previous,
+            )?;
+        Ok(Self {
+            description: format!("accepted previous Entry as {}", entry.to_nota()),
+        })
+    }
+}
+
+#[test]
+fn generated_upgrade_trait_accepts_previous_schema_objects_observably() {
+    let event = UpgradeEvent::from_previous_entry(PreviousEntry {
+        topic: "schema".to_owned(),
+        description: "old client spoke previous entry".to_owned(),
+    })
+    .expect("previous entry upgrades");
+
+    assert_eq!(
+        event,
+        UpgradeEvent {
+            description: "accepted previous Entry as ([schema] Clarification [old client spoke previous entry] High)".to_owned(),
+        },
     );
 }

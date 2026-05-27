@@ -67,6 +67,32 @@
             grep -R "pub fn encode_signal_frame" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             touch $out
           '';
+          generated-nexus-traits = pkgs.runCommand "schema-rust-next-generated-nexus-traits" { } ''
+            grep -R "pub trait InputNexus" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub fn dispatch_mail_with_nexus<Nexus>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "generated::InputNexus for SpiritNexus" ${src}/tests/emission.rs >/dev/null
+            grep -R "input dispatches through generated nexus trait" ${src}/tests/emission.rs >/dev/null
+            touch $out
+          '';
+          generated-mail-events = pkgs.runCommand "schema-rust-next-generated-mail-events" { } ''
+            grep -R "pub struct MessageIdentifier" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub enum MessageRoot" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub struct MessageSent" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub struct NexusMail<Payload>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub struct MessageProcessed<Reply>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub trait MessageSentHook" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub trait MessageProcessedHook<Reply>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "fn generated_signal_roots_emit_typed_message_sent_events" ${src}/tests/emission.rs >/dev/null
+            grep -R "event.push_to" ${src}/tests/emission.rs >/dev/null
+            touch $out
+          '';
+          generated-upgrade-traits = pkgs.runCommand "schema-rust-next-generated-upgrade-traits" { } ''
+            grep -R "pub trait UpgradeFrom<Previous>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub trait AcceptPrevious<Previous>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "UpgradeFrom<PreviousEntry> for generated::Entry" ${src}/tests/emission.rs >/dev/null
+            grep -R "accepted previous Entry as" ${src}/tests/emission.rs >/dev/null
+            touch $out
+          '';
           generated-nota-boundary = pkgs.runCommand "schema-rust-next-generated-nota-boundary" { } ''
             grep -R "parse::<generated::Input>" ${src}/tests/emission.rs >/dev/null
             grep -R "impl std::str::FromStr for Input" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
@@ -74,8 +100,8 @@
             touch $out
           '';
           generated-schema-module-path = pkgs.runCommand "schema-rust-next-generated-schema-module-path" { } ''
-            grep -R "schema/lib.rs" ${src}/tests/emission.rs >/dev/null
-            grep -R "schema/signal/public.rs" ${src}/tests/emission.rs >/dev/null
+            grep -R "src/schema/lib.rs" ${src}/tests/emission.rs >/dev/null
+            grep -R "src/schema/signal/public.rs" ${src}/tests/emission.rs >/dev/null
             grep -R "struct RustModulePath" ${src}/src/lib.rs >/dev/null
             touch $out
           '';
