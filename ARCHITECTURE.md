@@ -11,6 +11,35 @@
   module paths. The crate namespace segment is dropped; `lib` becomes
   `src/schema/lib.rs`, and nested modules become files under `src/schema/`.
 
+## Emits for three schema types — Signal / Nexus / Sema
+
+Per spirit record 964 (Maximum, 2026-05-27): the schema layer has
+three schema types corresponding to three runtime planes. This crate
+emits Rust for all three:
+
+| Schema type | Runtime plane | Emitted Rust shape |
+|---|---|---|
+| `Signal` | Wire and communication layer | Input/Output enums + encode/decode + Communicate trait methods on root |
+| `Nexus` | Execution layer — IO, external calls, all UI | Input/Output enums + handler trait + return-type encoding |
+| `Sema` | Durable state layer (the database) | Record types + storage/migration trait surface |
+
+Each plane gets its own engine + traits in the consuming runtime
+crate; this emitter produces the type vocabulary common to all
+three patterns (input-message / run-code / output-message) and the
+plane-specific trait surface.
+
+The **root type** of each schema is the message type; the emitter
+attaches the plane-appropriate methods to that root.
+
+File extensions are open per record 964: `.signal.schema` /
+`.nexus.schema` / `.sema.schema`, OR the variant as the first record
+of the schema content. The emitter routes by whichever the schema
+declares.
+
+Per record 965 (Maximum, 2026-05-27): Nexus schemas cover internal
+IO, external CLI calls (e.g. cloud-to-Cloudflare), and ALL user
+interfaces (Mencie panels each have their own nexus schema).
+
 ## Constraints
 
 - No dependency on the old signal macro.

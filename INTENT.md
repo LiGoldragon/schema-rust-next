@@ -61,6 +61,40 @@ proc-macro surface in `src/`. Schema macros are a separate schema-layer
 mechanism (record 932) and live in `schema-next`; this crate is the
 source-text emission step downstream of `schema-next::Asschema`.
 
+## Emits Rust for three schema types
+
+Per spirit record 964 (Maximum, 2026-05-27):
+
+*"the schema layer has THREE SCHEMA TYPES corresponding to the three
+runtime planes: SIGNAL schemas (wire and communication layer); NEXUS
+schemas (execution IO and UI layer - previously named Executor in
+record 371s runtime triad framing); SEMA schemas (durable state
+layer the database); each has its own engine with its own traits but
+all three engines share the pattern of running code based on input
+message and returning output message with populated data; each
+schema declares its own input and output enums per records 933 and
+940 uses namespace imports for shared types per record 902 colon-path
+and emits Rust types and traits via schema-rust-next."*
+
+`schema-rust-next` is the emission target for **all three schema
+types**. Each schema document declares its plane (Signal / Nexus /
+Sema) and schema-rust-next emits Rust source carrying the
+plane-appropriate input/output enums, payload types, and trait
+surface. The emission pattern — `src/schema/lib.rs` + per-module
+files — is the same regardless of plane.
+
+The **root type** of a schema is the message type; emitted Rust
+attaches encode/decode and Communicate-trait methods to that root.
+
+**File extensions are open** per record 964: candidates include
+`.signal.schema` / `.nexus.schema` / `.sema.schema`, OR the variant
+as the first record of the schema content. Not yet locked at the
+emitter side either.
+
+Per record 965: Nexus schemas drive ANY layer where code runs on
+typed input and returns typed output — internal IO, external CLI
+calls, AND all UI panels (Mencie is implemented as nexus schemas).
+
 ## Continuous manifestation
 
 Per spirit record 944 (Maximum, 2026-05-27): this `INTENT.md` is
