@@ -138,6 +138,25 @@ property (per `~/primary/ESSENCE.md` §"What I am building"): the
 structure of the system is the documentation of itself, and the
 mirror makes both halves of the structure visible.
 
+## Recurring patterns realised in this repo
+
+Per spirit record 988 (Maximum, 2026-05-27) + workspace INTENT.md
+§"Recurring architectural patterns": schema-rust-next is the
+Rust emission substrate and realises:
+
+- **Pattern B — Three execution centers (Signal + Nexus + SEMA).**
+  This crate is the emission target for ALL three schema types;
+  each plane's emitted Rust carries plane-appropriate
+  input/output enums, payload types, and trait surfaces (records
+  964, 970).
+- **Pattern C — Methods on schema-generated data types.** See
+  §"Methods on non-ZST types" above — the emitter generates
+  methods inside `impl` blocks of data-bearing types, never free
+  helpers (records 712, 882).
+- **Pattern F — Mirror naming.** See §"Schema and emitted Rust
+  mirror each other" above — this is the load-bearing emission
+  rule that realises pattern F.
+
 ## Continuous manifestation
 
 Per spirit record 944 (Maximum, 2026-05-27): this `INTENT.md` is
