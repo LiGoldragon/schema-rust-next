@@ -23,6 +23,13 @@
   traits on data-bearing engine objects, and the generated enum dispatches
   in-flight `NexusMail<Payload>` to one method per variant. Nexus names the
   execution-IO plane and mail keeper; it replaces the older executor wording.
+- Signal, Nexus, and SEMA roots are emitted from the same schema shape:
+  imports/exports, input, output, and namespace. Emission may attach different
+  support traits per plane, but the generated Rust mirrors the same authored
+  schema structure.
+- Single-colon schema namespaces map to generated Rust module paths. The
+  schema path `spirit-next:nexus:Mail` becomes a module/type path under
+  `src/schema/` without inventing a second naming system.
 - Generated schema objects emit `UpgradeFrom<Previous>` and
   `AcceptPrevious<Previous>` trait surfaces. A changed type gets hand-written
   upgrade behavior on the generated noun; unchanged types do not need upgrade
@@ -35,6 +42,11 @@
   react without polling. `NexusMail<Payload>` represents mail being processed
   by Nexus, and `MessageProcessed<Reply>` carries the processed reply after
   Nexus receives the SEMA or execution outcome.
+- Generated objects are the hand-written behavior surfaces. The emitter must
+  not compensate for missing runtime nouns by producing free helper functions.
+  If dispatch, upgrade, mail acceptance, or SEMA application needs behavior,
+  the generated type exposes a trait or method target and the consumer
+  implements it on a data-bearing actor or store object.
 - Mail identifiers and short headers use the generated scalar floor
   (`Integer`) rather than bespoke primitive widths. This keeps the runtime mail
   support closer to schema-authored nouns while the core mail schema is still

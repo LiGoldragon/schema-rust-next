@@ -20,11 +20,23 @@ traits with one method per reaction variant, and those methods live on
 data-bearing objects, not free helper functions. Nexus is the execution-IO
 schema plane for internal effects, external calls, and UI surfaces.*
 
+*Signal, Nexus, and SEMA schemas share the same authored shape:
+imports/exports, input, output, and namespace. Rust emission mirrors that
+shape into source-visible modules under `src/schema/`, using single-colon
+schema paths as the source naming convention and Rust modules as the emitted
+form.*
+
 *Nexus is also the mail keeper. When Signal input enters Nexus, it is wrapped
 as `NexusMail<Payload>` with a message identifier; while Nexus owns that value,
 the mail is being processed. Nexus receives SEMA or execution replies and emits
 `MessageProcessed<Reply>` before the runtime translates the reply back to the
 Signal output surface.*
+
+*The async mail path is object flow. Generated `MessageSent`,
+`NexusMail<Payload>`, `NexusInput`, `NexusOutput`, `SemaInput`, `SemaOutput`,
+and `MessageProcessed<Reply>` are the objects the runtime acts on. The emitter
+should create trait and method targets for those objects, not procedural helper
+functions around them.*
 
 *Schema version changes drive upgrade surfaces. If a data type has not changed,
 no upgrade code is emitted for it. If it has changed, the generated noun exposes
