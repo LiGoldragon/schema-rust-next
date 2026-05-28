@@ -35,6 +35,13 @@ fn emits_rust_source_as_a_separate_artifact() {
     assert!(generated.code.as_str().contains("pub trait InputNexus"));
     assert!(generated.code.as_str().contains("pub struct MessageSent"));
     assert!(generated.code.as_str().contains("pub struct OriginRoute"));
+    assert!(generated.code.as_str().contains("pub mod signal"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub type Input = super::Input;")
+    );
     assert!(
         generated
             .code
@@ -101,19 +108,15 @@ fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
     let generated = RustEmitter::default().emit_file(&asschema);
 
     assert!(generated.code.as_str().contains("pub trait NexusEngine"));
-    assert!(
-        generated
-            .code
-            .as_str()
-            .contains("fn execute(&self, input: NexusInput) -> NexusOutput;")
-    );
+    assert!(generated.code.as_str().contains("pub mod nexus"));
+    assert!(generated.code.as_str().contains("pub mod sema"));
+    assert!(generated.code.as_str().contains(
+        "fn execute(&self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;"
+    ));
     assert!(generated.code.as_str().contains("pub trait SemaEngine"));
-    assert!(
-        generated
-            .code
-            .as_str()
-            .contains("fn apply(&mut self, input: SemaInput) -> SemaOutput;")
-    );
+    assert!(generated.code.as_str().contains(
+        "fn apply(&mut self, input: sema::Sema<sema::Input>) -> sema::Sema<sema::Output>;"
+    ));
 }
 
 #[test]
@@ -134,6 +137,21 @@ fn compiled_fixture_is_usable_rust() {
     );
     assert_eq!(input.route(), generated::InputRoute::Record);
     assert_eq!(input.short_header(), generated::short_header::INPUT_RECORD);
+}
+
+#[test]
+fn generated_roots_wrap_into_messages_with_automatic_origin_route() {
+    let input = "(Observe ([schema] Principle))"
+        .parse::<generated::Input>()
+        .expect("parse observe input");
+    let message: generated::signal::Signal<generated::signal::Input> =
+        input.with_origin_route(generated::OriginRoute(19));
+
+    assert_eq!(message.origin_route(), generated::OriginRoute(19));
+    assert!(matches!(
+        message.root(),
+        generated::Input::Observe(generated::Query { .. })
+    ));
 }
 
 #[test]
@@ -230,7 +248,9 @@ fn generated_signal_roots_emit_typed_message_sent_events() {
     let input = "(Observe ([schema] Principle))"
         .parse::<generated::Input>()
         .expect("parse observe input");
-    let event = input.message_sent(generated::MessageIdentifier(42));
+    let event = input
+        .with_origin_route(generated::OriginRoute(900))
+        .message_sent(generated::MessageIdentifier(42));
     let mut hook = MailHook::new();
 
     event.push_to(&mut hook).expect("message sent event pushes");
@@ -239,12 +259,17 @@ fn generated_signal_roots_emit_typed_message_sent_events() {
         hook.sent_events,
         vec![generated::MessageSent {
             identifier: generated::MessageIdentifier(42),
-            origin_route: generated::OriginRoute(42),
+            origin_route: generated::OriginRoute(900),
             root: generated::MessageRoot::Input,
             short_header: generated::short_header::INPUT_OBSERVE,
         }],
     );
-    assert_eq!(event.origin_route(), generated::OriginRoute(42));
+    assert_eq!(event.origin_route(), generated::OriginRoute(900));
+    assert_ne!(
+        event.origin_route(),
+        generated::OriginRoute(event.identifier.0),
+        "origin route is minted separately from the message identifier"
+    );
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -310,7 +335,11 @@ fn generated_input_dispatches_mail_through_schema_emitted_nexus_trait_methods() 
     let mut hook = MailHook::new();
 
     let processed = input
-        .dispatch_mail_with_nexus(generated::MessageIdentifier(77), &nexus)
+        .dispatch_mail_with_nexus(
+            generated::MessageIdentifier(77),
+            generated::OriginRoute(701),
+            &nexus,
+        )
         .expect("input dispatches through generated nexus trait");
     processed
         .push_to(&mut hook)
@@ -329,7 +358,7 @@ fn generated_input_dispatches_mail_through_schema_emitted_nexus_trait_methods() 
         hook.processed_events,
         vec![generated::MessageProcessed {
             identifier: generated::MessageIdentifier(77),
-            origin_route: generated::OriginRoute(77),
+            origin_route: generated::OriginRoute(701),
             reply: RuntimeReply::Recorded("schema objects drive behavior".to_owned()),
         }],
     );

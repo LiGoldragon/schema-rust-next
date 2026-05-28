@@ -69,7 +69,7 @@
           '';
           generated-nexus-traits = pkgs.runCommand "schema-rust-next-generated-nexus-traits" { } ''
             grep -R "pub trait InputNexus" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
-            grep -R "pub fn dispatch_mail_with_nexus<Nexus>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub fn dispatch_mail_with_nexus<NexusActor>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "generated::InputNexus for SpiritNexus" ${src}/tests/emission.rs >/dev/null
             grep -R "input dispatches through generated nexus trait" ${src}/tests/emission.rs >/dev/null
             touch $out
@@ -77,6 +77,9 @@
           generated-mail-events = pkgs.runCommand "schema-rust-next-generated-mail-events" { } ''
             grep -R "pub struct MessageIdentifier(pub Integer)" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub struct OriginRoute(pub Integer)" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub mod schema" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub enum Kind" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub mod signal" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "impl OriginRoute" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub enum MessageRoot" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub struct MessageSent" ${src}/tests/fixtures/spirit_generated.rs >/dev/null

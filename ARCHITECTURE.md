@@ -27,6 +27,11 @@
   imports/exports, input, output, and namespace. Emission may attach different
   support traits per plane, but the generated Rust mirrors the same authored
   schema structure.
+- Plane namespaces are emitted for the three runtime planes. `signal::Input`,
+  `nexus::Input`, and `sema::Input` are the public shape for plane-local
+  payloads; the current flat backing names (`Input`, `NexusInput`,
+  `SemaInput`) are a bootstrap detail until the schema files split fully by
+  plane.
 - Single-colon schema namespaces map to generated Rust module paths. The
   schema path `spirit-next:nexus:Mail` becomes a module/type path under
   `src/schema/` without inventing a second naming system.
@@ -36,13 +41,16 @@
   logic.
 - Generated signal roots emit rkyv-derived data types, NOTA text conversion,
   short-header route triage, and binary signal-frame encode/decode methods.
-- Generated signal roots emit mail-event nouns. `MessageSent` records the
-  message identifier, default origin route, root schema type, and short header,
-  and pushes through `MessageSentHook` so routers, UI layers, or introspection
-  subscribers can react without polling. `NexusMail<Payload>` represents mail
-  being processed by Nexus and carries the same origin route; `MessageProcessed`
-  carries it again with the processed reply after Nexus receives the SEMA or
-  execution outcome.
+- Generated signal roots emit mail-event nouns. `signal::Signal<Root>`,
+  `nexus::Nexus<Root>`, and `sema::Sema<Root>` are the automatic envelopes for
+  root objects in each plane; each has an `origin_route` field plus the root
+  object and reports its meta-plane as `schema::Kind::{Signal,Nexus,Sema}`.
+  `MessageSent` records the message identifier, origin route, root schema type,
+  and short header, and pushes through `MessageSentHook` so routers, UI layers,
+  or introspection subscribers can react without polling. `NexusMail<Payload>`
+  represents mail being processed by Nexus and carries the same origin route;
+  `MessageProcessed` carries it again with the processed reply after Nexus
+  receives the SEMA or execution outcome.
 - Generated objects are the hand-written behavior surfaces. The emitter must
   not compensate for missing runtime nouns by producing free helper functions.
   If dispatch, upgrade, mail acceptance, or SEMA application needs behavior,
@@ -51,7 +59,8 @@
 - Schemas that declare `NexusInput`/`NexusOutput` emit a `NexusEngine` trait,
   and schemas that declare `SemaInput`/`SemaOutput` emit a `SemaEngine` trait.
   Tests and runtime code use those generated plane traits so Nexus takes and
-  returns Nexus schema objects, and SEMA takes and returns SEMA schema objects.
+  returns routed Nexus root messages, and SEMA takes and returns routed SEMA
+  root messages.
 - Mail identifiers, origin routes, and short headers use the generated scalar
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is

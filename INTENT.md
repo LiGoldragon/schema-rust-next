@@ -26,6 +26,12 @@ shape into source-visible modules under `src/schema/`, using single-colon
 schema paths as the source naming convention and Rust modules as the emitted
 form.*
 
+*Plane payload names are scoped by emitted namespaces. The generated public
+surface should read `signal::Input`, `nexus::Input`, and `sema::Input`
+inside their respective planes rather than forcing redundant names like
+`SemaInput` at every use site. The backing flat names may exist during the
+bootstrap, but trait signatures and examples should use the plane namespace.*
+
 *Nexus is also the mail keeper. When Signal input enters Nexus, it is wrapped
 as `NexusMail<Payload>` with a message identifier; while Nexus owns that value,
 the mail is being processed. Nexus receives SEMA or execution replies and emits
@@ -52,12 +58,14 @@ an upgrade/accept trait that hand-written runtime code implements, including
 observable acceptance of old-version messages.*
 
 *Signal messages participate in a universal mail mechanism. Sending a generated
-signal root creates a typed `MessageSent` event with the message identifier,
+root message creates a typed `MessageSent` event with the message identifier,
 origin route, root schema type, and short header, and the event is pushed
 through hook methods so observers can react without polling. The origin route is
-default metadata derived from the message identifier; authored component schemas
-do not have to spell it on every root message for Nexus and SEMA replies to
-carry the return address.*
+an automatically-created field on the root Signal, Nexus, and SEMA message
+objects; authored component schemas do not have to spell it out, but the
+generated message object always carries it as part of the message while it moves
+through the runtime chain. The origin route is minted distinctly from the
+message identifier.*
 
 *Mail lifecycle support should stay on the schema scalar floor. Generated
 `MessageIdentifier`, `OriginRoute`, and `MessageSent.short_header` use

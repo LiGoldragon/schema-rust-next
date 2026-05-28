@@ -72,6 +72,7 @@ impl RustEmitter {
         writer.blank();
         writer.emit_signal_frame_support(&asschema.input_and_output());
         writer.emit_mail_event_support(&asschema.input_and_output());
+        writer.emit_plane_namespaces(asschema.namespace(), &asschema.input_and_output());
         writer.emit_message_identifier_support();
         writer.emit_nexus_support(&asschema.input_and_output());
         writer.emit_schema_plane_trait_support(asschema.namespace());
@@ -656,6 +657,14 @@ impl RustWriter {
         }
         self.line("}");
         self.blank();
+        self.emit_schema_kind_support();
+        self.blank();
+        self.emit_plane_envelope("Signal", "Signal");
+        self.blank();
+        self.emit_plane_envelope("Nexus", "Nexus");
+        self.blank();
+        self.emit_plane_envelope("Sema", "Sema");
+        self.blank();
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line("pub struct MessageSent {");
         self.line("    pub identifier: MessageIdentifier,");
@@ -704,8 +713,8 @@ impl RustWriter {
         self.line("}");
         self.blank();
         self.line("impl<Payload> NexusMail<Payload> {");
-        self.line("    pub fn new(identifier: MessageIdentifier, payload: Payload) -> Self {");
-        self.line("        Self { identifier, origin_route: identifier.origin_route(), payload }");
+        self.line("    pub fn new(identifier: MessageIdentifier, origin_route: OriginRoute, payload: Payload) -> Self {");
+        self.line("        Self { identifier, origin_route, payload }");
         self.line("    }");
         self.blank();
         self.line("    pub fn identifier(&self) -> MessageIdentifier {");
@@ -722,8 +731,8 @@ impl RustWriter {
         self.line("}");
         self.blank();
         self.line("impl<Reply> MessageProcessed<Reply> {");
-        self.line("    pub fn new(identifier: MessageIdentifier, reply: Reply) -> Self {");
-        self.line("        Self { identifier, origin_route: identifier.origin_route(), reply }");
+        self.line("    pub fn new(identifier: MessageIdentifier, origin_route: OriginRoute, reply: Reply) -> Self {");
+        self.line("        Self { identifier, origin_route, reply }");
         self.line("    }");
         self.blank();
         self.line("    pub fn identifier(&self) -> MessageIdentifier {");
@@ -750,21 +759,77 @@ impl RustWriter {
         for root_enum in root_enums {
             self.line(format!("impl {} {{", root_enum.name));
             self.line(
+                "    pub fn with_origin_route(self, origin_route: OriginRoute) -> Signal<Self> {",
+            );
+            self.line("        Signal::new(origin_route, self)");
+            self.line("    }");
+            self.blank();
+            self.line("}");
+            self.blank();
+            self.line(format!("impl signal::Signal<{}> {{", root_enum.name));
+            self.line(
                 "    pub fn message_sent(&self, identifier: MessageIdentifier) -> MessageSent {",
             );
             self.line("        MessageSent {");
             self.line("            identifier,");
-            self.line("            origin_route: identifier.origin_route(),");
+            self.line("            origin_route: self.origin_route(),");
             self.line(format!(
                 "            root: MessageRoot::{},",
                 root_enum.name
             ));
-            self.line("            short_header: self.short_header(),");
+            self.line("            short_header: self.root().short_header(),");
             self.line("        }");
             self.line("    }");
             self.line("}");
             self.blank();
         }
+    }
+
+    fn emit_schema_kind_support(&mut self) {
+        self.line("pub mod schema {");
+        self.line("    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
+        self.line("    pub enum Kind {");
+        self.line("        Signal,");
+        self.line("        Nexus,");
+        self.line("        Sema,");
+        self.line("    }");
+        self.line("}");
+    }
+
+    fn emit_plane_envelope(&mut self, name: &str, kind: &str) {
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
+        self.line(format!("pub struct {name}<Root> {{"));
+        self.line("    pub origin_route: OriginRoute,");
+        self.line("    pub root: Root,");
+        self.line("}");
+        self.blank();
+        self.line(format!("impl<Root> {name}<Root> {{"));
+        self.line("    pub fn new(origin_route: OriginRoute, root: Root) -> Self {");
+        self.line("        Self { origin_route, root }");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn origin_route(&self) -> OriginRoute {");
+        self.line("        self.origin_route");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn kind(&self) -> schema::Kind {");
+        self.line(format!("        schema::Kind::{kind}"));
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn root(&self) -> &Root {");
+        self.line("        &self.root");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn into_root(self) -> Root {");
+        self.line("        self.root");
+        self.line("    }");
+        self.blank();
+        self.line(format!("    pub fn map_root<NextRoot>(self, map: impl FnOnce(Root) -> NextRoot) -> {name}<NextRoot> {{"));
+        self.line(format!(
+            "        {name}::new(self.origin_route, map(self.root))"
+        ));
+        self.line("    }");
+        self.line("}");
     }
 
     fn emit_message_identifier_support(&mut self) {
@@ -778,9 +843,74 @@ impl RustWriter {
         self.line("    }");
         self.line("}");
         self.blank();
-        self.line("impl MessageIdentifier {");
-        self.line("    pub fn origin_route(self) -> OriginRoute {");
-        self.line("        OriginRoute(self.0)");
+    }
+
+    fn emit_plane_namespaces(
+        &mut self,
+        declarations: &[TypeDeclaration],
+        root_enums: &[&EnumDeclaration],
+    ) {
+        if self.has_root_enum(root_enums, "Input") || self.has_root_enum(root_enums, "Output") {
+            self.line("pub mod signal {");
+            if self.has_root_enum(root_enums, "Input") {
+                self.line("    pub type Input = super::Input;");
+            }
+            if self.has_root_enum(root_enums, "Output") {
+                self.line("    pub type Output = super::Output;");
+            }
+            self.line("    pub type Signal<Root> = super::Signal<Root>;");
+            self.line("}");
+            self.blank();
+        }
+        if self.has_type(declarations, "NexusInput") || self.has_type(declarations, "NexusOutput") {
+            self.line("pub mod nexus {");
+            if self.has_type(declarations, "NexusInput") {
+                self.line("    pub type Input = super::NexusInput;");
+            }
+            if self.has_type(declarations, "NexusOutput") {
+                self.line("    pub type Output = super::NexusOutput;");
+            }
+            self.line("    pub type Nexus<Root> = super::Nexus<Root>;");
+            self.line("}");
+            self.blank();
+        }
+        if self.has_type(declarations, "SemaInput") || self.has_type(declarations, "SemaOutput") {
+            self.line("pub mod sema {");
+            if self.has_type(declarations, "SemaInput") {
+                self.line("    pub type Input = super::SemaInput;");
+            }
+            if self.has_type(declarations, "SemaOutput") {
+                self.line("    pub type Output = super::SemaOutput;");
+            }
+            self.line("    pub type Sema<Root> = super::Sema<Root>;");
+            self.line("}");
+            self.blank();
+        }
+        if self.has_type(declarations, "NexusInput") {
+            self.emit_plane_origin_route_constructor("NexusInput", "nexus::Nexus", "nexus::Nexus");
+        }
+        if self.has_type(declarations, "NexusOutput") {
+            self.emit_plane_origin_route_constructor("NexusOutput", "nexus::Nexus", "nexus::Nexus");
+        }
+        if self.has_type(declarations, "SemaInput") {
+            self.emit_plane_origin_route_constructor("SemaInput", "sema::Sema", "sema::Sema");
+        }
+        if self.has_type(declarations, "SemaOutput") {
+            self.emit_plane_origin_route_constructor("SemaOutput", "sema::Sema", "sema::Sema");
+        }
+    }
+
+    fn emit_plane_origin_route_constructor(
+        &mut self,
+        type_name: &str,
+        return_type: &str,
+        constructor: &str,
+    ) {
+        self.line(format!("impl {type_name} {{"));
+        self.line(format!(
+            "    pub fn with_origin_route(self, origin_route: OriginRoute) -> {return_type}<Self> {{"
+        ));
+        self.line(format!("        {constructor}::new(origin_route, self)"));
         self.line("    }");
         self.line("}");
         self.blank();
@@ -819,26 +949,26 @@ impl RustWriter {
     fn emit_nexus_dispatch_impl(&mut self, root_enum: &EnumDeclaration) {
         let trait_name = format!("{}Nexus", root_enum.name);
         self.line(format!("impl {} {{", root_enum.name));
-        self.line("    pub fn dispatch_mail_with_nexus<Nexus>(self, identifier: MessageIdentifier, nexus: &Nexus) -> Result<MessageProcessed<Nexus::Reply>, Nexus::Error>");
+        self.line("    pub fn dispatch_mail_with_nexus<NexusActor>(self, identifier: MessageIdentifier, origin_route: OriginRoute, nexus: &NexusActor) -> Result<MessageProcessed<NexusActor::Reply>, NexusActor::Error>");
         self.line("    where");
-        self.line(format!("        Nexus: {trait_name},"));
+        self.line(format!("        NexusActor: {trait_name},"));
         self.line("    {");
         self.line("        let reply = match self {");
         for variant in &root_enum.variants {
             let method_name = variant.name.field_name();
             match &variant.payload {
                 Some(_) => self.line(format!(
-                    "            Self::{}(payload) => nexus.{method_name}(NexusMail::new(identifier, payload)),",
+                    "            Self::{}(payload) => nexus.{method_name}(NexusMail::new(identifier, origin_route, payload)),",
                     variant.name
                 )),
                 None => self.line(format!(
-                    "            Self::{} => nexus.{method_name}(NexusMail::new(identifier, ())),",
+                    "            Self::{} => nexus.{method_name}(NexusMail::new(identifier, origin_route, ())),",
                     variant.name
                 )),
             }
         }
         self.line("        }?;");
-        self.line("        Ok(MessageProcessed::new(identifier, reply))");
+        self.line("        Ok(MessageProcessed::new(identifier, origin_route, reply))");
         self.line("    }");
         self.line("}");
     }
@@ -862,16 +992,22 @@ impl RustWriter {
     fn emit_schema_plane_trait_support(&mut self, declarations: &[TypeDeclaration]) {
         if self.has_type(declarations, "NexusInput") && self.has_type(declarations, "NexusOutput") {
             self.line("pub trait NexusEngine {");
-            self.line("    fn execute(&self, input: NexusInput) -> NexusOutput;");
+            self.line("    fn execute(&self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;");
             self.line("}");
             self.blank();
         }
         if self.has_type(declarations, "SemaInput") && self.has_type(declarations, "SemaOutput") {
             self.line("pub trait SemaEngine {");
-            self.line("    fn apply(&mut self, input: SemaInput) -> SemaOutput;");
+            self.line("    fn apply(&mut self, input: sema::Sema<sema::Input>) -> sema::Sema<sema::Output>;");
             self.line("}");
             self.blank();
         }
+    }
+
+    fn has_root_enum(&self, root_enums: &[&EnumDeclaration], type_name: &str) -> bool {
+        root_enums
+            .iter()
+            .any(|declaration| declaration.name.as_str() == type_name)
     }
 
     fn has_type(&self, declarations: &[TypeDeclaration], type_name: &str) -> bool {
