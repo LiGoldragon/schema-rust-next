@@ -17,9 +17,8 @@ fn emit_consumer() -> String {
         "0.1.0",
     );
     let engine = SchemaEngine::default();
-    let source =
-        std::fs::read_to_string(fixture_schema_dir("import-consumer").join("lib.schema"))
-            .expect("read consumer schema");
+    let source = std::fs::read_to_string(fixture_schema_dir("import-consumer").join("lib.schema"))
+        .expect("read consumer schema");
     let asschema = engine
         .lower_source_with_resolver(
             &source,

@@ -49,6 +49,7 @@ impl RustEmitter {
         writer.emit_imports(asschema.resolved_imports());
         writer.emit_nota_support();
         writer.blank();
+        writer.emit_imported_error_bridges(asschema.resolved_imports());
 
         for declaration in asschema.namespace() {
             writer.emit_type(declaration);
@@ -151,6 +152,36 @@ impl RustWriter {
             self.line(import.use_item());
         }
         self.blank();
+    }
+
+    /// Bridge each imported module's `NotaDecodeError` into the local
+    /// one.
+    ///
+    /// Every emitted module declares its own `NotaDecodeError`. When a
+    /// local NOTA codec calls an imported type's `from_nota_block`, the
+    /// `?` operator needs `From<dependency::NotaDecodeError>` for the
+    /// local error. One `From` impl per distinct imported module makes
+    /// the cross-crate codec compose; the dependency's parse failures
+    /// surface as the local `Parse` variant.
+    fn emit_imported_error_bridges(&mut self, imports: &[ResolvedImport]) {
+        let mut bridged_modules: Vec<String> = Vec::new();
+        for import in imports {
+            let module_path = import.module_path();
+            if bridged_modules.contains(&module_path) {
+                continue;
+            }
+            bridged_modules.push(module_path.clone());
+            self.line(format!(
+                "impl From<{module_path}::NotaDecodeError> for NotaDecodeError {{"
+            ));
+            self.line(format!(
+                "    fn from(error: {module_path}::NotaDecodeError) -> Self {{"
+            ));
+            self.line("        Self::Parse(error.to_string())");
+            self.line("    }");
+            self.line("}");
+            self.blank();
+        }
     }
 
     fn emit_type(&mut self, declaration: &TypeDeclaration) {
