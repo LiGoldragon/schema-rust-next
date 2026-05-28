@@ -124,7 +124,7 @@ dependencies = [
 [[package]]
 name = "nota-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#183a1739984f79249887798e8bb16cb587fead09"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#d8d489dcd831b9a4bce2345cb89be262d7a2cbd3"
 
 [[package]]
 name = "once_cell"
@@ -233,7 +233,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "schema-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#0c148f99eb9fd30a0b66efe89cac6d660406e1e9"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#31497c9d0662f96acceb0ebbd6511c546a44074c"
 dependencies = [
  "nota-next",
 ]

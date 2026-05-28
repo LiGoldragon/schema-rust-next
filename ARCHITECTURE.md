@@ -83,11 +83,14 @@ calls, sigils, or structural macro captures. The active test path gets that
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is
   still emitted by the support surface.
-- Collection references emit standard Rust collections. `rust_type` recurses a
-  `TypeReference`: `Vector` → `Vec<inner>`, `Map` →
-  `std::collections::BTreeMap<key, value>` (fully qualified, so no `use` and a
-  deterministic key order for rkyv + NOTA), `Optional` → `Option<inner>`. The
-  `parse_expression` / `format_expression` recursions mirror the type:
+- Collection references emit standard Rust collections. Authored schemas use
+  typed NOTA datatype objects such as `(Vec Topic)`, `(Map (Topic
+  RecordIdentifier))`, and `(Optional Topic)`; square brackets are not the
+  `Vec` reference syntax. `rust_type` recurses a `TypeReference`: `Vector` →
+  `Vec<inner>`, `Map` → `std::collections::BTreeMap<key, value>` (fully
+  qualified, so no `use` and a deterministic key order for rkyv + NOTA),
+  `Optional` → `Option<inner>`. The `parse_expression` / `format_expression`
+  recursions mirror the type:
   `parse_vector` / `parse_map` / `parse_option` decode and `format_vector` /
   `format_map` / `format_option` encode, each taking a per-element closure so
   nesting composes. A plain non-scalar element passes its `from_nota_block`

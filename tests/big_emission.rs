@@ -212,7 +212,7 @@ fn generated_big_rust_contains_the_current_schema_stack_surfaces() {
 
 #[test]
 fn compiled_large_spirit_generated_rust_parses_frames_and_dispatches_mail() {
-    let input = "(Record ([schema rust] Decision [schema generated Rust drives behavior] Maximum operator 7))"
+    let input = "(Record ([[schema] [rust]] Decision [schema generated Rust drives behavior] Maximum operator 7))"
         .parse::<spirit_large_generated::Input>()
         .expect("large spirit input parses");
     let frame = input.encode_signal_frame().expect("signal frame encodes");

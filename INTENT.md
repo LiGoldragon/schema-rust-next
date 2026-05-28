@@ -86,18 +86,20 @@ message identifier.*
 moved toward a shared schema-authored core.*
 
 *Collection references emit the standard Rust collections plus their NOTA
-codecs. The authored schema uses native NOTA structure at reference positions:
-`[T]` emits `Vec<T>`, `{K V}` emits `std::collections::BTreeMap<K, V>` (ordered
-so rkyv and NOTA round-trips are deterministic), and `(Optional T)` emits
-`Option<T>`; nested references recurse. The emitter writes a `NotaCollection`
-runtime codec — a vector is a square-bracket block, a map is a brace of
-key/value pairs, an option is `None` / `(Some inner)` — and the per-field
-parse/format expressions recurse through it. A type used as a map key earns
-the ordering derives (`PartialOrd, Ord` on both the type and its archived
-form); other types keep the original derive set. The collection codec and the
-ordering derives are emitted only when the schema actually uses a collection,
-so a collection-free schema emits byte-identical Rust to the pre-collection
-emitter.*
+codecs. The authored schema uses typed NOTA datatype objects at reference
+positions: `(Vec T)` emits `Vec<T>`, `(Map (K V))` emits
+`std::collections::BTreeMap<K, V>` (ordered so rkyv and NOTA round-trips are
+deterministic), and `(Optional T)` emits `Option<T>`; nested references
+recurse. Square brackets remain raw NOTA vector structure and schema field
+lists; they are not `Vec` reference syntax. The emitter writes a
+`NotaCollection` runtime codec — a vector value is still a square-bracket
+block, a map value is a brace of key/value pairs, an option is `None` /
+`(Some inner)` — and the per-field parse/format expressions recurse through
+it. A type used as a map key earns the ordering derives (`PartialOrd, Ord` on
+both the type and its archived form); other types keep the original derive
+set. The collection codec and the ordering derives are emitted only when the
+schema actually uses a collection, so a collection-free schema emits
+byte-identical Rust to the pre-collection emitter.*
 
 *The emitter starts from assembled schema data, not from authored macro syntax.
 That assembled data is currently produced in memory from real `.schema`

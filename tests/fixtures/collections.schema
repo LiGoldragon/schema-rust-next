@@ -1,10 +1,10 @@
 ((Register Cluster) (Observe Query))
-((Projected {NodeName NodeConfig}) (Listed [NodeName]))
+((Projected (Map (NodeName NodeConfig))) (Listed (Vec NodeName)))
 {
   NodeName [Text]
   NodeConfig [Text]
   Service [Text]
   Query [Topic]
   Topic [Text]
-  Cluster [(services [Service]) (nodes {NodeName NodeConfig}) (cache (Optional NodeConfig))]
+  Cluster [(services (Vec Service)) (nodes (Map (NodeName NodeConfig))) (cache (Optional NodeConfig))]
 }

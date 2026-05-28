@@ -23,6 +23,11 @@ derives, short-header signal frames, Nexus traits, Nexus mail lifecycle
 objects, mail-event hooks, and upgrade/accept traits that runtime crates
 implement against.
 
+Composite type references come from typed NOTA datatype objects in the
+authored schema: `(Vec Topic)`, `(Map (Topic RecordIdentifier))`, and
+`(Optional Topic)`. Square brackets are still used by NOTA values and schema
+field lists; they are not the schema surface for declaring `Vec`.
+
 For development, `cargo run --example emit_schema -- <schema/lib.schema>
 <crate:module> [version]` prints the generated Rust source so a consumer can
 refresh its checked-in `src/schema/<module>.rs` from local schema-next and

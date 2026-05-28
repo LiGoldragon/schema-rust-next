@@ -3,5 +3,5 @@
 ((Marked DatabaseMarker))
 {
   Topic [Text]
-  Query [Topic]
+  Query [(Vec Topic)]
 }

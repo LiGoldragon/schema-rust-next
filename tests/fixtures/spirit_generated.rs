@@ -113,11 +113,104 @@ impl<'a> NotaText<'a> {
     }
 }
 
+pub struct NotaCollection<'a> {
+    block: &'a nota_next::Block,
+}
+
+impl<'a> NotaCollection<'a> {
+    pub fn new(block: &'a nota_next::Block) -> Self {
+        Self { block }
+    }
+
+    pub fn parse_vector<Element, Parse>(&self, parse: Parse) -> Result<Vec<Element>, NotaDecodeError>
+    where
+        Parse: FnMut(&nota_next::Block) -> Result<Element, NotaDecodeError>,
+    {
+        match self.block {
+            nota_next::Block::Delimited { delimiter: nota_next::Delimiter::SquareBracket, root_objects, .. } => {
+                root_objects.iter().map(parse).collect()
+            }
+            _ => Err(NotaDecodeError::ExpectedDelimited { type_name: "Vec", delimiter: "square bracket" }),
+        }
+    }
+
+    pub fn parse_map<Key, Value, ParseKey, ParseValue>(&self, mut parse_key: ParseKey, mut parse_value: ParseValue) -> Result<std::collections::BTreeMap<Key, Value>, NotaDecodeError>
+    where
+        Key: Ord,
+        ParseKey: FnMut(&nota_next::Block) -> Result<Key, NotaDecodeError>,
+        ParseValue: FnMut(&nota_next::Block) -> Result<Value, NotaDecodeError>,
+    {
+        match self.block {
+            nota_next::Block::Delimited { delimiter: nota_next::Delimiter::Brace, root_objects, .. } => {
+                if root_objects.len() % 2 != 0 {
+                    return Err(NotaDecodeError::ExpectedRootCount { type_name: "BTreeMap", expected: root_objects.len() + 1, found: root_objects.len() });
+                }
+                let mut map = std::collections::BTreeMap::new();
+                let mut index = 0;
+                while index < root_objects.len() {
+                    let key = parse_key(&root_objects[index])?;
+                    let value = parse_value(&root_objects[index + 1])?;
+                    map.insert(key, value);
+                    index += 2;
+                }
+                Ok(map)
+            }
+            _ => Err(NotaDecodeError::ExpectedDelimited { type_name: "BTreeMap", delimiter: "brace" }),
+        }
+    }
+
+    pub fn parse_option<Inner, Parse>(&self, mut parse: Parse) -> Result<Option<Inner>, NotaDecodeError>
+    where
+        Parse: FnMut(&nota_next::Block) -> Result<Inner, NotaDecodeError>,
+    {
+        if self.block.demote_to_string() == Some("None") {
+            return Ok(None);
+        }
+        let children = NotaBlock::new(self.block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Option", 2)?;
+        let tag = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "Option tag" })?;
+        if tag != "Some" {
+            return Err(NotaDecodeError::UnknownVariant { enum_name: "Option", variant: tag.to_owned() });
+        }
+        Ok(Some(parse(&children[1])?))
+    }
+
+    pub fn format_vector<Element, Format>(elements: &[Element], format: Format) -> String
+    where
+        Format: FnMut(&Element) -> String,
+    {
+        let parts: Vec<String> = elements.iter().map(format).collect();
+        format!("[{}]", parts.join(" "))
+    }
+
+    pub fn format_map<Key, Value, FormatKey, FormatValue>(map: &std::collections::BTreeMap<Key, Value>, mut format_key: FormatKey, mut format_value: FormatValue) -> String
+    where
+        FormatKey: FnMut(&Key) -> String,
+        FormatValue: FnMut(&Value) -> String,
+    {
+        let mut parts: Vec<String> = Vec::new();
+        for (key, value) in map {
+            parts.push(format_key(key));
+            parts.push(format_value(value));
+        }
+        format!("{{{}}}", parts.join(" "))
+    }
+
+    pub fn format_option<Inner, Format>(value: &Option<Inner>, mut format: Format) -> String
+    where
+        Format: FnMut(&Inner) -> String,
+    {
+        match value {
+            Some(inner) => format!("(Some {})", format(inner)),
+            None => "None".to_owned(),
+        }
+    }
+}
+
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Topic(pub Text);
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Topics(pub Topic);
+pub struct Topics(pub Vec<Topic>);
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Description(pub Text);
@@ -140,7 +233,7 @@ pub struct Query {
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RecordSet(pub Entry);
+pub struct RecordSet(pub Vec<Entry>);
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -186,11 +279,11 @@ impl Topic {
 
 impl Topics {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(Topic::from_nota_block(block)?))
+        Ok(Self(NotaCollection::new(block).parse_vector(Topic::from_nota_block)?))
     }
 
     pub fn to_nota(&self) -> String {
-        self.0.to_nota()
+        NotaCollection::format_vector(&self.0, |element| element.to_nota())
     }
 }
 
@@ -256,11 +349,11 @@ impl Query {
 
 impl RecordSet {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(Entry::from_nota_block(block)?))
+        Ok(Self(NotaCollection::new(block).parse_vector(Entry::from_nota_block)?))
     }
 
     pub fn to_nota(&self) -> String {
-        self.0.to_nota()
+        NotaCollection::format_vector(&self.0, |element| element.to_nota())
     }
 }
 

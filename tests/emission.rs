@@ -109,7 +109,7 @@ fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
   ErrorReport [ErrorMessage DatabaseMarker]
   Entry [Topic Kind Description Magnitude]
   Query [Topic Kind]
-  RecordSet [Entry]
+  RecordSet [(Vec Entry)]
   Kind (Decision Principle Correction Clarification Constraint)
   Magnitude (Minimum VeryLow Low Medium High VeryHigh Maximum)
 }";
@@ -133,7 +133,7 @@ fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
 #[test]
 fn compiled_fixture_is_usable_rust() {
     let entry = generated::Entry {
-        topics: generated::Topics(generated::Topic(String::from("schema"))),
+        topics: generated::Topics(vec![generated::Topic(String::from("schema"))]),
         kind: generated::Kind::Decision,
         description: generated::Description(String::from("schema drives rust")),
         magnitude: generated::Magnitude::Maximum,
@@ -172,13 +172,13 @@ fn generated_roots_wrap_into_messages_with_automatic_origin_route() {
 
 #[test]
 fn generated_input_parses_cli_nota_and_emits_nota() {
-    let input = "(Record ([schema] Constraint [agent's clarified intent] Maximum))"
+    let input = "(Record ([[schema]] Constraint [agent's clarified intent] Maximum))"
         .parse::<generated::Input>()
         .expect("parse generated input");
 
     match &input {
         generated::Input::Record(entry) => {
-            assert_eq!(entry.topics.0.0, "schema");
+            assert_eq!(entry.topics.0[0].0, "schema");
             assert_eq!(entry.kind, generated::Kind::Constraint);
             assert_eq!(entry.description.0, "agent's clarified intent");
             assert_eq!(entry.magnitude, generated::Magnitude::Maximum);
@@ -188,13 +188,13 @@ fn generated_input_parses_cli_nota_and_emits_nota() {
 
     assert_eq!(
         input.to_string(),
-        "(Record ([schema] Constraint [agent's clarified intent] Maximum))"
+        "(Record ([[schema]] Constraint [agent's clarified intent] Maximum))"
     );
 }
 
 #[test]
 fn generated_signal_input_round_trips_from_nota_to_rkyv_bytes() {
-    let input = "(Record ([schema] Constraint [component messages use binary rkyv] Maximum))"
+    let input = "(Record ([[schema]] Constraint [component messages use binary rkyv] Maximum))"
         .parse::<generated::Input>()
         .expect("parse generated input");
 
@@ -207,7 +207,7 @@ fn generated_signal_input_round_trips_from_nota_to_rkyv_bytes() {
 
 #[test]
 fn generated_signal_frame_methods_round_trip_and_triage_route() {
-    let input = "(Record ([schema] Constraint [schema owns signal frames] Maximum))"
+    let input = "(Record ([[schema]] Constraint [schema owns signal frames] Maximum))"
         .parse::<generated::Input>()
         .expect("parse generated input");
 
@@ -344,7 +344,7 @@ impl generated::InputNexus for SpiritNexus {
 #[test]
 fn generated_input_dispatches_mail_through_schema_emitted_nexus_trait_methods() {
     assert_eq!(RuntimeError::StateRejected, RuntimeError::StateRejected);
-    let input = "(Record ([schema] Principle [schema objects drive behavior] Maximum))"
+    let input = "(Record ([[schema]] Principle [schema objects drive behavior] Maximum))"
         .parse::<generated::Input>()
         .expect("parse generated input");
     let nexus = SpiritNexus::new();
@@ -396,7 +396,7 @@ impl generated::UpgradeFrom<PreviousEntry> for generated::Entry {
 
     fn upgrade_from(previous: PreviousEntry) -> Result<Self, Self::Error> {
         Ok(Self {
-            topics: generated::Topics(generated::Topic(previous.topic)),
+            topics: generated::Topics(vec![generated::Topic(previous.topic)]),
             kind: generated::Kind::Clarification,
             description: generated::Description(previous.description),
             magnitude: generated::Magnitude::High,
@@ -427,7 +427,7 @@ fn generated_upgrade_trait_accepts_previous_schema_objects_observably() {
     assert_eq!(
         event,
         UpgradeEvent {
-            description: "accepted previous Entry as ([schema] Clarification [old client spoke previous entry] High)".to_owned(),
+            description: "accepted previous Entry as ([[schema]] Clarification [old client spoke previous entry] High)".to_owned(),
         },
     );
 }
