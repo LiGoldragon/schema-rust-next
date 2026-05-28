@@ -144,6 +144,10 @@
               echo "root Input/Output examples must use direct variants, not nested enum bodies" >&2
               exit 1
             fi
+            if grep -R -n -E '@(Vec|Option|KeyValue|Bag|HashSet)' ${src}/tests ${src}/src; then
+              echo "schema-rust-next examples must use no-sigil tagged macro invocation" >&2
+              exit 1
+            fi
             touch $out
           '';
           no-production-free-functions = pkgs.runCommand "schema-rust-next-no-production-free-functions" { } ''

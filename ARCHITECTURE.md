@@ -14,8 +14,8 @@
 ## Input Contract
 
 The input contract is assembled schema, not authored schema. `Asschema` has
-already resolved all macros and sugar; the emitter does not read `@Vec`,
-`@Option`, `@KeyValue`, `$Name`, or structural macro captures. The final
+already resolved all macros and sugar; the emitter does not read authored
+`Vec`/`Option`/`KeyValue` macro calls, `$Name`, or structural macro captures. The final
 collection/reference variants are `Plain`, `Vector`, `Optional`, and `Map`;
 `Map` carries one vector payload, for example
 `(Map [(Plain Topic) (Plain RecordIdentifier)])`.
