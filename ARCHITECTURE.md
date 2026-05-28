@@ -14,11 +14,9 @@
 ## Input Contract
 
 The input contract is assembled schema, not authored schema. `Asschema` has
-already resolved all macros and sugar; the emitter does not read authored
-`Vec`/`Option`/`KeyValue` macro calls, `$Name`, or structural macro captures.
-The active test path gets that `Asschema` as typed data from `schema-next`
-lowering real `.schema` fixtures. The old checked-in `.asschema`
-vector-record syntax is obsolete.
+already resolved all macros and sugar; the emitter does not read authored macro
+calls, sigils, or structural macro captures. The active test path gets that
+`Asschema` as typed data from `schema-next` lowering real `.schema` fixtures.
 
 ## Constraints
 
@@ -26,7 +24,7 @@ vector-record syntax is obsolete.
 - No `macro_rules!` or proc-macro surface in `src/`.
 - No authored-schema macro syntax is accepted as an emitter input. Tests lower
   real `.schema` fixtures into typed `Asschema` values before comparing
-  generated Rust; no `.asschema` syntax fixture is accepted.
+  generated Rust; no assembled-schema text fixture is accepted.
 - Generated Rust is source-visible under `src/schema/`; consumers include or
   compile that source rather than hiding the interface in `OUT_DIR`.
 - Emission is tested by source fixture comparison and by compiling the fixture
@@ -86,7 +84,7 @@ vector-record syntax is obsolete.
   mail support closer to schema-authored nouns while the core mail schema is
   still emitted by the support surface.
 - Collection references emit standard Rust collections. `rust_type` recurses a
-  `TypeReference`: `Vector` → `Vec<inner>`, `Map` (the `KeyValue` keyword) →
+  `TypeReference`: `Vector` → `Vec<inner>`, `Map` →
   `std::collections::BTreeMap<key, value>` (fully qualified, so no `use` and a
   deterministic key order for rkyv + NOTA), `Optional` → `Option<inner>`. The
   `parse_expression` / `format_expression` recursions mirror the type:

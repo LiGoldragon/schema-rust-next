@@ -86,24 +86,24 @@ message identifier.*
 moved toward a shared schema-authored core.*
 
 *Collection references emit the standard Rust collections plus their NOTA
-codecs. A `Vec T` reference emits `Vec<T>`, a `KeyValue K V` reference emits
-`std::collections::BTreeMap<K, V>` (ordered so rkyv and NOTA round-trips are
-deterministic), and an `Option T` reference emits `Option<T>`; nested
-references recurse. The emitter writes a `NotaCollection` runtime codec — a
-vector is a square-bracket block, a map is a brace of key/value pairs, an
-option is `None` / `(Some inner)` — and the per-field parse/format
-expressions recurse through it. A type used as a map key earns the ordering
-derives (`PartialOrd, Ord` on both the type and its archived form); other
-types keep the original derive set. The collection codec and the ordering
-derives are emitted only when the schema actually uses a collection, so a
-collection-free schema emits byte-identical Rust to the pre-collection
+codecs. The authored schema uses native NOTA structure at reference positions:
+`[T]` emits `Vec<T>`, `{K V}` emits `std::collections::BTreeMap<K, V>` (ordered
+so rkyv and NOTA round-trips are deterministic), and `(Optional T)` emits
+`Option<T>`; nested references recurse. The emitter writes a `NotaCollection`
+runtime codec — a vector is a square-bracket block, a map is a brace of
+key/value pairs, an option is `None` / `(Some inner)` — and the per-field
+parse/format expressions recurse through it. A type used as a map key earns
+the ordering derives (`PartialOrd, Ord` on both the type and its archived
+form); other types keep the original derive set. The collection codec and the
+ordering derives are emitted only when the schema actually uses a collection,
+so a collection-free schema emits byte-identical Rust to the pre-collection
 emitter.*
 
 *The emitter starts from assembled schema data, not from authored macro syntax.
 That assembled data is currently produced in memory from real `.schema`
-fixtures; the old checked-in `.asschema` vector-record syntax is obsolete and
-must not remain in active code or fixtures. Rust emission must not compensate
-for unresolved schema sugar.*
+fixtures; checked-in assembled-schema text fixtures must not remain in active
+code or fixtures. Rust emission must not compensate for unresolved schema
+sugar.*
 
 Future forge build logic may eventually turn generated Rust into
 content-addressed crates directly. That is future design; this repo owns the

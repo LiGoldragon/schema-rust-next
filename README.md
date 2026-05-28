@@ -9,9 +9,8 @@ then layer macro ergonomics later.
 
 The emitter consumes final assembled-schema data, not authored schema sugar.
 That `Asschema` value is produced in memory by `schema-next` from real
-`.schema` fixtures. The old checked-in `.asschema` vector-record fixture
-syntax is obsolete and is no longer part of this repository's active test
-surface.
+`.schema` fixtures. Checked-in assembled-schema text fixtures are no longer
+part of this repository's active test surface.
 
 Generated paths mirror crate-local schema modules. An assembled schema identity
 such as `spirit-next:lib` emits to `src/schema/lib.rs`; an identity such as
