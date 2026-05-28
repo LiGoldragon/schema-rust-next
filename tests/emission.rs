@@ -34,6 +34,13 @@ fn emits_rust_source_as_a_separate_artifact() {
     );
     assert!(generated.code.as_str().contains("pub trait InputNexus"));
     assert!(generated.code.as_str().contains("pub struct MessageSent"));
+    assert!(generated.code.as_str().contains("pub struct OriginRoute"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub origin_route: OriginRoute")
+    );
     assert!(
         generated
             .code
@@ -231,10 +238,12 @@ fn generated_signal_roots_emit_typed_message_sent_events() {
         hook.sent_events,
         vec![generated::MessageSent {
             identifier: generated::MessageIdentifier(42),
+            origin_route: generated::OriginRoute(42),
             root: generated::MessageRoot::Input,
             short_header: generated::short_header::INPUT_OBSERVE,
         }],
     );
+    assert_eq!(event.origin_route(), generated::OriginRoute(42));
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -319,6 +328,7 @@ fn generated_input_dispatches_mail_through_schema_emitted_nexus_trait_methods() 
         hook.processed_events,
         vec![generated::MessageProcessed {
             identifier: generated::MessageIdentifier(77),
+            origin_route: generated::OriginRoute(77),
             reply: RuntimeReply::Recorded("schema objects drive behavior".to_owned()),
         }],
     );

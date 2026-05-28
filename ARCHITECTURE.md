@@ -37,11 +37,12 @@
 - Generated signal roots emit rkyv-derived data types, NOTA text conversion,
   short-header route triage, and binary signal-frame encode/decode methods.
 - Generated signal roots emit mail-event nouns. `MessageSent` records the
-  message identifier, root schema type, and short header, and pushes through
-  `MessageSentHook` so routers, UI layers, or introspection subscribers can
-  react without polling. `NexusMail<Payload>` represents mail being processed
-  by Nexus, and `MessageProcessed<Reply>` carries the processed reply after
-  Nexus receives the SEMA or execution outcome.
+  message identifier, default origin route, root schema type, and short header,
+  and pushes through `MessageSentHook` so routers, UI layers, or introspection
+  subscribers can react without polling. `NexusMail<Payload>` represents mail
+  being processed by Nexus and carries the same origin route; `MessageProcessed`
+  carries it again with the processed reply after Nexus receives the SEMA or
+  execution outcome.
 - Generated objects are the hand-written behavior surfaces. The emitter must
   not compensate for missing runtime nouns by producing free helper functions.
   If dispatch, upgrade, mail acceptance, or SEMA application needs behavior,
@@ -51,7 +52,7 @@
   and schemas that declare `SemaInput`/`SemaOutput` emit a `SemaEngine` trait.
   Tests and runtime code use those generated plane traits so Nexus takes and
   returns Nexus schema objects, and SEMA takes and returns SEMA schema objects.
-- Mail identifiers and short headers use the generated scalar floor
-  (`Integer`) rather than bespoke primitive widths. This keeps the runtime mail
-  support closer to schema-authored nouns while the core mail schema is still
-  emitted by the support surface.
+- Mail identifiers, origin routes, and short headers use the generated scalar
+  floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
+  mail support closer to schema-authored nouns while the core mail schema is
+  still emitted by the support surface.

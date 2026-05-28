@@ -72,6 +72,7 @@ impl RustEmitter {
         writer.blank();
         writer.emit_signal_frame_support(&asschema.input_and_output());
         writer.emit_mail_event_support(&asschema.input_and_output());
+        writer.emit_message_identifier_support();
         writer.emit_nexus_support(&asschema.input_and_output());
         writer.emit_schema_plane_trait_support(asschema.namespace());
         writer.emit_upgrade_support();
@@ -646,6 +647,9 @@ impl RustWriter {
         self.line("pub struct MessageIdentifier(pub Integer);");
         self.blank();
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
+        self.line("pub struct OriginRoute(pub Integer);");
+        self.blank();
+        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub enum MessageRoot {");
         for root_enum in root_enums {
             self.line(format!("    {},", root_enum.name));
@@ -655,6 +659,7 @@ impl RustWriter {
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line("pub struct MessageSent {");
         self.line("    pub identifier: MessageIdentifier,");
+        self.line("    pub origin_route: OriginRoute,");
         self.line("    pub root: MessageRoot,");
         self.line("    pub short_header: Integer,");
         self.line("}");
@@ -662,12 +667,14 @@ impl RustWriter {
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line("pub struct NexusMail<Payload> {");
         self.line("    pub identifier: MessageIdentifier,");
+        self.line("    pub origin_route: OriginRoute,");
         self.line("    pub payload: Payload,");
         self.line("}");
         self.blank();
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line("pub struct MessageProcessed<Reply> {");
         self.line("    pub identifier: MessageIdentifier,");
+        self.line("    pub origin_route: OriginRoute,");
         self.line("    pub reply: Reply,");
         self.line("}");
         self.blank();
@@ -684,6 +691,10 @@ impl RustWriter {
         self.line("}");
         self.blank();
         self.line("impl MessageSent {");
+        self.line("    pub fn origin_route(&self) -> OriginRoute {");
+        self.line("        self.origin_route");
+        self.line("    }");
+        self.blank();
         self.line("    pub fn push_to<Hook>(&self, hook: &mut Hook) -> Result<(), Hook::Error>");
         self.line("    where");
         self.line("        Hook: MessageSentHook,");
@@ -694,11 +705,15 @@ impl RustWriter {
         self.blank();
         self.line("impl<Payload> NexusMail<Payload> {");
         self.line("    pub fn new(identifier: MessageIdentifier, payload: Payload) -> Self {");
-        self.line("        Self { identifier, payload }");
+        self.line("        Self { identifier, origin_route: identifier.origin_route(), payload }");
         self.line("    }");
         self.blank();
         self.line("    pub fn identifier(&self) -> MessageIdentifier {");
         self.line("        self.identifier");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn origin_route(&self) -> OriginRoute {");
+        self.line("        self.origin_route");
         self.line("    }");
         self.blank();
         self.line("    pub fn into_payload(self) -> Payload {");
@@ -708,11 +723,15 @@ impl RustWriter {
         self.blank();
         self.line("impl<Reply> MessageProcessed<Reply> {");
         self.line("    pub fn new(identifier: MessageIdentifier, reply: Reply) -> Self {");
-        self.line("        Self { identifier, reply }");
+        self.line("        Self { identifier, origin_route: identifier.origin_route(), reply }");
         self.line("    }");
         self.blank();
         self.line("    pub fn identifier(&self) -> MessageIdentifier {");
         self.line("        self.identifier");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn origin_route(&self) -> OriginRoute {");
+        self.line("        self.origin_route");
         self.line("    }");
         self.blank();
         self.line("    pub fn into_reply(self) -> Reply {");
@@ -735,6 +754,7 @@ impl RustWriter {
             );
             self.line("        MessageSent {");
             self.line("            identifier,");
+            self.line("            origin_route: identifier.origin_route(),");
             self.line(format!(
                 "            root: MessageRoot::{},",
                 root_enum.name
@@ -745,6 +765,15 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
+    }
+
+    fn emit_message_identifier_support(&mut self) {
+        self.line("impl MessageIdentifier {");
+        self.line("    pub fn origin_route(self) -> OriginRoute {");
+        self.line("        OriginRoute(self.0)");
+        self.line("    }");
+        self.line("}");
+        self.blank();
     }
 
     fn emit_nexus_support(&mut self, root_enums: &[&EnumDeclaration]) {

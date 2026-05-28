@@ -53,13 +53,16 @@ observable acceptance of old-version messages.*
 
 *Signal messages participate in a universal mail mechanism. Sending a generated
 signal root creates a typed `MessageSent` event with the message identifier,
-root schema type, and short header, and the event is pushed through hook methods
-so observers can react without polling.*
+origin route, root schema type, and short header, and the event is pushed
+through hook methods so observers can react without polling. The origin route is
+default metadata derived from the message identifier; authored component schemas
+do not have to spell it on every root message for Nexus and SEMA replies to
+carry the return address.*
 
 *Mail lifecycle support should stay on the schema scalar floor. Generated
-`MessageIdentifier` and `MessageSent.short_header` use `Integer`, not bespoke
-primitive widths, while the mail support surface is being moved toward a shared
-schema-authored core.*
+`MessageIdentifier`, `OriginRoute`, and `MessageSent.short_header` use
+`Integer`, not bespoke primitive widths, while the mail support surface is being
+moved toward a shared schema-authored core.*
 
 Future forge build logic may eventually turn generated Rust into
 content-addressed crates directly. That is future design; this repo owns the

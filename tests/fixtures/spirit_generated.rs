@@ -542,6 +542,9 @@ impl Output {
 pub struct MessageIdentifier(pub Integer);
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OriginRoute(pub Integer);
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MessageRoot {
     Input,
     Output,
@@ -550,6 +553,7 @@ pub enum MessageRoot {
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MessageSent {
     pub identifier: MessageIdentifier,
+    pub origin_route: OriginRoute,
     pub root: MessageRoot,
     pub short_header: Integer,
 }
@@ -557,12 +561,14 @@ pub struct MessageSent {
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct NexusMail<Payload> {
     pub identifier: MessageIdentifier,
+    pub origin_route: OriginRoute,
     pub payload: Payload,
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MessageProcessed<Reply> {
     pub identifier: MessageIdentifier,
+    pub origin_route: OriginRoute,
     pub reply: Reply,
 }
 
@@ -579,6 +585,10 @@ pub trait MessageProcessedHook<Reply> {
 }
 
 impl MessageSent {
+    pub fn origin_route(&self) -> OriginRoute {
+        self.origin_route
+    }
+
     pub fn push_to<Hook>(&self, hook: &mut Hook) -> Result<(), Hook::Error>
     where
         Hook: MessageSentHook,
@@ -589,11 +599,15 @@ impl MessageSent {
 
 impl<Payload> NexusMail<Payload> {
     pub fn new(identifier: MessageIdentifier, payload: Payload) -> Self {
-        Self { identifier, payload }
+        Self { identifier, origin_route: identifier.origin_route(), payload }
     }
 
     pub fn identifier(&self) -> MessageIdentifier {
         self.identifier
+    }
+
+    pub fn origin_route(&self) -> OriginRoute {
+        self.origin_route
     }
 
     pub fn into_payload(self) -> Payload {
@@ -603,11 +617,15 @@ impl<Payload> NexusMail<Payload> {
 
 impl<Reply> MessageProcessed<Reply> {
     pub fn new(identifier: MessageIdentifier, reply: Reply) -> Self {
-        Self { identifier, reply }
+        Self { identifier, origin_route: identifier.origin_route(), reply }
     }
 
     pub fn identifier(&self) -> MessageIdentifier {
         self.identifier
+    }
+
+    pub fn origin_route(&self) -> OriginRoute {
+        self.origin_route
     }
 
     pub fn into_reply(self) -> Reply {
@@ -627,6 +645,7 @@ impl Input {
     pub fn message_sent(&self, identifier: MessageIdentifier) -> MessageSent {
         MessageSent {
             identifier,
+            origin_route: identifier.origin_route(),
             root: MessageRoot::Input,
             short_header: self.short_header(),
         }
@@ -637,9 +656,16 @@ impl Output {
     pub fn message_sent(&self, identifier: MessageIdentifier) -> MessageSent {
         MessageSent {
             identifier,
+            origin_route: identifier.origin_route(),
             root: MessageRoot::Output,
             short_header: self.short_header(),
         }
+    }
+}
+
+impl MessageIdentifier {
+    pub fn origin_route(self) -> OriginRoute {
+        OriginRoute(self.0)
     }
 }
 
