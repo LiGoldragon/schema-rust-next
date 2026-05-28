@@ -38,6 +38,13 @@ needs to branch across Signal, Nexus, and SEMA, the emitted surface is
 envelopes. A thin unit discriminator beside the message would duplicate
 authority and is not the load-bearing plane surface.*
 
+*Cross-crate schema imports preserve type ownership. A consumer schema that
+imports `crate:module:Type` emits a local Rust alias to the dependency crate's
+generated type instead of re-declaring the type locally. The imported crate owns
+the type definition and its rkyv/NOTA implementations; the consumer only uses
+the alias in its local signal/Nexus/SEMA objects and bridges imported decode
+errors into the local generated error type.*
+
 *Nexus is also the mail keeper. When Signal input enters Nexus, it is wrapped
 as `NexusMail<Payload>` with a message identifier; while Nexus owns that value,
 the mail is being processed. Nexus receives SEMA or execution replies and emits

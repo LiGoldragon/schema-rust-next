@@ -113,6 +113,19 @@
             grep -R "struct RustModulePath" ${src}/src/lib.rs >/dev/null
             touch $out
           '';
+          generated-cross-crate-imports = pkgs.runCommand "schema-rust-next-generated-cross-crate-imports" { } ''
+            grep -R "imported_type_is_referenced_through_a_use_not_redeclared" ${src}/tests/cross_crate_import.rs >/dev/null
+            grep -R "pub use marker_core::schema::mail::DatabaseMarker as DatabaseMarker" ${src}/tests/cross_crate_import.rs >/dev/null
+            grep -R "Marked(DatabaseMarker)" ${src}/tests/cross_crate_import.rs >/dev/null
+            touch $out
+          '';
+          no-nested-root-enum-examples = pkgs.runCommand "schema-rust-next-no-nested-root-enum-examples" { } ''
+            if grep -R -n -E '\((Input|Output) \(\(' ${src}/tests; then
+              echo "root Input/Output examples must use direct variants, not nested enum bodies" >&2
+              exit 1
+            fi
+            touch $out
+          '';
           no-production-free-functions = pkgs.runCommand "schema-rust-next-no-production-free-functions" { } ''
             if grep -R -n -E '^(pub(\([^)]*\))? )?fn ' ${src}/src; then
               echo "production Rust must not use module-level free functions" >&2

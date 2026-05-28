@@ -1,5 +1,6 @@
 use schema_next::{
-    Asschema, EnumDeclaration, EnumVariant, Name, StructDeclaration, TypeDeclaration, TypeReference,
+    Asschema, EnumDeclaration, EnumVariant, Name, ResolvedImport, StructDeclaration,
+    TypeDeclaration, TypeReference,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,8 +47,10 @@ impl RustEmitter {
         writer.line("pub type Text = String;");
         writer.line("pub type Integer = u64;");
         writer.blank();
+        writer.emit_imports(asschema.resolved_imports());
         writer.emit_nota_support();
         writer.blank();
+        writer.emit_imported_error_bridges(asschema.resolved_imports());
         if CollectionScan::new(asschema).uses_collections() {
             writer.emit_collection_support();
             writer.blank();
@@ -260,6 +263,45 @@ impl RustWriter {
 
     fn finish(self) -> String {
         self.output
+    }
+
+    /// Emit a `pub use` alias for each cross-crate import.
+    ///
+    /// The dependency crate emits its own definition of the type; the
+    /// consumer references that type through the local alias instead of
+    /// re-declaring it. Later fields or variants that name the imported
+    /// type therefore use the dependency crate's type identity.
+    fn emit_imports(&mut self, imports: &[ResolvedImport]) {
+        if imports.is_empty() {
+            return;
+        }
+        for import in imports {
+            self.line(import.use_item());
+        }
+        self.blank();
+    }
+
+    /// Bridge each imported module's `NotaDecodeError` into the local
+    /// error type so generated codecs compose across crate boundaries.
+    fn emit_imported_error_bridges(&mut self, imports: &[ResolvedImport]) {
+        let mut bridged_modules: Vec<String> = Vec::new();
+        for import in imports {
+            let module_path = import.module_path();
+            if bridged_modules.contains(&module_path) {
+                continue;
+            }
+            bridged_modules.push(module_path.clone());
+            self.line(format!(
+                "impl From<{module_path}::NotaDecodeError> for NotaDecodeError {{"
+            ));
+            self.line(format!(
+                "    fn from(error: {module_path}::NotaDecodeError) -> Self {{"
+            ));
+            self.line("        Self::Parse(error.to_string())");
+            self.line("    }");
+            self.line("}");
+            self.blank();
+        }
     }
 
     fn emit_type(&mut self, declaration: &TypeDeclaration) {

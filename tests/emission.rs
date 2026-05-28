@@ -91,8 +91,8 @@ fn emitted_path_mirrors_schema_module_identity() {
 fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
     let source = "\
 {}
-(Input ((Record Entry) (Observe Query)))
-(Output ((RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport)))
+(Input (Record Entry) (Observe Query))
+(Output (RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport))
 {
   NexusInput ((Signal Input) (Sema SemaOutput))
   NexusOutput ((Sema SemaInput) (Signal Output))

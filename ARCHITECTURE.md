@@ -35,6 +35,13 @@
 - Single-colon schema namespaces map to generated Rust module paths. The
   schema path `spirit-next:nexus:Mail` becomes a module/type path under
   `src/schema/` without inventing a second naming system.
+- Cross-crate schema imports are emitted as Rust aliases, not local
+  re-declarations. If `schema-next` resolves `DatabaseMarker` from
+  `marker-core:mail:DatabaseMarker`, this emitter writes a `pub use
+  marker_core::schema::mail::DatabaseMarker as DatabaseMarker;` line and local
+  fields or variants reference that alias. The dependency crate owns the
+  imported type's rkyv/NOTA implementations; the consumer only bridges imported
+  decode errors into its own generated error type.
 - Generated schema objects emit `UpgradeFrom<Previous>` and
   `AcceptPrevious<Previous>` trait surfaces. A changed type gets hand-written
   upgrade behavior on the generated noun; unchanged types do not need upgrade
