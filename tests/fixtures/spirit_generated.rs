@@ -668,7 +668,7 @@ impl OriginRoute {
         Ok(Self(NotaBlock::new(block).parse_integer()?))
     }
 
-    pub fn to_nota(&self) -> String {
+    pub fn to_nota(self) -> String {
         self.0.to_string()
     }
 }

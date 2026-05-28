@@ -773,7 +773,7 @@ impl RustWriter {
         self.line("        Ok(Self(NotaBlock::new(block).parse_integer()?))");
         self.line("    }");
         self.blank();
-        self.line("    pub fn to_nota(&self) -> String {");
+        self.line("    pub fn to_nota(self) -> String {");
         self.line("        self.0.to_string()");
         self.line("    }");
         self.line("}");
