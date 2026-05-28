@@ -1,5 +1,6 @@
 use schema_next::{
-    Asschema, EnumDeclaration, EnumVariant, Name, StructDeclaration, TypeDeclaration, TypeReference,
+    Asschema, EnumDeclaration, EnumVariant, Name, ResolvedImport, StructDeclaration,
+    TypeDeclaration, TypeReference,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -45,6 +46,7 @@ impl RustEmitter {
         writer.line("pub type Text = String;");
         writer.line("pub type Integer = u64;");
         writer.blank();
+        writer.emit_imports(asschema.resolved_imports());
         writer.emit_nota_support();
         writer.blank();
 
@@ -130,6 +132,25 @@ impl RustWriter {
 
     fn finish(self) -> String {
         self.output
+    }
+
+    /// Emit a `pub use` alias for each cross-crate import.
+    ///
+    /// The dependency crate emits its own definition of the type
+    /// (struct/enum + rkyv + NOTA impls); the consumer references it
+    /// under the local alias instead of re-declaring it. Every later
+    /// field or variant that names the imported type resolves through
+    /// the alias, so the consumer's emitted module uses the dependency
+    /// crate's type identity — the proof that one type, not two
+    /// look-alikes, crosses the crate boundary.
+    fn emit_imports(&mut self, imports: &[ResolvedImport]) {
+        if imports.is_empty() {
+            return;
+        }
+        for import in imports {
+            self.line(import.use_item());
+        }
+        self.blank();
     }
 
     fn emit_type(&mut self, declaration: &TypeDeclaration) {
