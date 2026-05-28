@@ -13,7 +13,10 @@ name = "schema_rust_next"
 path = "src/lib.rs"
 
 [dependencies]
-schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "main" }
+# Coupled designer feature branch: collections in this emitter need the
+# TypeReference enum from schema-next's matching branch. The operator
+# reconciles this back to branch = "main" on integration (intent record 1057).
+schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "designer-schema-collections-2026-05-28" }
 
 [dev-dependencies]
 nota-next = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }

@@ -66,3 +66,23 @@
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is
   still emitted by the support surface.
+- Collection references emit standard Rust collections. `rust_type` recurses a
+  `TypeReference`: `Vector` → `Vec<inner>`, `Map` (the `KeyValue` keyword) →
+  `std::collections::BTreeMap<key, value>` (fully qualified, so no `use` and a
+  deterministic key order for rkyv + NOTA), `Optional` → `Option<inner>`. The
+  `parse_expression` / `format_expression` recursions mirror the type:
+  `parse_vector` / `parse_map` / `parse_option` decode and `format_vector` /
+  `format_map` / `format_option` encode, each taking a per-element closure so
+  nesting composes. A plain non-scalar element passes its `from_nota_block`
+  associated function directly (no redundant closure); a map / vector / option
+  value already held by reference is passed without a needless borrow.
+- A `NotaCollection` runtime codec block is emitted only when the schema uses a
+  collection. Its NOTA shapes: a `Vec` is a square-bracket block `[e1 e2 ...]`,
+  a `BTreeMap` is a brace block of `key value` pairs `{k1 v1 ...}`, an `Option`
+  is the atom `None` or the paren `(Some inner)`.
+- A type used anywhere as a `BTreeMap` key earns the ordering derives
+  (`PartialOrd, Ord` plus the archived `#[rkyv(derive(...))]`); value-only and
+  non-collection types keep the original derive set. `CollectionScan` decides
+  both the collection-codec emission and the map-key derive set, so a
+  collection-free schema emits byte-identical Rust to the pre-collection
+  emitter — the regression safety net the legacy fixture comparison enforces.

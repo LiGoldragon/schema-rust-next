@@ -78,6 +78,20 @@ message identifier.*
 `Integer`, not bespoke primitive widths, while the mail support surface is being
 moved toward a shared schema-authored core.*
 
+*Collection references emit the standard Rust collections plus their NOTA
+codecs. A `Vec T` reference emits `Vec<T>`, a `KeyValue K V` reference emits
+`std::collections::BTreeMap<K, V>` (ordered so rkyv and NOTA round-trips are
+deterministic), and an `Option T` reference emits `Option<T>`; nested
+references recurse. The emitter writes a `NotaCollection` runtime codec — a
+vector is a square-bracket block, a map is a brace of key/value pairs, an
+option is `None` / `(Some inner)` — and the per-field parse/format
+expressions recurse through it. A type used as a map key earns the ordering
+derives (`PartialOrd, Ord` on both the type and its archived form); other
+types keep the original derive set. The collection codec and the ordering
+derives are emitted only when the schema actually uses a collection, so a
+collection-free schema emits byte-identical Rust to the pre-collection
+emitter.*
+
 Future forge build logic may eventually turn generated Rust into
 content-addressed crates directly. That is future design; this repo owns the
 current explicit source emission step.

@@ -7,6 +7,11 @@ mod generated {
     include!("fixtures/spirit_generated.rs");
 }
 
+#[allow(dead_code)]
+mod collections_generated {
+    include!("fixtures/collections_generated.rs");
+}
+
 #[test]
 fn emits_rust_source_as_a_separate_artifact() {
     let source = include_str!("fixtures/spirit-min.schema");
@@ -426,4 +431,123 @@ fn generated_upgrade_trait_accepts_previous_schema_objects_observably() {
             description: "accepted previous Entry as ([schema] Clarification [old client spoke previous entry] High)".to_owned(),
         },
     );
+}
+
+#[test]
+fn emits_vec_map_and_option_collection_types_with_runtime_codec() {
+    let source = include_str!("fixtures/collections.schema");
+    let asschema = SchemaEngine::default()
+        .lower_source(source, SchemaIdentity::new("collections:lib", "0.1.0"))
+        .expect("schema lowers");
+    let generated = RustEmitter::default().emit(&asschema);
+    let code = generated.as_str();
+
+    // The collection-support runtime block is emitted because the
+    // schema uses collections.
+    assert!(code.contains("pub struct NotaCollection"));
+    // Vec / KeyValue->BTreeMap / Option render at the field positions.
+    assert!(code.contains("pub services: Vec<Service>,"));
+    assert!(code.contains("pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,"));
+    assert!(code.contains("pub cache: Option<NodeConfig>,"));
+    // Collection payloads in a root output variant.
+    assert!(code.contains("Projected(std::collections::BTreeMap<NodeName, NodeConfig>),"));
+    assert!(code.contains("Listed(Vec<NodeName>),"));
+    // A map key type earns the ordering derives so BTreeMap compiles;
+    // a value-only type keeps the original derive set.
+    assert!(code.contains(
+        "#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]\npub struct NodeName(pub Text);"
+    ));
+    assert!(code.contains(
+        "#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]\npub struct NodeConfig(pub Text);"
+    ));
+}
+
+#[test]
+fn collection_free_schema_emits_byte_identical_to_legacy_fixture() {
+    // The regression safety net: a schema that uses no collection still
+    // emits exactly the checked-in fixture, proving the collection work
+    // is purely additive.
+    let source = include_str!("fixtures/spirit-min.schema");
+    let asschema = SchemaEngine::default()
+        .lower_source(source, SchemaIdentity::new("spirit:lib", "0.1.0"))
+        .expect("schema lowers");
+    let generated = RustEmitter::default().emit(&asschema);
+
+    assert_eq!(
+        generated.as_str(),
+        include_str!("fixtures/spirit_generated.rs")
+    );
+}
+
+#[test]
+fn generated_collection_struct_round_trips_through_nota() {
+    // Author a Cluster carrying all three collection kinds, encode it
+    // to NOTA, parse it back, and confirm the value survives.
+    let cluster = collections_generated::Cluster {
+        services: vec![
+            collections_generated::Service("dns".to_owned()),
+            collections_generated::Service("mail".to_owned()),
+        ],
+        nodes: {
+            let mut nodes = std::collections::BTreeMap::new();
+            nodes.insert(
+                collections_generated::NodeName("alpha".to_owned()),
+                collections_generated::NodeConfig("primary".to_owned()),
+            );
+            nodes.insert(
+                collections_generated::NodeName("beta".to_owned()),
+                collections_generated::NodeConfig("replica".to_owned()),
+            );
+            nodes
+        },
+        cache: Some(collections_generated::NodeConfig("warm".to_owned())),
+    };
+
+    let encoded = cluster.to_nota();
+    let parsed = collections_generated::Cluster::from_nota_block(
+        &collections_generated::NotaSource::new(&encoded)
+            .parse_root()
+            .expect("cluster nota parses"),
+    )
+    .expect("cluster decodes");
+
+    assert_eq!(parsed, cluster);
+    // The empty / None forms also round-trip.
+    let empty = collections_generated::Cluster {
+        services: Vec::new(),
+        nodes: std::collections::BTreeMap::new(),
+        cache: None,
+    };
+    let empty_encoded = empty.to_nota();
+    let empty_parsed = collections_generated::Cluster::from_nota_block(
+        &collections_generated::NotaSource::new(&empty_encoded)
+            .parse_root()
+            .expect("empty cluster nota parses"),
+    )
+    .expect("empty cluster decodes");
+    assert_eq!(empty_parsed, empty);
+}
+
+#[test]
+fn generated_collection_payload_root_variant_round_trips_to_nota_and_rkyv() {
+    let mut projection = std::collections::BTreeMap::new();
+    projection.insert(
+        collections_generated::NodeName("alpha".to_owned()),
+        collections_generated::NodeConfig("primary".to_owned()),
+    );
+    let output = collections_generated::Output::Projected(projection);
+
+    // NOTA round-trip through the root enum codec.
+    let encoded = output.to_nota();
+    let parsed = encoded
+        .parse::<collections_generated::Output>()
+        .expect("projected output parses");
+    assert_eq!(parsed, output);
+
+    // rkyv round-trip — the map key's ordering derives let the archive
+    // form compile and compare.
+    let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&output).expect("archive output");
+    let decoded = rkyv::from_bytes::<collections_generated::Output, rkyv::rancor::Error>(&bytes)
+        .expect("decode output");
+    assert_eq!(decoded, output);
 }
