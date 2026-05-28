@@ -12,8 +12,12 @@ publish      = false
 name = "schema_rust_next"
 path = "src/lib.rs"
 
+# Co-develops against the schema-next collections branch — this
+# emitter consumes the new TypeReference enum (Plain/Vector/Map/
+# Optional). Reverts to `branch = "main"` when collections land on
+# schema-next's main.
 [dependencies]
-schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "main" }
+schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "collections-horizon-2026-05-28" }
 
 [dev-dependencies]
 nota-next = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }

@@ -61,16 +61,19 @@ fn emitted_path_mirrors_schema_module_identity() {
 }
 
 #[test]
-fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
+fn emits_the_data_carrying_plane_surface_and_three_engine_chain() {
+    // Record 1054: the schema root plane surface is a single
+    // data-carrying enum named `Plane` whose Signal / Nexus / Sema
+    // variants carry the actual plane messages with the auto-created
+    // origin route (records 1038/1039) folded onto the root, so runtime
+    // code matches directly on the plane (record 1052 names the kind-
+    // tag-beside-envelope shape wrong). Records 1028/1030: the three
+    // trait-ordered engines drive a real chain, not dead scaffolding.
     let source = "\
 {}
 (Input ((Record Entry) (Observe Query)))
 (Output ((RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport)))
 {
-  NexusInput ((Signal Input) (Sema SemaOutput))
-  NexusOutput ((Sema SemaInput) (Signal Output))
-  SemaInput ((Record Entry) (Observe Query))
-  SemaOutput ((Recorded SemaReceipt) (Observed ObservedRecords) (Missed ErrorReport))
   Topic [Text]
   Description [Text]
   ErrorMessage [Text]
@@ -91,21 +94,28 @@ fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
         .lower_source(source, SchemaIdentity::new("spirit:lib", "0.1.0"))
         .expect("schema lowers");
     let generated = RustEmitter::default().emit_file(&asschema);
+    let code = generated.code.as_str();
 
-    assert!(generated.code.as_str().contains("pub trait NexusEngine"));
-    assert!(
-        generated
-            .code
-            .as_str()
-            .contains("fn execute(&self, input: NexusInput) -> NexusOutput;")
-    );
-    assert!(generated.code.as_str().contains("pub trait SemaEngine"));
-    assert!(
-        generated
-            .code
-            .as_str()
-            .contains("fn apply(&mut self, input: SemaInput) -> SemaOutput;")
-    );
+    // The data-carrying Plane enum: variants carry the messages, with
+    // the origin route as the leading element (record 1054 + 1038/1039).
+    assert!(code.contains("pub enum Plane {"));
+    assert!(code.contains("Signal(OriginRoute, Input),"));
+    assert!(code.contains("Nexus(OriginRoute, Input),"));
+    assert!(code.contains("Sema(OriginRoute, Output),"));
+
+    // The three trait-ordered engines (record 1028).
+    assert!(code.contains("pub trait SignalEngine"));
+    assert!(code.contains("fn admit(&self, signal: Plane) -> Result<Plane, Self::Error>;"));
+    assert!(code.contains("pub trait NexusEngine"));
+    assert!(code.contains("fn execute(&self, nexus: Plane) -> Result<Plane, Self::Error>;"));
+    assert!(code.contains("pub trait SemaEngine"));
+    assert!(code.contains("fn apply(&mut self, sema: Plane) -> Result<Plane, Self::Error>;"));
+
+    // The running chain that drives Signal -> Nexus -> Sema (record 1030).
+    assert!(code.contains("pub fn drive<Signal, Nexus, Sema>("));
+    assert!(code.contains("let admitted = signal.admit(self)"));
+    assert!(code.contains("let executed = nexus.execute(admitted)"));
+    assert!(code.contains("let reply = sema.apply(executed)"));
 }
 
 #[test]
@@ -222,7 +232,7 @@ fn generated_signal_roots_emit_typed_message_sent_events() {
     let input = "(Observe ([schema] Principle))"
         .parse::<generated::Input>()
         .expect("parse observe input");
-    let event = input.message_sent(generated::MessageIdentifier(42));
+    let event = input.message_sent(generated::MessageIdentifier(42), generated::OriginRoute(7));
     let mut hook = MailHook::new();
 
     event.push_to(&mut hook).expect("message sent event pushes");
@@ -231,6 +241,7 @@ fn generated_signal_roots_emit_typed_message_sent_events() {
         hook.sent_events,
         vec![generated::MessageSent {
             identifier: generated::MessageIdentifier(42),
+            origin_route: generated::OriginRoute(7),
             root: generated::MessageRoot::Input,
             short_header: generated::short_header::INPUT_OBSERVE,
         }],
@@ -300,7 +311,11 @@ fn generated_input_dispatches_mail_through_schema_emitted_nexus_trait_methods() 
     let mut hook = MailHook::new();
 
     let processed = input
-        .dispatch_mail_with_nexus(generated::MessageIdentifier(77), &nexus)
+        .dispatch_mail_with_nexus(
+            generated::MessageIdentifier(77),
+            generated::OriginRoute(13),
+            &nexus,
+        )
         .expect("input dispatches through generated nexus trait");
     processed
         .push_to(&mut hook)
@@ -310,6 +325,8 @@ fn generated_input_dispatches_mail_through_schema_emitted_nexus_trait_methods() 
         processed.reply,
         RuntimeReply::Recorded("schema objects drive behavior".to_owned())
     );
+    // The origin route minted at dispatch threads onto the processed reply.
+    assert_eq!(processed.origin_route(), generated::OriginRoute(13));
     assert_eq!(nexus.accepted_records(), 1);
     assert_eq!(
         nexus.last_mail_identifier.get(),
@@ -319,6 +336,7 @@ fn generated_input_dispatches_mail_through_schema_emitted_nexus_trait_methods() 
         hook.processed_events,
         vec![generated::MessageProcessed {
             identifier: generated::MessageIdentifier(77),
+            origin_route: generated::OriginRoute(13),
             reply: RuntimeReply::Recorded("schema objects drive behavior".to_owned()),
         }],
     );

@@ -73,3 +73,53 @@ existing emission stays byte-identical:
 schema-next resolves the imports (`Asschema::resolved_imports`); this repo
 turns each `ResolvedImport` into the `use` alias and the error bridge. Proven
 end-to-end in Nix by the `schema-core` repo's `nix flake check`.
+
+## Collection emission (record 1034)
+
+The emitter turns the `TypeReference` collection variants into real Rust:
+
+- `rust_type` recurses: `Vector` → `Vec<inner>`, `Map` → fully-qualified
+  `std::collections::BTreeMap<key, value>` (no `use` emitted, deterministic
+  ordering), `Optional` → `Option<inner>`. `Plain` keeps the leaf name (after a
+  cross-crate import alias, the imported type's local name).
+- `parse_expression` / `format_expression` recurse over the same variants and
+  emit a NOTA codec. NOTA shapes: a `Vec` is `[e1 e2 ...]`, a `BTreeMap` is a
+  brace of `key value` pairs `{k1 v1 ...}`, an `Option` is the atom `None` or
+  `(Some inner)`.
+- `emit_collection_support` emits a `NotaCollection` runtime type carrying
+  `parse_vector` / `parse_map` / `parse_option` (closure-per-element so nested
+  collections compose) and the matching `format_*` associated functions. It is
+  emitted ONLY when `CollectionScan` finds a collection in the schema, so
+  collection-free schemas keep byte-identical emission.
+- Map keys need ordering. `CollectionScan::map_key_type_names` finds every type
+  used as a `BTreeMap` key (recursively, through nested collections), and
+  `data_type_derive` adds `PartialOrd, Ord` plus `#[rkyv(derive(..., Ord))]` to
+  exactly those types' derives. Non-key types keep the original derive set.
+
+This unblocks the aggregate roots in horizon and lojix, which are all
+collection-bearing. Demonstrated end-to-end on the real Horizon `ClusterProposal`
+shape in the `horizon-next` concept repo. `examples/emit_collections_probe.rs`
+prints the emission for a small collection-bearing schema; the
+`collections_emission` test compiles the captured output and round-trips a
+collection value through NOTA and rkyv.
+
+## The Plane surface and the runtime floor
+
+`RustEmitter::emit` emits the runtime floor only for a component module
+(`Asschema::signal_plane().is_some()`). The floor is, in order:
+
+- `emit_mail_event_support` — `MessageIdentifier`, `OriginRoute` (the
+  auto-created route, records 1038/1039), `MessageRoot`, `MessageSent`,
+  `NexusMail<Payload>`, `MessageProcessed<Reply>`, the push hooks, all
+  threading `origin_route`.
+- `emit_nexus_support` — per-root `XNexus` dispatch traits + the
+  `dispatch_mail_with_nexus` method threading the origin route.
+- `emit_plane_surface` — the record-1054 `Plane` enum (`Signal(OriginRoute,
+  Input)` / `Nexus(OriginRoute, Input)` / `Sema(OriginRoute, Output)`), the
+  three trait-ordered engines `SignalEngine` / `NexusEngine` / `SemaEngine`
+  (each `Plane -> Plane`), the `PlaneChainError` enum, and `Plane::drive` —
+  the running chain (record 1030) that threads Signal → Nexus → Sema and
+  echoes the origin route.
+
+A types-only module (`signal_plane() == None`) emits none of this — its types
+are imported across the crate boundary by component modules.
