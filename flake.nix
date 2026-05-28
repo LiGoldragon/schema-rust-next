@@ -26,7 +26,6 @@
         schemaFilter = path: type:
           type == "regular" && (
             pkgs.lib.hasSuffix ".schema" path
-            || pkgs.lib.hasSuffix ".asschema" path
             || pkgs.lib.hasSuffix ".witness.txt" path
           );
         sourceFilter = path: type:
@@ -123,18 +122,14 @@
             grep -R "Marked(DatabaseMarker)" ${src}/tests/cross_crate_import.rs >/dev/null
             touch $out
           '';
-          asschema-fixtures-final-data = pkgs.runCommand "schema-rust-next-asschema-fixtures-final-data" { } ''
-            grep -R "assert_asschema_is_final_data" ${src}/tests/big_emission.rs >/dev/null
-            if grep -R -n --include='*.asschema' '@' ${src}/tests/fixtures; then
-              echo ".asschema fixtures must not contain authored macro markers" >&2
+          no-obsolete-asschema-fixtures = pkgs.runCommand "schema-rust-next-no-obsolete-asschema-fixtures" { } ''
+            grep -R "assert_asschema_data_shape" ${src}/tests/big_emission.rs >/dev/null
+            if find ${src} -name '*.asschema' -print -quit | grep .; then
+              echo "obsolete .asschema syntax fixtures must not remain in schema-rust-next" >&2
               exit 1
             fi
-            if grep -R -n --include='*.asschema' '\$' ${src}/tests/fixtures; then
-              echo ".asschema fixtures must not contain macro captures" >&2
-              exit 1
-            fi
-            if grep -R -n --include='*.asschema' -E '\(Map \(Plain' ${src}/tests/fixtures; then
-              echo ".asschema Map must carry one vector payload" >&2
+            if grep -R -n -E '\[Input \[|\[Output \[|\(Struct \[|\(Enum \[|\(Newtype \[|\(Map \[\(Plain|\(Carries \(Plain' ${src}/tests ${src}/src; then
+              echo "obsolete ASSchema vector-record syntax must not remain in active Rust-emission code or fixtures" >&2
               exit 1
             fi
             touch $out

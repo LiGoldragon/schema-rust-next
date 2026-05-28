@@ -8,9 +8,10 @@ assembled schema in, Rust source text out, compile and test the emitted source,
 then layer macro ergonomics later.
 
 The emitter consumes final assembled-schema data, not authored schema sugar.
-Checked `.asschema` fixtures contain no `@` macro markers or `$` captures;
-collection references are final variants such as
-`(Map [(Plain Key) (Plain Value)])`.
+That `Asschema` value is produced in memory by `schema-next` from real
+`.schema` fixtures. The old checked-in `.asschema` vector-record fixture
+syntax is obsolete and is no longer part of this repository's active test
+surface.
 
 Generated paths mirror crate-local schema modules. An assembled schema identity
 such as `spirit-next:lib` emits to `src/schema/lib.rs`; an identity such as

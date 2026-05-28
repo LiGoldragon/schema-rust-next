@@ -15,18 +15,18 @@
 
 The input contract is assembled schema, not authored schema. `Asschema` has
 already resolved all macros and sugar; the emitter does not read authored
-`Vec`/`Option`/`KeyValue` macro calls, `$Name`, or structural macro captures. The final
-collection/reference variants are `Plain`, `Vector`, `Optional`, and `Map`;
-`Map` carries one vector payload, for example
-`(Map [(Plain Topic) (Plain RecordIdentifier)])`.
+`Vec`/`Option`/`KeyValue` macro calls, `$Name`, or structural macro captures.
+The active test path gets that `Asschema` as typed data from `schema-next`
+lowering real `.schema` fixtures. The old checked-in `.asschema`
+vector-record syntax is obsolete.
 
 ## Constraints
 
 - No dependency on the old signal macro.
 - No `macro_rules!` or proc-macro surface in `src/`.
-- No authored-schema macro syntax is accepted as an emitter input. Tests parse
-  checked `.asschema` fixtures through `Asschema::from_nota` and reject macro
-  markers or loose old `Map` payloads before comparing generated Rust.
+- No authored-schema macro syntax is accepted as an emitter input. Tests lower
+  real `.schema` fixtures into typed `Asschema` values before comparing
+  generated Rust; no `.asschema` syntax fixture is accepted.
 - Generated Rust is source-visible under `src/schema/`; consumers include or
   compile that source rather than hiding the interface in `OUT_DIR`.
 - Emission is tested by source fixture comparison and by compiling the fixture

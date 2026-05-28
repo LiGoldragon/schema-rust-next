@@ -18,7 +18,6 @@ struct BigRustFixture<'fixture> {
     name: &'fixture str,
     identity: &'fixture str,
     source_path: PathBuf,
-    asschema_path: PathBuf,
     witness_path: PathBuf,
     rust_path: PathBuf,
     resolver: Option<ImportResolver>,
@@ -30,7 +29,6 @@ impl<'fixture> BigRustFixture<'fixture> {
             name,
             identity,
             source_path: fixture_path(name, "schema"),
-            asschema_path: fixture_path(name, "asschema"),
             witness_path: fixture_path(name, "witness.txt"),
             rust_path: fixture_path(name, "generated.rs"),
             resolver: None,
@@ -47,7 +45,6 @@ impl<'fixture> BigRustFixture<'fixture> {
             name,
             identity,
             source_path: fixture_path(name, "schema"),
-            asschema_path: fixture_path(name, "asschema"),
             witness_path: fixture_path(name, "witness.txt"),
             rust_path: fixture_path(name, "generated.rs"),
             resolver: Some(ImportResolver::new().with_dependency(
@@ -87,33 +84,9 @@ impl<'fixture> BigRustFixture<'fixture> {
         RustEmitter::default().emit(&asschema).as_str().to_owned()
     }
 
-    fn assert_matches_checked_in_asschema(&self) {
+    fn assert_matches_checked_in_witness(&self) {
         let (asschema, context) = self.lower();
-        let rendered = asschema.to_nota();
-        let reparsed = Asschema::from_nota(&rendered).expect("generated asschema parses");
-        assert_eq!(
-            reparsed, asschema,
-            "generated asschema did not round-trip for {}",
-            self.name
-        );
-        if std::env::var_os("SCHEMA_RUST_NEXT_UPDATE_BIG_EXAMPLES").is_some() {
-            std::fs::write(&self.asschema_path, &rendered).expect("write assembled schema fixture");
-        }
-        let expected =
-            std::fs::read_to_string(&self.asschema_path).expect("read assembled schema fixture");
-        self.assert_asschema_is_final_data(&expected);
-        let parsed_expected =
-            Asschema::from_nota(&expected).expect("checked-in asschema fixture parses");
-        assert_eq!(
-            parsed_expected, asschema,
-            "checked-in asschema fixture changed assembled data for {}",
-            self.name
-        );
-        assert_eq!(
-            rendered, expected,
-            "assembled schema NOTA drifted for {}",
-            self.name
-        );
+        self.assert_asschema_data_shape(&asschema);
 
         let witness = AsschemaWitness::new(self.name, &asschema, &context).render();
         if std::env::var_os("SCHEMA_RUST_NEXT_UPDATE_BIG_EXAMPLES").is_some() {
@@ -128,20 +101,20 @@ impl<'fixture> BigRustFixture<'fixture> {
         );
     }
 
-    fn assert_asschema_is_final_data(&self, source: &str) {
+    fn assert_asschema_data_shape(&self, asschema: &Asschema) {
         assert!(
-            !source.contains('@'),
-            "{} .asschema must not contain authored macro markers",
+            !asschema.namespace().is_empty(),
+            "{} must lower into typed namespace data",
             self.name
         );
         assert!(
-            !source.contains("$Name") && !source.contains("$*"),
-            "{} .asschema must not contain macro captures",
+            !asschema.input().variants.is_empty(),
+            "{} must lower typed input variants",
             self.name
         );
         assert!(
-            !source.contains("(Map (Plain"),
-            "{} .asschema must use final Map vector payloads",
+            !asschema.output().variants.is_empty(),
+            "{} must lower typed output variants",
             self.name
         );
     }
@@ -161,9 +134,9 @@ impl<'fixture> BigRustFixture<'fixture> {
 }
 
 #[test]
-fn large_spirit_schema_lowers_to_checked_asschema_snapshot() {
+fn large_spirit_schema_lowers_to_checked_witness_snapshot() {
     BigRustFixture::local("spirit-reactive-large", "example:spirit-reactive-large")
-        .assert_matches_checked_in_asschema();
+        .assert_matches_checked_in_witness();
 }
 
 #[test]
@@ -173,9 +146,9 @@ fn large_spirit_schema_emits_checked_rust_snapshot() {
 }
 
 #[test]
-fn large_triad_schema_lowers_to_checked_asschema_snapshot() {
+fn large_triad_schema_lowers_to_checked_witness_snapshot() {
     BigRustFixture::local("triad-reactive-large", "example:triad-reactive-large")
-        .assert_matches_checked_in_asschema();
+        .assert_matches_checked_in_witness();
 }
 
 #[test]
@@ -185,9 +158,9 @@ fn large_triad_schema_emits_checked_rust_snapshot() {
 }
 
 #[test]
-fn large_imported_schema_lowers_to_checked_asschema_snapshot() {
+fn large_imported_schema_lowers_to_checked_witness_snapshot() {
     BigRustFixture::imported("imported-mail-consumer", "example:imported-mail-consumer")
-        .assert_matches_checked_in_asschema();
+        .assert_matches_checked_in_witness();
 }
 
 #[test]
