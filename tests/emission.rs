@@ -41,6 +41,7 @@ fn emits_rust_source_as_a_separate_artifact() {
             .as_str()
             .contains("pub origin_route: OriginRoute")
     );
+    assert!(generated.code.as_str().contains("impl OriginRoute"));
     assert!(
         generated
             .code

@@ -663,6 +663,16 @@ impl Output {
     }
 }
 
+impl OriginRoute {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(NotaBlock::new(block).parse_integer()?))
+    }
+
+    pub fn to_nota(&self) -> String {
+        self.0.to_string()
+    }
+}
+
 impl MessageIdentifier {
     pub fn origin_route(self) -> OriginRoute {
         OriginRoute(self.0)

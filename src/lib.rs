@@ -768,6 +768,16 @@ impl RustWriter {
     }
 
     fn emit_message_identifier_support(&mut self) {
+        self.line("impl OriginRoute {");
+        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
+        self.line("        Ok(Self(NotaBlock::new(block).parse_integer()?))");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn to_nota(&self) -> String {");
+        self.line("        self.0.to_string()");
+        self.line("    }");
+        self.line("}");
+        self.blank();
         self.line("impl MessageIdentifier {");
         self.line("    pub fn origin_route(self) -> OriginRoute {");
         self.line("        OriginRoute(self.0)");
