@@ -124,7 +124,7 @@ dependencies = [
 [[package]]
 name = "nota-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#83720738cc2ca88e5fa3b76129bcd6512de8f1de"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#fff3dd19f330f4cc6eef6542ae7b2b451d0cd19d"
 
 [[package]]
 name = "once_cell"
@@ -233,7 +233,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "schema-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#d75a0e217ac9e954c70b00713b0ce2acf3c98167"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=designer-sigil-grammar-2026-05-28#5e01f6fe31e67339fefe02a8c91b7ee700be0d5e"
 dependencies = [
  "nota-next",
 ]

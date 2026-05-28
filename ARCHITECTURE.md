@@ -73,8 +73,19 @@
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is
   still emitted by the support surface.
+- The converged sigil grammar (`@`-prefix macro invocations, `*`-suffix
+  same-name variants) is a schema-next surface concern that lowers into the
+  assembled shapes this emitter already consumes; the emitter has NO sigil-
+  specific code. A `(@Vec T)` lowers to `TypeReference::Vector` (emitted
+  `Vec<T>` exactly as the old `(Vec T)` did), and a `Tag*` lowers to
+  `EnumVariant { payload: Some(Plain(Tag)) }` (emitted as the same-name data
+  variant `Tag(Tag)`). The `*` never reaches the emitter — it is stripped
+  during lowering — so route enums, short-header constants, and every emitted
+  identifier carry the clean tag name. `tests/fixtures/sigils.schema` +
+  `tests/sigils.rs` are the witnesses: a sigil-grammar schema emits, NOTA-
+  round-trips, and rkyv-round-trips identically to its desugared form.
 - Collection references emit standard Rust collections. `rust_type` recurses a
-  `TypeReference`: `Vector` → `Vec<inner>`, `Map` (the `KeyValue` keyword) →
+  `TypeReference`: `Vector` → `Vec<inner>`, `Map` (the `@KeyValue` macro) →
   `std::collections::BTreeMap<key, value>` (fully qualified, so no `use` and a
   deterministic key order for rkyv + NOTA), `Optional` → `Option<inner>`. The
   `parse_expression` / `format_expression` recursions mirror the type:

@@ -1,0 +1,11 @@
+{}
+(Input Register* Observe* Decommission)
+(Output Registered* Listed*)
+{
+  NodeName [Text]
+  Service [Text]
+  Register [(services (@Vec Service)) (replicas (@Option NodeName))]
+  Observe [NodeName]
+  Registered [(placements (@KeyValue NodeName Service))]
+  Listed [(nodes (@Vec NodeName))]
+}

@@ -86,18 +86,30 @@ message identifier.*
 moved toward a shared schema-authored core.*
 
 *Collection references emit the standard Rust collections plus their NOTA
-codecs. A `Vec T` reference emits `Vec<T>`, a `KeyValue K V` reference emits
-`std::collections::BTreeMap<K, V>` (ordered so rkyv and NOTA round-trips are
-deterministic), and an `Option T` reference emits `Option<T>`; nested
-references recurse. The emitter writes a `NotaCollection` runtime codec — a
-vector is a square-bracket block, a map is a brace of key/value pairs, an
-option is `None` / `(Some inner)` — and the per-field parse/format
-expressions recurse through it. A type used as a map key earns the ordering
-derives (`PartialOrd, Ord` on both the type and its archived form); other
-types keep the original derive set. The collection codec and the ordering
-derives are emitted only when the schema actually uses a collection, so a
-collection-free schema emits byte-identical Rust to the pre-collection
-emitter.*
+codecs. A `@Vec T` macro invocation emits `Vec<T>`, a `@KeyValue K V`
+invocation emits `std::collections::BTreeMap<K, V>` (ordered so rkyv and
+NOTA round-trips are deterministic), and an `@Option T` invocation emits
+`Option<T>`; nested invocations recurse. The emitter writes a
+`NotaCollection` runtime codec — a vector is a square-bracket block, a map
+is a brace of key/value pairs, an option is `None` / `(Some inner)` — and
+the per-field parse/format expressions recurse through it. A type used as a
+map key earns the ordering derives (`PartialOrd, Ord` on both the type and
+its archived form); other types keep the original derive set. The
+collection codec and the ordering derives are emitted only when the schema
+actually uses a collection, so a collection-free schema emits byte-identical
+Rust to the pre-collection emitter.*
+
+*The converged sigil grammar is invisible to the emitter. The `@`-prefix
+macro invocations (`@Vec` / `@Option` / `@KeyValue`) and the `*`-suffix
+same-name variants (`Tag*` ≡ `(Tag Tag)`) are SURFACE grammar that
+schema-next lowers into the assembled shapes the emitter already consumes:
+`TypeReference::Vector / Map / Optional` and `EnumVariant { payload:
+Some(..) }`. So a schema authored with `@Vec`/`Tag*` emits byte-for-byte the
+same Rust as its desugared equivalent — `Tag*` emits a same-name data
+variant `Tag(Tag)`, and the `*` never leaks into a route enum, short-header
+constant, or any emitted identifier. The emitter needed no change for the
+sigil grammar; the sigil work here is the fixture + round-trip witnesses
+proving the surface change produces identical, round-tripping Rust.*
 
 Future forge build logic may eventually turn generated Rust into
 content-addressed crates directly. That is future design; this repo owns the

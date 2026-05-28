@@ -13,7 +13,10 @@ name = "schema_rust_next"
 path = "src/lib.rs"
 
 [dependencies]
-schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "main" }
+# Designer prototype of the converged sigil grammar lives on this
+# schema-next feature branch; the operator reconciles to main during
+# integration. See reports/designer/416-sigil-grammar-implementation.
+schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "designer-sigil-grammar-2026-05-28" }
 
 [dev-dependencies]
 nota-next = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }

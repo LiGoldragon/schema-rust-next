@@ -155,6 +155,36 @@
             grep -R "pub struct NotaBlock" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             touch $out
           '';
+          sigil-grammar-emits-and-round-trips = pkgs.runCommand "schema-rust-next-sigil-grammar-emits-and-round-trips" { } ''
+            # The fixture is authored in the converged sigil grammar:
+            # @-prefixed macro invocations and *-suffix same-name variants.
+            grep -R "(@Vec Service)" ${src}/tests/fixtures/sigils.schema >/dev/null
+            grep -R "(@Option NodeName)" ${src}/tests/fixtures/sigils.schema >/dev/null
+            grep -R "(@KeyValue NodeName Service)" ${src}/tests/fixtures/sigils.schema >/dev/null
+            grep -R "Register\* Observe\* Decommission" ${src}/tests/fixtures/sigils.schema >/dev/null
+            grep -R "Registered\* Listed\*" ${src}/tests/fixtures/sigils.schema >/dev/null
+            # The * sugar emitted same-name data variants; the @ macros
+            # emitted the collection Rust types.
+            grep -R "Register(Register)" ${src}/tests/fixtures/sigils_generated.rs >/dev/null
+            grep -R "pub services: Vec<Service>" ${src}/tests/fixtures/sigils_generated.rs >/dev/null
+            grep -R "pub replicas: Option<NodeName>" ${src}/tests/fixtures/sigils_generated.rs >/dev/null
+            grep -R "Registered(pub std::collections::BTreeMap<NodeName, Service>)" ${src}/tests/fixtures/sigils_generated.rs >/dev/null
+            # The * suffix never leaks into emitted identifiers.
+            ! grep -R -F "*Route" ${src}/tests/fixtures/sigils_generated.rs
+            ! grep -R -F "REGISTER*" ${src}/tests/fixtures/sigils_generated.rs
+            # The round-trip witnesses exercise the emitted surface.
+            grep -R "sigil_schema_emits_byte_identical_to_generated_fixture" ${src}/tests/sigils.rs >/dev/null
+            grep -R "same_name_map_variant_round_trips_through_nota_and_rkyv" ${src}/tests/sigils.rs >/dev/null
+            grep -R "same_name_vector_variant_crosses_signal_frame_and_triages_route" ${src}/tests/sigils.rs >/dev/null
+            touch $out
+          '';
+          sigil-generated-no-free-functions = pkgs.runCommand "schema-rust-next-sigil-generated-no-free-functions" { } ''
+            if grep -n -E '^(pub(\([^)]*\))? )?fn ' ${src}/tests/fixtures/sigils_generated.rs; then
+              echo "generated Rust fixture must not use module-level free functions" >&2
+              exit 1
+            fi
+            touch $out
+          '';
           doc = craneLib.cargoDoc (commonArguments // {
             inherit cargoArtifacts;
             RUSTDOCFLAGS = "-D warnings";
