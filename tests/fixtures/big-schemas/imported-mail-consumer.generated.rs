@@ -3,6 +3,9 @@
 pub type Text = String;
 pub type Integer = u64;
 
+pub use marker_core::schema::mail::DatabaseMarker as DatabaseMarker;
+pub use marker_core::schema::mail::CommitSequence as CommitSequence;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotaDecodeError {
     Parse(String),
@@ -113,6 +116,12 @@ impl<'a> NotaText<'a> {
     }
 }
 
+impl From<marker_core::schema::mail::NotaDecodeError> for NotaDecodeError {
+    fn from(error: marker_core::schema::mail::NotaDecodeError) -> Self {
+        Self::Parse(error.to_string())
+    }
+}
+
 pub struct NotaCollection<'a> {
     block: &'a nota_next::Block,
 }
@@ -208,77 +217,65 @@ impl<'a> NotaCollection<'a> {
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]
-pub struct NodeName(pub Text);
-
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct NodeConfig(pub Text);
-
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Service(pub Text);
-
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Query(pub Topic);
-
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Topic(pub Text);
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Cluster {
-    pub services: Vec<Service>,
-    pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,
-    pub cache: Option<NodeConfig>,
+pub struct Topics(pub Vec<Topic>);
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Description(pub Text);
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AgentName(pub Text);
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RecordIdentifier(pub Integer);
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Rejection(pub Description);
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Entry {
+    pub topics: Topics,
+    pub description: Description,
+    pub agent_name: AgentName,
+    pub database_marker: DatabaseMarker,
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Query {
+    pub topics: Topics,
+    pub limit: Option<Integer>,
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RecordReceipt {
+    pub record_identifier: RecordIdentifier,
+    pub database_marker: DatabaseMarker,
+    pub commit_sequence: CommitSequence,
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RecordSet {
+    pub records: Vec<Entry>,
+    pub by_topic: std::collections::BTreeMap<Topic, RecordIdentifier>,
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Input {
-    Register(Cluster),
+    Record(Entry),
     Observe(Query),
+    Mark(DatabaseMarker),
+    Commit(CommitSequence),
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Output {
-    Projected(std::collections::BTreeMap<NodeName, NodeConfig>),
-    Listed(Vec<NodeName>),
-}
-
-impl NodeName {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(NotaBlock::new(block).parse_text()?))
-    }
-
-    pub fn to_nota(&self) -> String {
-        NotaText::new(&self.0).format()
-    }
-}
-
-impl NodeConfig {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(NotaBlock::new(block).parse_text()?))
-    }
-
-    pub fn to_nota(&self) -> String {
-        NotaText::new(&self.0).format()
-    }
-}
-
-impl Service {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(NotaBlock::new(block).parse_text()?))
-    }
-
-    pub fn to_nota(&self) -> String {
-        NotaText::new(&self.0).format()
-    }
-}
-
-impl Query {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(Topic::from_nota_block(block)?))
-    }
-
-    pub fn to_nota(&self) -> String {
-        self.0.to_nota()
-    }
+    Recorded(RecordReceipt),
+    Observed(RecordSet),
+    Marked(DatabaseMarker),
+    Committed(CommitSequence),
+    Rejected(Rejected),
 }
 
 impl Topic {
@@ -291,21 +288,129 @@ impl Topic {
     }
 }
 
-impl Cluster {
+impl Topics {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Cluster", 3)?;
+        Ok(Self(NotaCollection::new(block).parse_vector(Topic::from_nota_block)?))
+    }
+
+    pub fn to_nota(&self) -> String {
+        NotaCollection::format_vector(&self.0, |element| element.to_nota())
+    }
+}
+
+impl Description {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(NotaBlock::new(block).parse_text()?))
+    }
+
+    pub fn to_nota(&self) -> String {
+        NotaText::new(&self.0).format()
+    }
+}
+
+impl AgentName {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(NotaBlock::new(block).parse_text()?))
+    }
+
+    pub fn to_nota(&self) -> String {
+        NotaText::new(&self.0).format()
+    }
+}
+
+impl RecordIdentifier {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(NotaBlock::new(block).parse_integer()?))
+    }
+
+    pub fn to_nota(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+impl Rejection {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(Description::from_nota_block(block)?))
+    }
+
+    pub fn to_nota(&self) -> String {
+        self.0.to_nota()
+    }
+}
+
+impl Entry {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Entry", 4)?;
         Ok(Self {
-            services: NotaCollection::new(&children[0]).parse_vector(Service::from_nota_block)?,
-            nodes: NotaCollection::new(&children[1]).parse_map(NodeName::from_nota_block, NodeConfig::from_nota_block)?,
-            cache: NotaCollection::new(&children[2]).parse_option(NodeConfig::from_nota_block)?,
+            topics: Topics::from_nota_block(&children[0])?,
+            description: Description::from_nota_block(&children[1])?,
+            agent_name: AgentName::from_nota_block(&children[2])?,
+            database_marker: DatabaseMarker::from_nota_block(&children[3])?,
         })
     }
 
     pub fn to_nota(&self) -> String {
         let fields = [
-            NotaCollection::format_vector(&self.services, |element| element.to_nota()),
-            NotaCollection::format_map(&self.nodes, |key| key.to_nota(), |value| value.to_nota()),
-            NotaCollection::format_option(&self.cache, |inner| inner.to_nota()),
+            self.topics.to_nota(),
+            self.description.to_nota(),
+            self.agent_name.to_nota(),
+            self.database_marker.to_nota(),
+        ];
+        format!("({})", fields.join(" "))
+    }
+}
+
+impl Query {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Query", 2)?;
+        Ok(Self {
+            topics: Topics::from_nota_block(&children[0])?,
+            limit: NotaCollection::new(&children[1]).parse_option(|inner_block| NotaBlock::new(inner_block).parse_integer())?,
+        })
+    }
+
+    pub fn to_nota(&self) -> String {
+        let fields = [
+            self.topics.to_nota(),
+            NotaCollection::format_option(&self.limit, |inner| inner.to_string()),
+        ];
+        format!("({})", fields.join(" "))
+    }
+}
+
+impl RecordReceipt {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "RecordReceipt", 3)?;
+        Ok(Self {
+            record_identifier: RecordIdentifier::from_nota_block(&children[0])?,
+            database_marker: DatabaseMarker::from_nota_block(&children[1])?,
+            commit_sequence: CommitSequence::from_nota_block(&children[2])?,
+        })
+    }
+
+    pub fn to_nota(&self) -> String {
+        let fields = [
+            self.record_identifier.to_nota(),
+            self.database_marker.to_nota(),
+            self.commit_sequence.to_nota(),
+        ];
+        format!("({})", fields.join(" "))
+    }
+}
+
+impl RecordSet {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "RecordSet", 2)?;
+        Ok(Self {
+            records: NotaCollection::new(&children[0]).parse_vector(Entry::from_nota_block)?,
+            by_topic: NotaCollection::new(&children[1]).parse_map(Topic::from_nota_block, RecordIdentifier::from_nota_block)?,
+        })
+    }
+
+    pub fn to_nota(&self) -> String {
+        let fields = [
+            NotaCollection::format_vector(&self.records, |element| element.to_nota()),
+            NotaCollection::format_map(&self.by_topic, |key| key.to_nota(), |value| value.to_nota()),
         ];
         format!("({})", fields.join(" "))
     }
@@ -319,16 +424,20 @@ impl Input {
         let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Input", 2)?;
         let variant = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "enum variant" })?;
         match variant {
-            "Register" => Ok(Self::Register(Cluster::from_nota_block(&children[1])?)),
+            "Record" => Ok(Self::Record(Entry::from_nota_block(&children[1])?)),
             "Observe" => Ok(Self::Observe(Query::from_nota_block(&children[1])?)),
+            "Mark" => Ok(Self::Mark(DatabaseMarker::from_nota_block(&children[1])?)),
+            "Commit" => Ok(Self::Commit(CommitSequence::from_nota_block(&children[1])?)),
             other => Err(NotaDecodeError::UnknownVariant { enum_name: "Input", variant: other.to_owned() }),
         }
     }
 
     pub fn to_nota(&self) -> String {
         match self {
-            Self::Register(payload) => format!("(Register {})", payload.to_nota()),
+            Self::Record(payload) => format!("(Record {})", payload.to_nota()),
             Self::Observe(payload) => format!("(Observe {})", payload.to_nota()),
+            Self::Mark(payload) => format!("(Mark {})", payload.to_nota()),
+            Self::Commit(payload) => format!("(Commit {})", payload.to_nota()),
         }
     }
 }
@@ -356,16 +465,22 @@ impl Output {
         let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Output", 2)?;
         let variant = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "enum variant" })?;
         match variant {
-            "Projected" => Ok(Self::Projected(NotaCollection::new(&children[1]).parse_map(NodeName::from_nota_block, NodeConfig::from_nota_block)?)),
-            "Listed" => Ok(Self::Listed(NotaCollection::new(&children[1]).parse_vector(NodeName::from_nota_block)?)),
+            "Recorded" => Ok(Self::Recorded(RecordReceipt::from_nota_block(&children[1])?)),
+            "Observed" => Ok(Self::Observed(RecordSet::from_nota_block(&children[1])?)),
+            "Marked" => Ok(Self::Marked(DatabaseMarker::from_nota_block(&children[1])?)),
+            "Committed" => Ok(Self::Committed(CommitSequence::from_nota_block(&children[1])?)),
+            "Rejected" => Ok(Self::Rejected(Rejected::from_nota_block(&children[1])?)),
             other => Err(NotaDecodeError::UnknownVariant { enum_name: "Output", variant: other.to_owned() }),
         }
     }
 
     pub fn to_nota(&self) -> String {
         match self {
-            Self::Projected(payload) => format!("(Projected {})", NotaCollection::format_map(payload, |key| key.to_nota(), |value| value.to_nota())),
-            Self::Listed(payload) => format!("(Listed {})", NotaCollection::format_vector(payload, |element| element.to_nota())),
+            Self::Recorded(payload) => format!("(Recorded {})", payload.to_nota()),
+            Self::Observed(payload) => format!("(Observed {})", payload.to_nota()),
+            Self::Marked(payload) => format!("(Marked {})", payload.to_nota()),
+            Self::Committed(payload) => format!("(Committed {})", payload.to_nota()),
+            Self::Rejected(payload) => format!("(Rejected {})", payload.to_nota()),
         }
     }
 }
@@ -386,10 +501,15 @@ impl std::fmt::Display for Output {
 }
 
 pub mod short_header {
-    pub const INPUT_REGISTER: u64 = 0x0000000000000000;
+    pub const INPUT_RECORD: u64 = 0x0000000000000000;
     pub const INPUT_OBSERVE: u64 = 0x0001000000000000;
-    pub const OUTPUT_PROJECTED: u64 = 0x0100000000000000;
-    pub const OUTPUT_LISTED: u64 = 0x0101000000000000;
+    pub const INPUT_MARK: u64 = 0x0002000000000000;
+    pub const INPUT_COMMIT: u64 = 0x0003000000000000;
+    pub const OUTPUT_RECORDED: u64 = 0x0100000000000000;
+    pub const OUTPUT_OBSERVED: u64 = 0x0101000000000000;
+    pub const OUTPUT_MARKED: u64 = 0x0102000000000000;
+    pub const OUTPUT_COMMITTED: u64 = 0x0103000000000000;
+    pub const OUTPUT_REJECTED: u64 = 0x0104000000000000;
 }
 
 const SIGNAL_SHORT_HEADER_BYTE_COUNT: usize = 8;
@@ -419,35 +539,46 @@ impl std::error::Error for SignalFrameError {}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InputRoute {
-    Register,
+    Record,
     Observe,
+    Mark,
+    Commit,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OutputRoute {
-    Projected,
-    Listed,
+    Recorded,
+    Observed,
+    Marked,
+    Committed,
+    Rejected,
 }
 
 impl Input {
     pub fn route(&self) -> InputRoute {
         match self {
-            Self::Register(_) => InputRoute::Register,
+            Self::Record(_) => InputRoute::Record,
             Self::Observe(_) => InputRoute::Observe,
+            Self::Mark(_) => InputRoute::Mark,
+            Self::Commit(_) => InputRoute::Commit,
         }
     }
 
     pub fn short_header(&self) -> u64 {
         match self {
-            Self::Register(_) => short_header::INPUT_REGISTER,
+            Self::Record(_) => short_header::INPUT_RECORD,
             Self::Observe(_) => short_header::INPUT_OBSERVE,
+            Self::Mark(_) => short_header::INPUT_MARK,
+            Self::Commit(_) => short_header::INPUT_COMMIT,
         }
     }
 
     pub fn route_from_short_header(header: u64) -> Result<InputRoute, SignalFrameError> {
         match header {
-            short_header::INPUT_REGISTER => Ok(InputRoute::Register),
+            short_header::INPUT_RECORD => Ok(InputRoute::Record),
             short_header::INPUT_OBSERVE => Ok(InputRoute::Observe),
+            short_header::INPUT_MARK => Ok(InputRoute::Mark),
+            short_header::INPUT_COMMIT => Ok(InputRoute::Commit),
             _ => Err(SignalFrameError::UnknownHeader { root_enum: "Input", header }),
         }
     }
@@ -482,22 +613,31 @@ impl Input {
 impl Output {
     pub fn route(&self) -> OutputRoute {
         match self {
-            Self::Projected(_) => OutputRoute::Projected,
-            Self::Listed(_) => OutputRoute::Listed,
+            Self::Recorded(_) => OutputRoute::Recorded,
+            Self::Observed(_) => OutputRoute::Observed,
+            Self::Marked(_) => OutputRoute::Marked,
+            Self::Committed(_) => OutputRoute::Committed,
+            Self::Rejected(_) => OutputRoute::Rejected,
         }
     }
 
     pub fn short_header(&self) -> u64 {
         match self {
-            Self::Projected(_) => short_header::OUTPUT_PROJECTED,
-            Self::Listed(_) => short_header::OUTPUT_LISTED,
+            Self::Recorded(_) => short_header::OUTPUT_RECORDED,
+            Self::Observed(_) => short_header::OUTPUT_OBSERVED,
+            Self::Marked(_) => short_header::OUTPUT_MARKED,
+            Self::Committed(_) => short_header::OUTPUT_COMMITTED,
+            Self::Rejected(_) => short_header::OUTPUT_REJECTED,
         }
     }
 
     pub fn route_from_short_header(header: u64) -> Result<OutputRoute, SignalFrameError> {
         match header {
-            short_header::OUTPUT_PROJECTED => Ok(OutputRoute::Projected),
-            short_header::OUTPUT_LISTED => Ok(OutputRoute::Listed),
+            short_header::OUTPUT_RECORDED => Ok(OutputRoute::Recorded),
+            short_header::OUTPUT_OBSERVED => Ok(OutputRoute::Observed),
+            short_header::OUTPUT_MARKED => Ok(OutputRoute::Marked),
+            short_header::OUTPUT_COMMITTED => Ok(OutputRoute::Committed),
+            short_header::OUTPUT_REJECTED => Ok(OutputRoute::Rejected),
             _ => Err(SignalFrameError::UnknownHeader { root_enum: "Output", header }),
         }
     }
@@ -791,8 +931,10 @@ pub trait InputNexus {
     type Reply;
     type Error;
 
-    fn register(&self, mail: NexusMail<Cluster>) -> Result<Self::Reply, Self::Error>;
+    fn record(&self, mail: NexusMail<Entry>) -> Result<Self::Reply, Self::Error>;
     fn observe(&self, mail: NexusMail<Query>) -> Result<Self::Reply, Self::Error>;
+    fn mark(&self, mail: NexusMail<DatabaseMarker>) -> Result<Self::Reply, Self::Error>;
+    fn commit(&self, mail: NexusMail<CommitSequence>) -> Result<Self::Reply, Self::Error>;
 }
 
 impl Input {
@@ -801,8 +943,10 @@ impl Input {
         NexusActor: InputNexus,
     {
         let reply = match self {
-            Self::Register(payload) => nexus.register(NexusMail::new(identifier, origin_route, payload)),
+            Self::Record(payload) => nexus.record(NexusMail::new(identifier, origin_route, payload)),
             Self::Observe(payload) => nexus.observe(NexusMail::new(identifier, origin_route, payload)),
+            Self::Mark(payload) => nexus.mark(NexusMail::new(identifier, origin_route, payload)),
+            Self::Commit(payload) => nexus.commit(NexusMail::new(identifier, origin_route, payload)),
         }?;
         Ok(MessageProcessed::new(identifier, origin_route, reply))
     }
@@ -812,8 +956,11 @@ pub trait OutputNexus {
     type Reply;
     type Error;
 
-    fn projected(&self, mail: NexusMail<std::collections::BTreeMap<NodeName, NodeConfig>>) -> Result<Self::Reply, Self::Error>;
-    fn listed(&self, mail: NexusMail<Vec<NodeName>>) -> Result<Self::Reply, Self::Error>;
+    fn recorded(&self, mail: NexusMail<RecordReceipt>) -> Result<Self::Reply, Self::Error>;
+    fn observed(&self, mail: NexusMail<RecordSet>) -> Result<Self::Reply, Self::Error>;
+    fn marked(&self, mail: NexusMail<DatabaseMarker>) -> Result<Self::Reply, Self::Error>;
+    fn committed(&self, mail: NexusMail<CommitSequence>) -> Result<Self::Reply, Self::Error>;
+    fn rejected(&self, mail: NexusMail<Rejected>) -> Result<Self::Reply, Self::Error>;
 }
 
 impl Output {
@@ -822,8 +969,11 @@ impl Output {
         NexusActor: OutputNexus,
     {
         let reply = match self {
-            Self::Projected(payload) => nexus.projected(NexusMail::new(identifier, origin_route, payload)),
-            Self::Listed(payload) => nexus.listed(NexusMail::new(identifier, origin_route, payload)),
+            Self::Recorded(payload) => nexus.recorded(NexusMail::new(identifier, origin_route, payload)),
+            Self::Observed(payload) => nexus.observed(NexusMail::new(identifier, origin_route, payload)),
+            Self::Marked(payload) => nexus.marked(NexusMail::new(identifier, origin_route, payload)),
+            Self::Committed(payload) => nexus.committed(NexusMail::new(identifier, origin_route, payload)),
+            Self::Rejected(payload) => nexus.rejected(NexusMail::new(identifier, origin_route, payload)),
         }?;
         Ok(MessageProcessed::new(identifier, origin_route, reply))
     }

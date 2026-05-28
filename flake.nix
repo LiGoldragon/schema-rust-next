@@ -24,7 +24,11 @@
         ];
         craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
         schemaFilter = path: type:
-          type == "regular" && pkgs.lib.hasSuffix ".schema" path;
+          type == "regular" && (
+            pkgs.lib.hasSuffix ".schema" path
+            || pkgs.lib.hasSuffix ".asschema" path
+            || pkgs.lib.hasSuffix ".witness.txt" path
+          );
         sourceFilter = path: type:
           (craneLib.filterCargoSources path type) || (schemaFilter path type);
         src = pkgs.lib.cleanSourceWith {
@@ -141,18 +145,18 @@
             touch $out
           '';
           generated-no-free-functions = pkgs.runCommand "schema-rust-next-generated-no-free-functions" { } ''
-            if grep -n -E '^(pub(\([^)]*\))? )?fn ' ${src}/tests/fixtures/spirit_generated.rs; then
+            if grep -R -n --include='*.generated.rs' -E '^(pub(\([^)]*\))? )?fn ' ${src}/tests/fixtures; then
               echo "generated Rust fixture must not use module-level free functions" >&2
               exit 1
             fi
             touch $out
           '';
           generated-no-legacy-helper-surface = pkgs.runCommand "schema-rust-next-generated-no-legacy-helper-surface" { } ''
-            ! grep -R "parse_nota_root" ${src}/tests/fixtures/spirit_generated.rs
-            ! grep -R "UnknownHeader { surface" ${src}/tests/fixtures/spirit_generated.rs
+            ! grep -R --include='*.generated.rs' "parse_nota_root" ${src}/tests/fixtures
+            ! grep -R --include='*.generated.rs' "UnknownHeader { surface" ${src}/tests/fixtures
             ! grep -R "pub struct RustEmitter;" ${src}/src
-            grep -R "pub struct NotaSource" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
-            grep -R "pub struct NotaBlock" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R --include='*.generated.rs' "pub struct NotaSource" ${src}/tests/fixtures >/dev/null
+            grep -R --include='*.generated.rs' "pub struct NotaBlock" ${src}/tests/fixtures >/dev/null
             touch $out
           '';
           doc = craneLib.cargoDoc (commonArguments // {
