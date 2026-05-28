@@ -2,6 +2,7 @@
 
 pub type Text = String;
 pub type Integer = u64;
+pub type Boolean = bool;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotaDecodeError {
@@ -90,6 +91,15 @@ impl<'a> NotaBlock<'a> {
     pub fn parse_integer(&self) -> Result<Integer, NotaDecodeError> {
         let value = self.block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "Integer" })?;
         value.parse::<Integer>().map_err(|_| NotaDecodeError::InvalidInteger { value: value.to_owned() })
+    }
+
+    pub fn parse_boolean(&self) -> Result<Boolean, NotaDecodeError> {
+        let value = self.block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "Boolean" })?;
+        match value {
+            "True" => Ok(true),
+            "False" => Ok(false),
+            other => Err(NotaDecodeError::UnknownVariant { enum_name: "Boolean", variant: other.to_owned() }),
+        }
     }
 }
 
@@ -227,6 +237,7 @@ pub struct Cluster {
     pub services: Vec<Service>,
     pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,
     pub cache: Option<NodeConfig>,
+    pub healthy: Boolean,
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -293,11 +304,12 @@ impl Topic {
 
 impl Cluster {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Cluster", 3)?;
+        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Cluster", 4)?;
         Ok(Self {
             services: NotaCollection::new(&children[0]).parse_vector(Service::from_nota_block)?,
             nodes: NotaCollection::new(&children[1]).parse_map(NodeName::from_nota_block, NodeConfig::from_nota_block)?,
             cache: NotaCollection::new(&children[2]).parse_option(NodeConfig::from_nota_block)?,
+            healthy: NotaBlock::new(&children[3]).parse_boolean()?,
         })
     }
 
@@ -306,6 +318,7 @@ impl Cluster {
             NotaCollection::format_vector(&self.services, |element| element.to_nota()),
             NotaCollection::format_map(&self.nodes, |key| key.to_nota(), |value| value.to_nota()),
             NotaCollection::format_option(&self.cache, |inner| inner.to_nota()),
+            if self.healthy { "True".to_owned() } else { "False".to_owned() },
         ];
         format!("({})", fields.join(" "))
     }

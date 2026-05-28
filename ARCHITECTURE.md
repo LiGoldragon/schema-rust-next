@@ -83,6 +83,12 @@ calls, sigils, or structural macro captures. The active test path gets that
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is
   still emitted by the support surface.
+- Scalar references are explicit asschema data. `TypeReference::Text`,
+  `TypeReference::Integer`, and `TypeReference::Boolean` emit the scalar aliases
+  (`Text = String`, `Integer = u64`, `Boolean = bool`) plus their NOTA codecs.
+  `Plain(Name)` no longer carries scalar special cases; it names an emitted or
+  imported schema type and therefore decodes through that type's
+  `from_nota_block` method.
 - Collection references emit standard Rust collections. Authored schemas use
   typed NOTA datatype objects such as `(Vec Topic)`, `(Map (Topic
   RecordIdentifier))`, and `(Optional Topic)`; square brackets are not the
@@ -104,5 +110,5 @@ calls, sigils, or structural macro captures. The active test path gets that
   (`PartialOrd, Ord` plus the archived `#[rkyv(derive(...))]`); value-only and
   non-collection types keep the original derive set. `CollectionScan` decides
   both the collection-codec emission and the map-key derive set, so a
-  collection-free schema emits byte-identical Rust to the pre-collection
-  emitter — the regression safety net the legacy fixture comparison enforces.
+  collection-free schema stays byte-identical to the current scalar-floor
+  fixture when collection support changes.

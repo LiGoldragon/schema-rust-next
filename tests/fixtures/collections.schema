@@ -6,5 +6,5 @@
   Service [Text]
   Query [Topic]
   Topic [Text]
-  Cluster [(services (Vec Service)) (nodes (Map (NodeName NodeConfig))) (cache (Optional NodeConfig))]
+  Cluster [(services (Vec Service)) (nodes (Map (NodeName NodeConfig))) (cache (Optional NodeConfig)) (healthy Boolean)]
 }

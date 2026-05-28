@@ -46,6 +46,7 @@ impl RustEmitter {
         writer.blank();
         writer.line("pub type Text = String;");
         writer.line("pub type Integer = u64;");
+        writer.line("pub type Boolean = bool;");
         writer.blank();
         writer.emit_imports(asschema.resolved_imports());
         writer.emit_nota_support();
@@ -151,7 +152,7 @@ impl<'asschema> CollectionScan<'asschema> {
                     | TypeDeclaration::Newtype(declaration) => declaration
                         .fields
                         .iter()
-                        .any(|field| !field.reference.is_plain()),
+                        .any(|field| Self::reference_uses_collection(&field.reference)),
                     TypeDeclaration::Enum(declaration) => Self::enum_uses_collections(declaration),
                 });
         let root_uses = self
@@ -167,8 +168,18 @@ impl<'asschema> CollectionScan<'asschema> {
             variant
                 .payload
                 .as_ref()
-                .is_some_and(|payload| !payload.is_plain())
+                .is_some_and(Self::reference_uses_collection)
         })
+    }
+
+    fn reference_uses_collection(reference: &TypeReference) -> bool {
+        match reference {
+            TypeReference::Text
+            | TypeReference::Integer
+            | TypeReference::Boolean
+            | TypeReference::Plain(_) => false,
+            TypeReference::Vector(_) | TypeReference::Map(..) | TypeReference::Optional(_) => true,
+        }
     }
 
     /// The plain type names that appear as a `BTreeMap` key anywhere in
@@ -204,7 +215,10 @@ impl<'asschema> CollectionScan<'asschema> {
 
     fn collect_map_keys(reference: &TypeReference, names: &mut Vec<String>) {
         match reference {
-            TypeReference::Plain(_) => {}
+            TypeReference::Text
+            | TypeReference::Integer
+            | TypeReference::Boolean
+            | TypeReference::Plain(_) => {}
             TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
                 Self::collect_map_keys(inner, names);
             }
@@ -404,6 +418,15 @@ impl RustWriter {
         self.line("    pub fn parse_integer(&self) -> Result<Integer, NotaDecodeError> {");
         self.line("        let value = self.block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: \"Integer\" })?;");
         self.line("        value.parse::<Integer>().map_err(|_| NotaDecodeError::InvalidInteger { value: value.to_owned() })");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn parse_boolean(&self) -> Result<Boolean, NotaDecodeError> {");
+        self.line("        let value = self.block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: \"Boolean\" })?;");
+        self.line("        match value {");
+        self.line("            \"True\" => Ok(true),");
+        self.line("            \"False\" => Ok(false),");
+        self.line("            other => Err(NotaDecodeError::UnknownVariant { enum_name: \"Boolean\", variant: other.to_owned() }),");
+        self.line("        }");
         self.line("    }");
         self.line("}");
         self.blank();
@@ -1321,7 +1344,8 @@ impl RustWriter {
     /// The expression that decodes a NOTA `block` into this reference's
     /// value, applying `?` so it can sit directly at a field position.
     ///
-    /// Plain leaves call the scalar / `from_nota_block` codecs.
+    /// Scalar leaves call the scalar codecs. Plain declared-name leaves
+    /// call `from_nota_block`.
     /// Collection references decode structurally: a `Vec` reads a
     /// square-bracket block's children, a `KeyValue` map reads a brace
     /// block's key/value pairs into a `BTreeMap`, an `Option` reads the
@@ -1345,11 +1369,10 @@ impl RustWriter {
     /// (scalars and nested collections).
     fn parse_expression_result(&self, reference: &TypeReference, block: &str) -> String {
         match reference {
-            TypeReference::Plain(name) => match name.local_part() {
-                "Text" => format!("NotaBlock::new({block}).parse_text()"),
-                "Integer" => format!("NotaBlock::new({block}).parse_integer()"),
-                _ => format!("{}::from_nota_block({block})", name.as_str()),
-            },
+            TypeReference::Text => format!("NotaBlock::new({block}).parse_text()"),
+            TypeReference::Integer => format!("NotaBlock::new({block}).parse_integer()"),
+            TypeReference::Boolean => format!("NotaBlock::new({block}).parse_boolean()"),
+            TypeReference::Plain(name) => format!("{}::from_nota_block({block})", name.as_str()),
             TypeReference::Vector(inner) => format!(
                 "NotaCollection::new({block}).parse_vector({})",
                 self.parse_decoder(inner, "element")
@@ -1376,9 +1399,7 @@ impl RustWriter {
     /// form.
     fn parse_decoder(&self, reference: &TypeReference, binder: &str) -> String {
         match reference {
-            TypeReference::Plain(name) if !matches!(name.local_part(), "Text" | "Integer") => {
-                format!("{}::from_nota_block", name.as_str())
-            }
+            TypeReference::Plain(name) => format!("{}::from_nota_block", name.as_str()),
             _ => format!(
                 "|{binder}| {}",
                 self.parse_expression_result(reference, binder)
@@ -1407,11 +1428,10 @@ impl RustWriter {
     ) -> String {
         let borrow = if value_is_reference { "" } else { "&" };
         match reference {
-            TypeReference::Plain(name) => match name.local_part() {
-                "Text" => format!("NotaText::new({borrow}{value}).format()"),
-                "Integer" => format!("{value}.to_string()"),
-                _ => format!("{value}.to_nota()"),
-            },
+            TypeReference::Text => format!("NotaText::new({borrow}{value}).format()"),
+            TypeReference::Integer => format!("{value}.to_string()"),
+            TypeReference::Boolean => self.format_boolean(value, value_is_reference),
+            TypeReference::Plain(_) => format!("{value}.to_nota()"),
             TypeReference::Vector(inner) => format!(
                 "NotaCollection::format_vector({borrow}{value}, |element| {})",
                 self.format_expression(inner, "element", true)
@@ -1428,10 +1448,19 @@ impl RustWriter {
         }
     }
 
+    fn format_boolean(&self, value: &str, value_is_reference: bool) -> String {
+        let condition = if value_is_reference {
+            format!("*{value}")
+        } else {
+            value.to_owned()
+        };
+        format!("if {condition} {{ \"True\".to_owned() }} else {{ \"False\".to_owned() }}")
+    }
+
     /// The Rust type for a reference.
     ///
-    /// A plain leaf maps to its name (`Text` / `Integer` keep the
-    /// emitted aliases; any other name is the local type). The
+    /// Scalar leaves map to emitted scalar aliases. A plain declared-name
+    /// leaf maps to its local or imported type name. The
     /// collection variants recurse: `Vector` → `Vec<inner>`, `Map` →
     /// `BTreeMap<key, value>` (the `KeyValue` keyword), `Optional` →
     /// `Option<inner>`. `BTreeMap` is written fully-qualified so no
@@ -1439,11 +1468,10 @@ impl RustWriter {
     /// round-trips need a stable key order).
     fn rust_type(&self, reference: &TypeReference) -> String {
         match reference {
-            TypeReference::Plain(name) => match name.local_part() {
-                "Text" => "Text".to_owned(),
-                "Integer" => "Integer".to_owned(),
-                _ => name.as_str().to_owned(),
-            },
+            TypeReference::Text => "Text".to_owned(),
+            TypeReference::Integer => "Integer".to_owned(),
+            TypeReference::Boolean => "Boolean".to_owned(),
+            TypeReference::Plain(name) => name.as_str().to_owned(),
             TypeReference::Vector(inner) => format!("Vec<{}>", self.rust_type(inner)),
             TypeReference::Map(key, value) => format!(
                 "std::collections::BTreeMap<{}, {}>",

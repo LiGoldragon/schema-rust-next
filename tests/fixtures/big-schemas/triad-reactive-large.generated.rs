@@ -2,6 +2,7 @@
 
 pub type Text = String;
 pub type Integer = u64;
+pub type Boolean = bool;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotaDecodeError {
@@ -90,6 +91,15 @@ impl<'a> NotaBlock<'a> {
     pub fn parse_integer(&self) -> Result<Integer, NotaDecodeError> {
         let value = self.block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "Integer" })?;
         value.parse::<Integer>().map_err(|_| NotaDecodeError::InvalidInteger { value: value.to_owned() })
+    }
+
+    pub fn parse_boolean(&self) -> Result<Boolean, NotaDecodeError> {
+        let value = self.block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "Boolean" })?;
+        match value {
+            "True" => Ok(true),
+            "False" => Ok(false),
+            other => Err(NotaDecodeError::UnknownVariant { enum_name: "Boolean", variant: other.to_owned() }),
+        }
     }
 }
 

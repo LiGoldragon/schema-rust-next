@@ -85,6 +85,11 @@ message identifier.*
 `Integer`, not bespoke primitive widths, while the mail support surface is being
 moved toward a shared schema-authored core.*
 
+*Rust emission consumes scalar pass-throughs from asschema as data, not as
+emitter-side magic. `TypeReference::Text`, `TypeReference::Integer`, and
+`TypeReference::Boolean` emit the scalar aliases and NOTA codecs directly;
+`Plain(Name)` means a declared schema type or imported namespace name.*
+
 *Collection references emit the standard Rust collections plus their NOTA
 codecs. The authored schema uses typed NOTA datatype objects at reference
 positions: `(Vec T)` emits `Vec<T>`, `(Map (K V))` emits
@@ -98,8 +103,8 @@ block, a map value is a brace of key/value pairs, an option is `None` /
 it. A type used as a map key earns the ordering derives (`PartialOrd, Ord` on
 both the type and its archived form); other types keep the original derive
 set. The collection codec and the ordering derives are emitted only when the
-schema actually uses a collection, so a collection-free schema emits
-byte-identical Rust to the pre-collection emitter.*
+schema actually uses a collection, so a collection-free schema remains stable
+against the current scalar-floor fixture.*
 
 *The emitter starts from assembled schema data, not from authored macro syntax.
 That assembled data is currently produced in memory from real `.schema`
