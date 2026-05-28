@@ -26,6 +26,11 @@ shape into source-visible modules under `src/schema/`, using single-colon
 schema paths as the source naming convention and Rust modules as the emitted
 form.*
 
+*Pure-schema Horizon work must be demonstrated as a runnable pipeline, not as
+marketing prose. A concept is only credible when the repo contains authored
+schema, lowered assembled schema output, emitted Rust, and tests compiling the
+generated data types across module imports.*
+
 *Plane payload names are scoped by emitted namespaces. The generated public
 surface should read `signal::Input`, `nexus::Input`, and `sema::Input`
 inside their respective planes rather than forcing redundant names like

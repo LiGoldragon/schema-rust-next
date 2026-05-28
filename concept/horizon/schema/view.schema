@@ -1,0 +1,14 @@
+{}
+(Input ((Render Horizon)))
+(Output ((Rendered ViewReceipt)))
+{
+  ClusterName [Text]
+  NodeName [Text]
+  DomainName [Text]
+  SshTarget [Text]
+  HostView [NodeName DomainName SshTarget]
+  WorkstationView [HostView]
+  RouterView [HostView]
+  Horizon [ClusterName WorkstationView RouterView]
+  ViewReceipt [Integer]
+}

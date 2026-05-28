@@ -1,0 +1,15 @@
+{
+  Proposal horizon-concept:proposal:ClusterProposal
+  View horizon-concept:view:Horizon
+}
+(Input ((Project ProjectionRequest)))
+(Output ((Projected ProjectionResult) (Rejected ProjectionRejection)))
+{
+  ClusterName [Text]
+  NodeName [Text]
+  Viewpoint [ClusterName NodeName]
+  ProjectionRequest [Proposal Viewpoint]
+  ProjectionResult [View]
+  Reason [Text]
+  ProjectionRejection [Reason]
+}

@@ -18,7 +18,17 @@ derives, short-header signal frames, Nexus traits, Nexus mail lifecycle
 objects, mail-event hooks, and upgrade/accept traits that runtime crates
 implement against.
 
+Schema imports lower into Rust aliases across generated `src/schema/` modules.
+For example, `Proposal horizon-concept:proposal:ClusterProposal` emits a
+`pub use crate::schema::proposal::ClusterProposal as Proposal;` bridge plus
+the NOTA decode error conversion needed for generated parsers to call across
+module boundaries.
+
 For development, `cargo run --example emit_schema -- <schema/lib.schema>
 <crate:module> [version]` prints the generated Rust source so a consumer can
 refresh its checked-in `src/schema/<module>.rs` from local schema-next and
 schema-rust-next changes.
+
+`cargo run --example horizon_concept -- target/horizon-schema-concept` writes a
+small Horizon-domain pipeline: authored schema, lowered `Asschema`, and
+generated Rust for the proposal, view, and importing lib modules.

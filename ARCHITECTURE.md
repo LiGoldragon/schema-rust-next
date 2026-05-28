@@ -35,6 +35,11 @@
 - Single-colon schema namespaces map to generated Rust module paths. The
   schema path `spirit-next:nexus:Mail` becomes a module/type path under
   `src/schema/` without inventing a second naming system.
+- Import declarations emit explicit Rust bridges between generated modules.
+  The local import name is a public alias to the source type, and the emitter
+  adds a `NotaDecodeError` conversion for each imported module so generated
+  `from_nota_block` methods can parse imported payloads without hand-written
+  adapter code.
 - Generated schema objects emit `UpgradeFrom<Previous>` and
   `AcceptPrevious<Previous>` trait surfaces. A changed type gets hand-written
   upgrade behavior on the generated noun; unchanged types do not need upgrade

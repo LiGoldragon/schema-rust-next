@@ -1,5 +1,6 @@
 use schema_next::{
-    Asschema, EnumDeclaration, EnumVariant, Name, StructDeclaration, TypeDeclaration, TypeReference,
+    Asschema, EnumDeclaration, EnumVariant, ImportDeclaration, Name, StructDeclaration,
+    TypeDeclaration, TypeReference,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -47,6 +48,10 @@ impl RustEmitter {
         writer.blank();
         writer.emit_nota_support();
         writer.blank();
+        writer.emit_imports(asschema.imports());
+        if !asschema.imports().is_empty() {
+            writer.blank();
+        }
 
         for declaration in asschema.namespace() {
             writer.emit_type(declaration);
@@ -139,6 +144,31 @@ impl RustWriter {
             TypeDeclaration::Struct(declaration) => self.emit_struct(declaration),
             TypeDeclaration::Newtype(declaration) => self.emit_newtype(declaration),
             TypeDeclaration::Enum(declaration) => self.emit_enum(declaration),
+        }
+    }
+
+    fn emit_imports(&mut self, imports: &[ImportDeclaration]) {
+        let mut error_modules = Vec::new();
+        for import in imports {
+            let import_path = RustImportPath::new(import);
+            self.line(format!(
+                "pub use {} as {};",
+                import_path.type_path(),
+                import.local_name
+            ));
+            let module_path = import_path.module_path();
+            if !error_modules.contains(&module_path) {
+                error_modules.push(module_path.clone());
+                self.line(format!(
+                    "impl From<{module_path}::NotaDecodeError> for NotaDecodeError {{"
+                ));
+                self.line(format!(
+                    "    fn from(value: {module_path}::NotaDecodeError) -> Self {{"
+                ));
+                self.line("        Self::Parse(value.to_string())");
+                self.line("    }");
+                self.line("}");
+            }
         }
     }
 
@@ -1064,5 +1094,39 @@ impl RustWriter {
             }
         }
         output
+    }
+}
+
+struct RustImportPath<'a> {
+    import: &'a ImportDeclaration,
+}
+
+impl<'a> RustImportPath<'a> {
+    fn new(import: &'a ImportDeclaration) -> Self {
+        Self { import }
+    }
+
+    fn type_path(&self) -> String {
+        format!("{}::{}", self.module_path(), self.type_name())
+    }
+
+    fn module_path(&self) -> String {
+        let segments = self.import.source.name.namespace_segments();
+        let module_segments = if segments.len() > 2 {
+            &segments[1..segments.len() - 1]
+        } else {
+            &segments[..0]
+        };
+        let mut rust_segments = vec!["crate".to_owned(), "schema".to_owned()];
+        rust_segments.extend(
+            module_segments
+                .iter()
+                .map(|segment| Name::new(*segment).field_name()),
+        );
+        rust_segments.join("::")
+    }
+
+    fn type_name(&self) -> &str {
+        self.import.source.name.local_part()
     }
 }

@@ -1,0 +1,17 @@
+{}
+(Input ((Accept ClusterProposal)))
+(Output ((Accepted ProjectionReceipt) (Rejected ProjectionRejection)))
+{
+  ClusterName [Text]
+  NodeName [Text]
+  MajorNodeKind (Workstation Router Builder Cache)
+  NodeFeature (NixBuilder NixCache PersonaDevelopment ScreenshotNotification)
+  Node [NodeName MajorNodeKind NodeFeature]
+  Workstation [Node]
+  Router [Node]
+  ClusterProposal [ClusterName Workstation Router]
+  ProjectionIdentifier [Integer]
+  ProjectionReceipt [ProjectionIdentifier]
+  Reason [Text]
+  ProjectionRejection [Reason]
+}
