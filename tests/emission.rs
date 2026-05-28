@@ -36,6 +36,13 @@ fn emits_rust_source_as_a_separate_artifact() {
     assert!(generated.code.as_str().contains("pub struct MessageSent"));
     assert!(generated.code.as_str().contains("pub struct OriginRoute"));
     assert!(generated.code.as_str().contains("pub mod signal"));
+    assert!(generated.code.as_str().contains("pub enum Plane"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("Signal(super::Signal<SignalRoot>)")
+    );
     assert!(
         generated
             .code
@@ -148,6 +155,11 @@ fn generated_roots_wrap_into_messages_with_automatic_origin_route() {
         input.with_origin_route(generated::OriginRoute(19));
 
     assert_eq!(message.origin_route(), generated::OriginRoute(19));
+    let plane = generated::schema::Plane::<generated::signal::Input, (), ()>::Signal(message);
+    assert_eq!(plane.origin_route(), generated::OriginRoute(19));
+    let generated::schema::Plane::Signal(message) = plane else {
+        panic!("expected signal plane");
+    };
     assert!(matches!(
         message.root(),
         generated::Input::Observe(generated::Query { .. })

@@ -551,11 +551,21 @@ pub enum MessageRoot {
 }
 
 pub mod schema {
-    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-    pub enum Kind {
-        Signal,
-        Nexus,
-        Sema,
+    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub enum Plane<SignalRoot, NexusRoot, SemaRoot> {
+        Signal(super::Signal<SignalRoot>),
+        Nexus(super::Nexus<NexusRoot>),
+        Sema(super::Sema<SemaRoot>),
+    }
+
+    impl<SignalRoot, NexusRoot, SemaRoot> Plane<SignalRoot, NexusRoot, SemaRoot> {
+        pub fn origin_route(&self) -> super::OriginRoute {
+            match self {
+                Self::Signal(message) => message.origin_route(),
+                Self::Nexus(message) => message.origin_route(),
+                Self::Sema(message) => message.origin_route(),
+            }
+        }
     }
 }
 
@@ -572,10 +582,6 @@ impl<Root> Signal<Root> {
 
     pub fn origin_route(&self) -> OriginRoute {
         self.origin_route
-    }
-
-    pub fn kind(&self) -> schema::Kind {
-        schema::Kind::Signal
     }
 
     pub fn root(&self) -> &Root {
@@ -606,10 +612,6 @@ impl<Root> Nexus<Root> {
         self.origin_route
     }
 
-    pub fn kind(&self) -> schema::Kind {
-        schema::Kind::Nexus
-    }
-
     pub fn root(&self) -> &Root {
         &self.root
     }
@@ -636,10 +638,6 @@ impl<Root> Sema<Root> {
 
     pub fn origin_route(&self) -> OriginRoute {
         self.origin_route
-    }
-
-    pub fn kind(&self) -> schema::Kind {
-        schema::Kind::Sema
     }
 
     pub fn root(&self) -> &Root {

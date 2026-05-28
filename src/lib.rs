@@ -657,13 +657,13 @@ impl RustWriter {
         }
         self.line("}");
         self.blank();
-        self.emit_schema_kind_support();
+        self.emit_schema_plane_support();
         self.blank();
-        self.emit_plane_envelope("Signal", "Signal");
+        self.emit_plane_envelope("Signal");
         self.blank();
-        self.emit_plane_envelope("Nexus", "Nexus");
+        self.emit_plane_envelope("Nexus");
         self.blank();
-        self.emit_plane_envelope("Sema", "Sema");
+        self.emit_plane_envelope("Sema");
         self.blank();
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line("pub struct MessageSent {");
@@ -785,18 +785,30 @@ impl RustWriter {
         }
     }
 
-    fn emit_schema_kind_support(&mut self) {
+    fn emit_schema_plane_support(&mut self) {
         self.line("pub mod schema {");
-        self.line("    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
-        self.line("    pub enum Kind {");
-        self.line("        Signal,");
-        self.line("        Nexus,");
-        self.line("        Sema,");
+        self.line("    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
+        self.line("    pub enum Plane<SignalRoot, NexusRoot, SemaRoot> {");
+        self.line("        Signal(super::Signal<SignalRoot>),");
+        self.line("        Nexus(super::Nexus<NexusRoot>),");
+        self.line("        Sema(super::Sema<SemaRoot>),");
+        self.line("    }");
+        self.blank();
+        self.line(
+            "    impl<SignalRoot, NexusRoot, SemaRoot> Plane<SignalRoot, NexusRoot, SemaRoot> {",
+        );
+        self.line("        pub fn origin_route(&self) -> super::OriginRoute {");
+        self.line("            match self {");
+        self.line("                Self::Signal(message) => message.origin_route(),");
+        self.line("                Self::Nexus(message) => message.origin_route(),");
+        self.line("                Self::Sema(message) => message.origin_route(),");
+        self.line("            }");
+        self.line("        }");
         self.line("    }");
         self.line("}");
     }
 
-    fn emit_plane_envelope(&mut self, name: &str, kind: &str) {
+    fn emit_plane_envelope(&mut self, name: &str) {
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line(format!("pub struct {name}<Root> {{"));
         self.line("    pub origin_route: OriginRoute,");
@@ -810,10 +822,6 @@ impl RustWriter {
         self.blank();
         self.line("    pub fn origin_route(&self) -> OriginRoute {");
         self.line("        self.origin_route");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn kind(&self) -> schema::Kind {");
-        self.line(format!("        schema::Kind::{kind}"));
         self.line("    }");
         self.blank();
         self.line("    pub fn root(&self) -> &Root {");

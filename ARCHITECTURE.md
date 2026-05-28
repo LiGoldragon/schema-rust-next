@@ -44,7 +44,8 @@
 - Generated signal roots emit mail-event nouns. `signal::Signal<Root>`,
   `nexus::Nexus<Root>`, and `sema::Sema<Root>` are the automatic envelopes for
   root objects in each plane; each has an `origin_route` field plus the root
-  object and reports its meta-plane as `schema::Kind::{Signal,Nexus,Sema}`.
+  object. `schema::Plane::{Signal,Nexus,Sema}` is the data-carrying match
+  surface for code that needs to branch across planes.
   `MessageSent` records the message identifier, origin route, root schema type,
   and short header, and pushes through `MessageSentHook` so routers, UI layers,
   or introspection subscribers can react without polling. `NexusMail<Payload>`
