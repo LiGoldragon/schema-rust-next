@@ -32,6 +32,12 @@ inside their respective planes rather than forcing redundant names like
 `SemaInput` at every use site. The backing flat names may exist during the
 bootstrap, but trait signatures and examples should use the plane namespace.*
 
+*Plane identity is matchable data, not a separate kind tag. When runtime code
+needs to branch across Signal, Nexus, and SEMA, the emitted surface is
+`schema::Plane::{Signal,Nexus,Sema}` carrying the actual plane message
+envelopes. A thin unit discriminator beside the message would duplicate
+authority and is not the load-bearing plane surface.*
+
 *Nexus is also the mail keeper. When Signal input enters Nexus, it is wrapped
 as `NexusMail<Payload>` with a message identifier; while Nexus owns that value,
 the mail is being processed. Nexus receives SEMA or execution replies and emits
