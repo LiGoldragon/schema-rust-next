@@ -64,3 +64,19 @@ schema-authored core.*
 Future forge build logic may eventually turn generated Rust into
 content-addressed crates directly. That is future design; this repo owns the
 current explicit source emission step.
+
+Cross-crate import emission (Spirit record 1009, 2026-05-28):
+
+*An imported type is REFERENCED, never re-declared.* When the assembled schema
+carries resolved imports, the emitter writes a `pub use` alias to the
+dependency crate's emitted type
+(`pub use crate::schema::module::Type as Local;`) instead of emitting a fresh
+struct/enum. The dependency crate owns the type's definition and its rkyv/NOTA
+impls; the importing module reaches them through the alias. One type identity
+crosses the crate boundary — this is the cross-crate realisation of "schema
+types are the nouns; don't hand-write a parallel mirror."
+
+Because each emitted module declares its own `NotaDecodeError`, the emitter
+also writes `impl From<<dep-module>::NotaDecodeError> for NotaDecodeError` for
+each distinct imported module, so a local NOTA codec calling an imported type's
+`from_nota_block` composes under the `?` operator.

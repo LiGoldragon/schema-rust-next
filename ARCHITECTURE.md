@@ -55,3 +55,21 @@
   (`Integer`) rather than bespoke primitive widths. This keeps the runtime mail
   support closer to schema-authored nouns while the core mail schema is still
   emitted by the support surface.
+
+## Cross-crate import emission
+
+`RustEmitter` gained two methods, both early-returning on empty imports so
+existing emission stays byte-identical:
+
+- `emit_imports` writes one `pub use <dep-path> as <Local>;` per resolved
+  import, placed before the types that reference them so the alias resolves.
+  No `pub struct`/`pub enum` is emitted for an imported type — the dependency
+  crate owns the definition.
+- `emit_imported_error_bridges` writes one
+  `impl From<<dep-module>::NotaDecodeError> for NotaDecodeError` per distinct
+  imported module, collapsing the dependency's parse failures into the local
+  `Parse` variant so cross-crate NOTA codecs compose.
+
+schema-next resolves the imports (`Asschema::resolved_imports`); this repo
+turns each `ResolvedImport` into the `use` alias and the error bridge. Proven
+end-to-end in Nix by the `schema-core` repo's `nix flake check`.
