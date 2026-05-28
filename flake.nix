@@ -123,6 +123,22 @@
             grep -R "Marked(DatabaseMarker)" ${src}/tests/cross_crate_import.rs >/dev/null
             touch $out
           '';
+          asschema-fixtures-final-data = pkgs.runCommand "schema-rust-next-asschema-fixtures-final-data" { } ''
+            grep -R "assert_asschema_is_final_data" ${src}/tests/big_emission.rs >/dev/null
+            if grep -R -n --include='*.asschema' '@' ${src}/tests/fixtures; then
+              echo ".asschema fixtures must not contain authored macro markers" >&2
+              exit 1
+            fi
+            if grep -R -n --include='*.asschema' '\$' ${src}/tests/fixtures; then
+              echo ".asschema fixtures must not contain macro captures" >&2
+              exit 1
+            fi
+            if grep -R -n --include='*.asschema' -E '\(Map \(Plain' ${src}/tests/fixtures; then
+              echo ".asschema Map must carry one vector payload" >&2
+              exit 1
+            fi
+            touch $out
+          '';
           no-nested-root-enum-examples = pkgs.runCommand "schema-rust-next-no-nested-root-enum-examples" { } ''
             if grep -R -n -E '\((Input|Output) \(\(' ${src}/tests; then
               echo "root Input/Output examples must use direct variants, not nested enum bodies" >&2

@@ -99,6 +99,14 @@ derives are emitted only when the schema actually uses a collection, so a
 collection-free schema emits byte-identical Rust to the pre-collection
 emitter.*
 
+*The emitter starts from assembled schema data, not from authored macro syntax.
+The checked `.asschema` fixtures are macro-free NOTA data: square brackets are
+vectors typed by assembled-schema positions, and collection/reference forms
+are final variants (`Vector`, `Optional`, `Map`, `Plain`). In final data,
+`Map` carries one vector payload — `(Map [(Plain Key) (Plain Value)])` —
+rather than loose macro-style arguments. Rust emission must not compensate for
+unresolved schema sugar.*
+
 Future forge build logic may eventually turn generated Rust into
 content-addressed crates directly. That is future design; this repo owns the
 current explicit source emission step.

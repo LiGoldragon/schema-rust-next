@@ -7,6 +7,11 @@ This repository is deliberately not a Rust macro crate. The MVP path is:
 assembled schema in, Rust source text out, compile and test the emitted source,
 then layer macro ergonomics later.
 
+The emitter consumes final assembled-schema data, not authored schema sugar.
+Checked `.asschema` fixtures contain no `@` macro markers or `$` captures;
+collection references are final variants such as
+`(Map [(Plain Key) (Plain Value)])`.
+
 Generated paths mirror crate-local schema modules. An assembled schema identity
 such as `spirit-next:lib` emits to `src/schema/lib.rs`; an identity such as
 `spirit-next:signal:public` emits to `src/schema/signal/public.rs`. The first

@@ -233,7 +233,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "schema-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#a17c4d4eb9819ac3b11877bcc11735873ad17a47"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#6307e65a2b35b8a9f3f00689345938c347f90071"
 dependencies = [
  "nota-next",
 ]

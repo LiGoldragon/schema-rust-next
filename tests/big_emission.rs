@@ -101,6 +101,7 @@ impl<'fixture> BigRustFixture<'fixture> {
         }
         let expected =
             std::fs::read_to_string(&self.asschema_path).expect("read assembled schema fixture");
+        self.assert_asschema_is_final_data(&expected);
         let parsed_expected =
             Asschema::from_nota(&expected).expect("checked-in asschema fixture parses");
         assert_eq!(
@@ -123,6 +124,24 @@ impl<'fixture> BigRustFixture<'fixture> {
         assert_eq!(
             witness, expected_witness,
             "assembled schema witness drifted for {}",
+            self.name
+        );
+    }
+
+    fn assert_asschema_is_final_data(&self, source: &str) {
+        assert!(
+            !source.contains('@'),
+            "{} .asschema must not contain authored macro markers",
+            self.name
+        );
+        assert!(
+            !source.contains("$Name") && !source.contains("$*"),
+            "{} .asschema must not contain macro captures",
+            self.name
+        );
+        assert!(
+            !source.contains("(Map (Plain"),
+            "{} .asschema must use final Map vector payloads",
             self.name
         );
     }
