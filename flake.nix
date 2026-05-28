@@ -140,7 +140,15 @@
               exit 1
             fi
             if grep -R -n -E '@(Vec|Option|KeyValue|Bag|HashSet)' ${src}/tests ${src}/src; then
-              echo "schema-rust-next examples must use no-sigil tagged macro invocation" >&2
+              echo "schema-rust-next examples must not reintroduce the old @ macro sigil" >&2
+              exit 1
+            fi
+            if grep -R -n -E '\((Vec|Option|KeyValue) \[' ${src}/tests; then
+              echo "schema-rust-next examples must use native collection syntax: [T], {K V}, (Optional T)" >&2
+              exit 1
+            fi
+            if grep -R -n -E '[A-Za-z][A-Za-z0-9]*\*' ${src}/tests/fixtures; then
+              echo "schema-rust-next examples must not reintroduce star-suffix same-name payload sugar" >&2
               exit 1
             fi
             touch $out

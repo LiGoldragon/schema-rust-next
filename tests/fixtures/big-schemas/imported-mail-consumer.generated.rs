@@ -275,7 +275,7 @@ pub enum Output {
     Observed(RecordSet),
     Marked(DatabaseMarker),
     Committed(CommitSequence),
-    Rejected(Rejected),
+    Rejected(Rejection),
 }
 
 impl Topic {
@@ -469,7 +469,7 @@ impl Output {
             "Observed" => Ok(Self::Observed(RecordSet::from_nota_block(&children[1])?)),
             "Marked" => Ok(Self::Marked(DatabaseMarker::from_nota_block(&children[1])?)),
             "Committed" => Ok(Self::Committed(CommitSequence::from_nota_block(&children[1])?)),
-            "Rejected" => Ok(Self::Rejected(Rejected::from_nota_block(&children[1])?)),
+            "Rejected" => Ok(Self::Rejected(Rejection::from_nota_block(&children[1])?)),
             other => Err(NotaDecodeError::UnknownVariant { enum_name: "Output", variant: other.to_owned() }),
         }
     }
@@ -960,7 +960,7 @@ pub trait OutputNexus {
     fn observed(&self, mail: NexusMail<RecordSet>) -> Result<Self::Reply, Self::Error>;
     fn marked(&self, mail: NexusMail<DatabaseMarker>) -> Result<Self::Reply, Self::Error>;
     fn committed(&self, mail: NexusMail<CommitSequence>) -> Result<Self::Reply, Self::Error>;
-    fn rejected(&self, mail: NexusMail<Rejected>) -> Result<Self::Reply, Self::Error>;
+    fn rejected(&self, mail: NexusMail<Rejection>) -> Result<Self::Reply, Self::Error>;
 }
 
 impl Output {
