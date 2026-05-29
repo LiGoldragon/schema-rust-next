@@ -122,12 +122,13 @@ codec still serializes Rust `Vec`, `BTreeMap`, and `Option` values into NOTA
 value shapes, but the names used in a `.schema` file to reference those types
 are Schema vocabulary.*
 
-*The authored schema declaration surface is moving from the transitional
-pipe-family syntax to the name-first `@` syntax (`Name@{...}`,
-`Name@(...)`, `name@Type`). Rust emission should not care which authored
-surface produced the assembled data: it consumes the macro-free `Asschema`
-roots and type declarations. Existing generated fixtures still come from the
-pipe implementation until schema-next implements the `@` lowering path.*
+*The authored schema declaration surface is the name-first `@` syntax:
+`Input@[...]` and `Output@[...]` for root enums, `Name@{...}` for structs,
+`Name@[...]` for enums, and `name@Type` / `name@(Composite Type)` for fields
+or variant payloads. Namespace braces contain self-named declarations, not
+duplicated `Name Name@{...}` key/value pairs. Rust emission should not care
+which authored surface produced the assembled data: it consumes the
+macro-free `Asschema` roots and type declarations.*
 
 *The emitter starts from assembled schema data, not from authored macro syntax.
 That assembled data is currently produced in memory from real `.schema`

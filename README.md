@@ -25,8 +25,8 @@ runtime crates implement against.
 
 Composite type references come from typed NOTA datatype objects in the
 authored schema: `(Vec Topic)`, `(Map (Topic RecordIdentifier))`, and
-`(Optional Topic)`. Authored datatype declarations use pipe forms such as
-`{| Entry topic Topic |}` and `(| Kind Decision Correction |)`. Square brackets
+`(Optional Topic)`. Authored datatype declarations use name-first `@` forms
+such as `Entry@{ topic@Topic }` and `Kind@[Decision Correction]`. Square brackets
 are still used by NOTA values; they are not schema datatype declarations and
 they are not the schema surface for declaring `Vec`.
 

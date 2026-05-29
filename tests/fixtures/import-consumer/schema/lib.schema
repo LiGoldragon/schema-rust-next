@@ -1,7 +1,7 @@
 { DatabaseMarker marker-core:mail:DatabaseMarker }
-((Observe Query))
-((Marked DatabaseMarker))
+Input@[Observe@Query]
+Output@[Marked@DatabaseMarker]
 {
-  Topic {| Topic string String |}
-  Query {| Query topics (Vec Topic) |}
+  Topic@{ string@String }
+  Query@{ topics@(Vec Topic) }
 }

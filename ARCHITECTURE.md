@@ -18,11 +18,12 @@ already resolved all macros and sugar; the emitter does not read authored macro
 calls, sigils, or structural macro captures. The active test path gets that
 `Asschema` as typed data from `schema-next` lowering real `.schema` fixtures.
 
-The active fixtures still use the transitional pipe-family declaration syntax.
-The target authored surface is `Name@{...}` / `Name@(...)` / `name@Type`, but
-that change belongs in `nota-next` and `schema-next`. This emitter should only
-see the resulting `Asschema` data and should not grow a second parser for the
-authored form.
+The active fixtures use the settled name-first `@` declaration surface:
+`Input@[...]` / `Output@[...]` for root enums, `Name@{...}` for structs,
+`Name@[...]` for enums, and parenthesized `name@(Vec Type)` /
+`name@(Optional Type)` / `name@(Map (...))` for composite references. This
+emitter only sees the resulting `Asschema` data and must not grow a second
+parser for the authored form.
 
 ## Constraints
 
@@ -99,8 +100,9 @@ authored form.
 - Collection references emit standard Rust collections. Authored schemas use
   Schema type-reference vocabulary such as `(Vec Topic)`, `(Map (Topic
   RecordIdentifier))`, and `(Optional Topic)`. Authored datatype declarations
-  use pipe forms (`{| ... |}` and `(| ... |)`); plain square brackets are not
-  datatype declarations and are not the `Vec` reference syntax. The emitter's
+  use name-first `@` forms (`Name@{...}` and `Name@[...]`); plain square
+  brackets are not datatype declarations and are not the `Vec` reference
+  syntax. The emitter's
   Rust type projection recurses a `TypeReference`: `Vector` → `Vec<inner>`,
   `Map` → `std::collections::BTreeMap<key, value>` (fully qualified, so no
   `use` and a deterministic key order for rkyv + NOTA), `Optional` →

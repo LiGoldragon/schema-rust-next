@@ -1,23 +1,23 @@
-((Record Entry) (Observe Query))
-((RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport))
+Input@[Record@Entry Observe@Query]
+Output@[RecordAccepted@SemaReceipt RecordsObserved@ObservedRecords Error@ErrorReport]
 {
-  NexusInput (| NexusInput (Signal Input) (Sema SemaOutput) |)
-  NexusOutput (| NexusOutput (Sema SemaInput) (Signal Output) |)
-  SemaInput (| SemaInput (Record Entry) (Observe Query) |)
-  SemaOutput (| SemaOutput (Recorded SemaReceipt) (Observed ObservedRecords) (Missed ErrorReport) |)
-  Topic {| Topic string String |}
-  Description {| Description string String |}
-  ErrorMessage {| ErrorMessage string String |}
-  RecordIdentifier {| RecordIdentifier integer Integer |}
-  CommitSequence {| CommitSequence integer Integer |}
-  StateDigest {| StateDigest integer Integer |}
-  DatabaseMarker {| DatabaseMarker commitSequence CommitSequence stateDigest StateDigest |}
-  SemaReceipt {| SemaReceipt recordIdentifier RecordIdentifier databaseMarker DatabaseMarker |}
-  ObservedRecords {| ObservedRecords recordSet RecordSet databaseMarker DatabaseMarker |}
-  ErrorReport {| ErrorReport errorMessage ErrorMessage databaseMarker DatabaseMarker |}
-  Entry {| Entry topic Topic kind Kind description Description magnitude Magnitude |}
-  Query {| Query topic Topic kind Kind |}
-  RecordSet {| RecordSet entries (Vec Entry) |}
-  Kind (| Kind Decision Principle Correction Clarification Constraint |)
-  Magnitude (| Magnitude Minimum VeryLow Low Medium High VeryHigh Maximum |)
+  NexusInput@[Signal@Input Sema@SemaOutput]
+  NexusOutput@[Sema@SemaInput Signal@Output]
+  SemaInput@[Record@Entry Observe@Query]
+  SemaOutput@[Recorded@SemaReceipt Observed@ObservedRecords Missed@ErrorReport]
+  Topic@{ string@String }
+  Description@{ string@String }
+  ErrorMessage@{ string@String }
+  RecordIdentifier@{ integer@Integer }
+  CommitSequence@{ integer@Integer }
+  StateDigest@{ integer@Integer }
+  DatabaseMarker@{ commitSequence@CommitSequence stateDigest@StateDigest }
+  SemaReceipt@{ recordIdentifier@RecordIdentifier databaseMarker@DatabaseMarker }
+  ObservedRecords@{ recordSet@RecordSet databaseMarker@DatabaseMarker }
+  ErrorReport@{ errorMessage@ErrorMessage databaseMarker@DatabaseMarker }
+  Entry@{ topic@Topic kind@Kind description@Description magnitude@Magnitude }
+  Query@{ topic@Topic kind@Kind }
+  RecordSet@{ entries@(Vec Entry) }
+  Kind@[Decision Principle Correction Clarification Constraint]
+  Magnitude@[Minimum VeryLow Low Medium High VeryHigh Maximum]
 }
