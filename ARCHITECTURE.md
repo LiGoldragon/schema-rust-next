@@ -90,7 +90,7 @@ calls, sigils, or structural macro captures. The active test path gets that
   imported schema type and therefore decodes through that type's
   `from_nota_block` method.
 - Collection references emit standard Rust collections. Authored schemas use
-  typed NOTA datatype objects such as `(Vec Topic)`, `(Map (Topic
+  Schema type-reference vocabulary such as `(Vec Topic)`, `(Map (Topic
   RecordIdentifier))`, and `(Optional Topic)`; square brackets are not the
   `Vec` reference syntax. `rust_type` recurses a `TypeReference`: `Vector` →
   `Vec<inner>`, `Map` → `std::collections::BTreeMap<key, value>` (fully
@@ -106,6 +106,8 @@ calls, sigils, or structural macro captures. The active test path gets that
   collection. Its NOTA shapes: a `Vec` is a square-bracket block `[e1 e2 ...]`,
   a `BTreeMap` is a brace block of `key value` pairs `{k1 v1 ...}`, an `Option`
   is the atom `None` or the paren `(Some inner)`.
+- NOTA owns those value shapes. Schema owns the type-name keywords that select
+  scalar and composite type references in `.schema` files.
 - A type used anywhere as a `BTreeMap` key earns the ordering derives
   (`PartialOrd, Ord` plus the archived `#[rkyv(derive(...))]`); value-only and
   non-collection types keep the original derive set. `CollectionScan` decides

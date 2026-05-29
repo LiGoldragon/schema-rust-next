@@ -93,7 +93,7 @@ scalar floor uses `String`, `Integer`, and `Boolean`; `Bool` is not a spelling,
 and `Text` is a schema-declared newtype when a domain wants that noun.*
 
 *Collection references emit the standard Rust collections plus their NOTA
-codecs. The authored schema uses typed NOTA datatype objects at reference
+codecs. The authored schema uses Schema type-reference vocabulary at reference
 positions: `(Vec T)` emits `Vec<T>`, `(Map (K V))` emits
 `std::collections::BTreeMap<K, V>` (ordered so rkyv and NOTA round-trips are
 deterministic), and `(Optional T)` emits `Option<T>`; nested references
@@ -107,6 +107,13 @@ both the type and its archived form); other types keep the original derive
 set. The collection codec and the ordering derives are emitted only when the
 schema actually uses a collection, so a collection-free schema remains stable
 against the current scalar-floor fixture.*
+
+*NOTA owns raw delimiter structure and serialization shapes. Schema owns all
+type-name keywords: scalar names such as `String`, `Integer`, and `Boolean`,
+and composite names such as `Vec`, `Optional`, and `Map`. The generated NOTA
+codec still serializes Rust `Vec`, `BTreeMap`, and `Option` values into NOTA
+value shapes, but the names used in a `.schema` file to reference those types
+are Schema vocabulary.*
 
 *The emitter starts from assembled schema data, not from authored macro syntax.
 That assembled data is currently produced in memory from real `.schema`
