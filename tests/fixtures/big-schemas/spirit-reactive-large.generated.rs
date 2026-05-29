@@ -6,38 +6,38 @@ pub type Boolean = bool;
 pub type Path = std::string::String;
 
 pub use nota_next::{
-    NotaBlock, NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
+    NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
 };
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]
 pub struct Topic(pub String);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Topics(pub Vec<Topic>);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Description(pub String);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AgentName(pub String);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Timestamp(pub Integer);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RecordIdentifier(pub Integer);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SubscriptionToken(pub Integer);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CommitSequence(pub Integer);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DatabaseDigest(pub Integer);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Magnitude {
     Minimum,
     VeryLow,
@@ -48,7 +48,7 @@ pub enum Magnitude {
     Maximum,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Kind {
     Decision,
     Principle,
@@ -59,7 +59,7 @@ pub enum Kind {
     Question,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum RejectionReason {
     Malformed,
     Unauthorized,
@@ -68,7 +68,7 @@ pub enum RejectionReason {
     StaleVersion,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     pub topics: Topics,
     pub kind: Kind,
@@ -78,7 +78,7 @@ pub struct Entry {
     pub timestamp: Timestamp,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Correction {
     pub record_identifier: RecordIdentifier,
     pub description: Description,
@@ -87,59 +87,59 @@ pub struct Correction {
     pub timestamp: Timestamp,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Query {
     pub topics: Topics,
     pub kinds: Vec<Kind>,
     pub limit: Option<Integer>,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct WatchRequest {
     pub topics: Topics,
     pub kinds: Vec<Kind>,
     pub agent_name: AgentName,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RecordReceipt {
     pub record_identifier: RecordIdentifier,
     pub commit_sequence: CommitSequence,
     pub database_digest: DatabaseDigest,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CorrectionReceipt {
     pub record_identifier: RecordIdentifier,
     pub commit_sequence: CommitSequence,
     pub database_digest: DatabaseDigest,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RecordSet {
     pub records: Vec<Entry>,
     pub by_topic: std::collections::BTreeMap<Topic, RecordIdentifier>,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SubscriptionReceipt {
     pub subscription_token: SubscriptionToken,
     pub commit_sequence: CommitSequence,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Rejection {
     pub rejection_reason: RejectionReason,
     pub description: Description,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct IndexReceipt {
     pub commit_sequence: CommitSequence,
     pub database_digest: DatabaseDigest,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Input {
     Record(Entry),
     Correct(Correction),
@@ -150,7 +150,7 @@ pub enum Input {
     Compact,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Output {
     Recorded(RecordReceipt),
     Corrected(CorrectionReceipt),
@@ -161,18 +161,6 @@ pub enum Output {
     Indexed(IndexReceipt),
 }
 
-impl NotaDecode for Topic {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for Topic {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl Topic {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -180,18 +168,6 @@ impl Topic {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for Topics {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Vec<Topic> as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for Topics {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
     }
 }
 
@@ -205,18 +181,6 @@ impl Topics {
     }
 }
 
-impl NotaDecode for Description {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for Description {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl Description {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -224,18 +188,6 @@ impl Description {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for AgentName {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for AgentName {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
     }
 }
 
@@ -249,18 +201,6 @@ impl AgentName {
     }
 }
 
-impl NotaDecode for Timestamp {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for Timestamp {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl Timestamp {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -268,18 +208,6 @@ impl Timestamp {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for RecordIdentifier {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for RecordIdentifier {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
     }
 }
 
@@ -293,18 +221,6 @@ impl RecordIdentifier {
     }
 }
 
-impl NotaDecode for SubscriptionToken {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for SubscriptionToken {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl SubscriptionToken {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -312,18 +228,6 @@ impl SubscriptionToken {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for CommitSequence {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for CommitSequence {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
     }
 }
 
@@ -337,18 +241,6 @@ impl CommitSequence {
     }
 }
 
-impl NotaDecode for DatabaseDigest {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for DatabaseDigest {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl DatabaseDigest {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -356,39 +248,6 @@ impl DatabaseDigest {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for Magnitude {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        if let Some(variant) = block.demote_to_string() {
-            return match variant {
-                "Minimum" => Ok(Self::Minimum),
-                "VeryLow" => Ok(Self::VeryLow),
-                "Low" => Ok(Self::Low),
-                "Medium" => Ok(Self::Medium),
-                "High" => Ok(Self::High),
-                "VeryHigh" => Ok(Self::VeryHigh),
-                "Maximum" => Ok(Self::Maximum),
-                other => Err(NotaDecodeError::UnknownVariant { enum_name: "Magnitude", variant: other.to_owned() }),
-            };
-        }
-        Err(NotaDecodeError::ExpectedAtom { type_name: "Magnitude" })
-    }
-
-}
-
-impl NotaEncode for Magnitude {
-    fn to_nota(&self) -> String {
-        match self {
-            Self::Minimum => "Minimum".to_owned(),
-            Self::VeryLow => "VeryLow".to_owned(),
-            Self::Low => "Low".to_owned(),
-            Self::Medium => "Medium".to_owned(),
-            Self::High => "High".to_owned(),
-            Self::VeryHigh => "VeryHigh".to_owned(),
-            Self::Maximum => "Maximum".to_owned(),
-        }
     }
 }
 
@@ -402,39 +261,6 @@ impl Magnitude {
     }
 }
 
-impl NotaDecode for Kind {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        if let Some(variant) = block.demote_to_string() {
-            return match variant {
-                "Decision" => Ok(Self::Decision),
-                "Principle" => Ok(Self::Principle),
-                "Correction" => Ok(Self::Correction),
-                "Clarification" => Ok(Self::Clarification),
-                "Constraint" => Ok(Self::Constraint),
-                "Observation" => Ok(Self::Observation),
-                "Question" => Ok(Self::Question),
-                other => Err(NotaDecodeError::UnknownVariant { enum_name: "Kind", variant: other.to_owned() }),
-            };
-        }
-        Err(NotaDecodeError::ExpectedAtom { type_name: "Kind" })
-    }
-
-}
-
-impl NotaEncode for Kind {
-    fn to_nota(&self) -> String {
-        match self {
-            Self::Decision => "Decision".to_owned(),
-            Self::Principle => "Principle".to_owned(),
-            Self::Correction => "Correction".to_owned(),
-            Self::Clarification => "Clarification".to_owned(),
-            Self::Constraint => "Constraint".to_owned(),
-            Self::Observation => "Observation".to_owned(),
-            Self::Question => "Question".to_owned(),
-        }
-    }
-}
-
 impl Kind {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -442,35 +268,6 @@ impl Kind {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for RejectionReason {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        if let Some(variant) = block.demote_to_string() {
-            return match variant {
-                "Malformed" => Ok(Self::Malformed),
-                "Unauthorized" => Ok(Self::Unauthorized),
-                "Conflict" => Ok(Self::Conflict),
-                "Unsupported" => Ok(Self::Unsupported),
-                "StaleVersion" => Ok(Self::StaleVersion),
-                other => Err(NotaDecodeError::UnknownVariant { enum_name: "RejectionReason", variant: other.to_owned() }),
-            };
-        }
-        Err(NotaDecodeError::ExpectedAtom { type_name: "RejectionReason" })
-    }
-
-}
-
-impl NotaEncode for RejectionReason {
-    fn to_nota(&self) -> String {
-        match self {
-            Self::Malformed => "Malformed".to_owned(),
-            Self::Unauthorized => "Unauthorized".to_owned(),
-            Self::Conflict => "Conflict".to_owned(),
-            Self::Unsupported => "Unsupported".to_owned(),
-            Self::StaleVersion => "StaleVersion".to_owned(),
-        }
     }
 }
 
@@ -484,34 +281,6 @@ impl RejectionReason {
     }
 }
 
-impl NotaDecode for Entry {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Entry", 6)?;
-        Ok(Self {
-            topics: <Topics as NotaDecode>::from_nota_block(&children[0])?,
-            kind: <Kind as NotaDecode>::from_nota_block(&children[1])?,
-            description: <Description as NotaDecode>::from_nota_block(&children[2])?,
-            magnitude: <Magnitude as NotaDecode>::from_nota_block(&children[3])?,
-            agent_name: <AgentName as NotaDecode>::from_nota_block(&children[4])?,
-            timestamp: <Timestamp as NotaDecode>::from_nota_block(&children[5])?,
-        })
-    }
-}
-
-impl NotaEncode for Entry {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.topics),
-            NotaEncode::to_nota(&self.kind),
-            NotaEncode::to_nota(&self.description),
-            NotaEncode::to_nota(&self.magnitude),
-            NotaEncode::to_nota(&self.agent_name),
-            NotaEncode::to_nota(&self.timestamp),
-        ];
-        format!("({})", fields.join(" "))
-    }
-}
-
 impl Entry {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -519,32 +288,6 @@ impl Entry {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for Correction {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Correction", 5)?;
-        Ok(Self {
-            record_identifier: <RecordIdentifier as NotaDecode>::from_nota_block(&children[0])?,
-            description: <Description as NotaDecode>::from_nota_block(&children[1])?,
-            magnitude: <Magnitude as NotaDecode>::from_nota_block(&children[2])?,
-            agent_name: <AgentName as NotaDecode>::from_nota_block(&children[3])?,
-            timestamp: <Timestamp as NotaDecode>::from_nota_block(&children[4])?,
-        })
-    }
-}
-
-impl NotaEncode for Correction {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.record_identifier),
-            NotaEncode::to_nota(&self.description),
-            NotaEncode::to_nota(&self.magnitude),
-            NotaEncode::to_nota(&self.agent_name),
-            NotaEncode::to_nota(&self.timestamp),
-        ];
-        format!("({})", fields.join(" "))
     }
 }
 
@@ -558,28 +301,6 @@ impl Correction {
     }
 }
 
-impl NotaDecode for Query {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Query", 3)?;
-        Ok(Self {
-            topics: <Topics as NotaDecode>::from_nota_block(&children[0])?,
-            kinds: <Vec<Kind> as NotaDecode>::from_nota_block(&children[1])?,
-            limit: <Option<Integer> as NotaDecode>::from_nota_block(&children[2])?,
-        })
-    }
-}
-
-impl NotaEncode for Query {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.topics),
-            NotaEncode::to_nota(&self.kinds),
-            NotaEncode::to_nota(&self.limit),
-        ];
-        format!("({})", fields.join(" "))
-    }
-}
-
 impl Query {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -587,28 +308,6 @@ impl Query {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for WatchRequest {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "WatchRequest", 3)?;
-        Ok(Self {
-            topics: <Topics as NotaDecode>::from_nota_block(&children[0])?,
-            kinds: <Vec<Kind> as NotaDecode>::from_nota_block(&children[1])?,
-            agent_name: <AgentName as NotaDecode>::from_nota_block(&children[2])?,
-        })
-    }
-}
-
-impl NotaEncode for WatchRequest {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.topics),
-            NotaEncode::to_nota(&self.kinds),
-            NotaEncode::to_nota(&self.agent_name),
-        ];
-        format!("({})", fields.join(" "))
     }
 }
 
@@ -622,28 +321,6 @@ impl WatchRequest {
     }
 }
 
-impl NotaDecode for RecordReceipt {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "RecordReceipt", 3)?;
-        Ok(Self {
-            record_identifier: <RecordIdentifier as NotaDecode>::from_nota_block(&children[0])?,
-            commit_sequence: <CommitSequence as NotaDecode>::from_nota_block(&children[1])?,
-            database_digest: <DatabaseDigest as NotaDecode>::from_nota_block(&children[2])?,
-        })
-    }
-}
-
-impl NotaEncode for RecordReceipt {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.record_identifier),
-            NotaEncode::to_nota(&self.commit_sequence),
-            NotaEncode::to_nota(&self.database_digest),
-        ];
-        format!("({})", fields.join(" "))
-    }
-}
-
 impl RecordReceipt {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -651,28 +328,6 @@ impl RecordReceipt {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for CorrectionReceipt {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "CorrectionReceipt", 3)?;
-        Ok(Self {
-            record_identifier: <RecordIdentifier as NotaDecode>::from_nota_block(&children[0])?,
-            commit_sequence: <CommitSequence as NotaDecode>::from_nota_block(&children[1])?,
-            database_digest: <DatabaseDigest as NotaDecode>::from_nota_block(&children[2])?,
-        })
-    }
-}
-
-impl NotaEncode for CorrectionReceipt {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.record_identifier),
-            NotaEncode::to_nota(&self.commit_sequence),
-            NotaEncode::to_nota(&self.database_digest),
-        ];
-        format!("({})", fields.join(" "))
     }
 }
 
@@ -686,26 +341,6 @@ impl CorrectionReceipt {
     }
 }
 
-impl NotaDecode for RecordSet {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "RecordSet", 2)?;
-        Ok(Self {
-            records: <Vec<Entry> as NotaDecode>::from_nota_block(&children[0])?,
-            by_topic: <std::collections::BTreeMap<Topic, RecordIdentifier> as NotaDecode>::from_nota_block(&children[1])?,
-        })
-    }
-}
-
-impl NotaEncode for RecordSet {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.records),
-            NotaEncode::to_nota(&self.by_topic),
-        ];
-        format!("({})", fields.join(" "))
-    }
-}
-
 impl RecordSet {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -713,26 +348,6 @@ impl RecordSet {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for SubscriptionReceipt {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "SubscriptionReceipt", 2)?;
-        Ok(Self {
-            subscription_token: <SubscriptionToken as NotaDecode>::from_nota_block(&children[0])?,
-            commit_sequence: <CommitSequence as NotaDecode>::from_nota_block(&children[1])?,
-        })
-    }
-}
-
-impl NotaEncode for SubscriptionReceipt {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.subscription_token),
-            NotaEncode::to_nota(&self.commit_sequence),
-        ];
-        format!("({})", fields.join(" "))
     }
 }
 
@@ -746,26 +361,6 @@ impl SubscriptionReceipt {
     }
 }
 
-impl NotaDecode for Rejection {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Rejection", 2)?;
-        Ok(Self {
-            rejection_reason: <RejectionReason as NotaDecode>::from_nota_block(&children[0])?,
-            description: <Description as NotaDecode>::from_nota_block(&children[1])?,
-        })
-    }
-}
-
-impl NotaEncode for Rejection {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.rejection_reason),
-            NotaEncode::to_nota(&self.description),
-        ];
-        format!("({})", fields.join(" "))
-    }
-}
-
 impl Rejection {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -776,26 +371,6 @@ impl Rejection {
     }
 }
 
-impl NotaDecode for IndexReceipt {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "IndexReceipt", 2)?;
-        Ok(Self {
-            commit_sequence: <CommitSequence as NotaDecode>::from_nota_block(&children[0])?,
-            database_digest: <DatabaseDigest as NotaDecode>::from_nota_block(&children[1])?,
-        })
-    }
-}
-
-impl NotaEncode for IndexReceipt {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.commit_sequence),
-            NotaEncode::to_nota(&self.database_digest),
-        ];
-        format!("({})", fields.join(" "))
-    }
-}
-
 impl IndexReceipt {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -803,43 +378,6 @@ impl IndexReceipt {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for Input {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        if let Some(variant) = block.demote_to_string() {
-            return match variant {
-                "Reindex" => Ok(Self::Reindex),
-                "Compact" => Ok(Self::Compact),
-                other => Err(NotaDecodeError::UnknownVariant { enum_name: "Input", variant: other.to_owned() }),
-            };
-        }
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Input", 2)?;
-        let variant = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "enum variant" })?;
-        match variant {
-            "Record" => Ok(Self::Record(<Entry as NotaDecode>::from_nota_block(&children[1])?)),
-            "Correct" => Ok(Self::Correct(<Correction as NotaDecode>::from_nota_block(&children[1])?)),
-            "Observe" => Ok(Self::Observe(<Query as NotaDecode>::from_nota_block(&children[1])?)),
-            "Watch" => Ok(Self::Watch(<WatchRequest as NotaDecode>::from_nota_block(&children[1])?)),
-            "Unwatch" => Ok(Self::Unwatch(<SubscriptionToken as NotaDecode>::from_nota_block(&children[1])?)),
-            other => Err(NotaDecodeError::UnknownVariant { enum_name: "Input", variant: other.to_owned() }),
-        }
-    }
-
-}
-
-impl NotaEncode for Input {
-    fn to_nota(&self) -> String {
-        match self {
-            Self::Record(payload) => format!("(Record {})", NotaEncode::to_nota(payload)),
-            Self::Correct(payload) => format!("(Correct {})", NotaEncode::to_nota(payload)),
-            Self::Observe(payload) => format!("(Observe {})", NotaEncode::to_nota(payload)),
-            Self::Watch(payload) => format!("(Watch {})", NotaEncode::to_nota(payload)),
-            Self::Unwatch(payload) => format!("(Unwatch {})", NotaEncode::to_nota(payload)),
-            Self::Reindex => "Reindex".to_owned(),
-            Self::Compact => "Compact".to_owned(),
-        }
     }
 }
 
@@ -864,41 +402,6 @@ impl std::str::FromStr for Input {
 impl std::fmt::Display for Input {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&<Self as NotaEncode>::to_nota(self))
-    }
-}
-
-impl NotaDecode for Output {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        if let Some(variant) = block.demote_to_string() {
-            return Err(NotaDecodeError::UnknownVariant { enum_name: "Output", variant: variant.to_owned() });
-        }
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Output", 2)?;
-        let variant = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "enum variant" })?;
-        match variant {
-            "Recorded" => Ok(Self::Recorded(<RecordReceipt as NotaDecode>::from_nota_block(&children[1])?)),
-            "Corrected" => Ok(Self::Corrected(<CorrectionReceipt as NotaDecode>::from_nota_block(&children[1])?)),
-            "Observed" => Ok(Self::Observed(<RecordSet as NotaDecode>::from_nota_block(&children[1])?)),
-            "Watching" => Ok(Self::Watching(<SubscriptionReceipt as NotaDecode>::from_nota_block(&children[1])?)),
-            "Unwatched" => Ok(Self::Unwatched(<SubscriptionReceipt as NotaDecode>::from_nota_block(&children[1])?)),
-            "Rejected" => Ok(Self::Rejected(<Rejection as NotaDecode>::from_nota_block(&children[1])?)),
-            "Indexed" => Ok(Self::Indexed(<IndexReceipt as NotaDecode>::from_nota_block(&children[1])?)),
-            other => Err(NotaDecodeError::UnknownVariant { enum_name: "Output", variant: other.to_owned() }),
-        }
-    }
-
-}
-
-impl NotaEncode for Output {
-    fn to_nota(&self) -> String {
-        match self {
-            Self::Recorded(payload) => format!("(Recorded {})", NotaEncode::to_nota(payload)),
-            Self::Corrected(payload) => format!("(Corrected {})", NotaEncode::to_nota(payload)),
-            Self::Observed(payload) => format!("(Observed {})", NotaEncode::to_nota(payload)),
-            Self::Watching(payload) => format!("(Watching {})", NotaEncode::to_nota(payload)),
-            Self::Unwatched(payload) => format!("(Unwatched {})", NotaEncode::to_nota(payload)),
-            Self::Rejected(payload) => format!("(Rejected {})", NotaEncode::to_nota(payload)),
-            Self::Indexed(payload) => format!("(Indexed {})", NotaEncode::to_nota(payload)),
-        }
     }
 }
 
@@ -1120,57 +623,31 @@ impl Output {
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MessageIdentifier(pub Integer);
-
-impl NotaDecode for MessageIdentifier {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for MessageIdentifier {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl MessageIdentifier {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
 
-    pub fn to_nota(self) -> String {
-        <Self as NotaEncode>::to_nota(&self)
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OriginRoute(pub Integer);
-
-impl NotaDecode for OriginRoute {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for OriginRoute {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl OriginRoute {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
 
-    pub fn to_nota(self) -> String {
-        <Self as NotaEncode>::to_nota(&self)
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MessageRoot {
     Input,
     Output,

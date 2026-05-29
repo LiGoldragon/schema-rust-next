@@ -99,9 +99,12 @@ calls, sigils, or structural macro captures. The active test path gets that
   `Map` → `std::collections::BTreeMap<key, value>` (fully qualified, so no
   `use` and a deterministic key order for rkyv + NOTA), `Optional` →
   `Option<inner>`.
-- Generated code imports `nota-next`'s shared codec surface and implements
-  `NotaDecode` / `NotaEncode` for generated nouns. It does not emit private
-  `NotaSource`, `NotaBlock`, or `NotaCollection` helper types. Its NOTA value
+- Generated code imports `nota-next`'s shared codec surface and derives
+  `nota_next::NotaDecode` / `nota_next::NotaEncode` for generated nouns. It
+  keeps small inherent bridge methods (`from_nota_block`, `to_nota`) on the
+  owning noun, but does not hand-write per-type codec trait implementations.
+  It does not emit private `NotaSource`, `NotaBlock`, or `NotaCollection`
+  helper types. Its NOTA value
   shapes stay the shared codec shapes: a `Vec` is a square-bracket block
   `[e1 e2 ...]`, a `BTreeMap` is a brace block of `key value` pairs
   `{k1 v1 ...}`, and an `Option` is the atom `None` or the paren `(Some inner)`.

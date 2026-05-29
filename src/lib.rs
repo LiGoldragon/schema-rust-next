@@ -63,13 +63,9 @@ impl RustEmitter {
             writer.blank();
         }
 
-        for declaration in asschema.namespace() {
-            writer.emit_nota_type_impl(declaration);
-            writer.blank();
-        }
-
+        writer.emit_nota_type_bridges(asschema.namespace());
         for root_enum in asschema.input_and_output() {
-            writer.emit_nota_root_enum_impl(root_enum);
+            writer.emit_nota_root_enum_support(root_enum);
             writer.blank();
         }
 
@@ -209,9 +205,9 @@ impl RustWriter {
             .iter()
             .any(|key| key == type_name.as_str())
         {
-            "#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]\n#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]".to_owned()
+            "#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]\n#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]".to_owned()
         } else {
-            "#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]".to_owned()
+            "#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]".to_owned()
         }
     }
 
@@ -254,7 +250,7 @@ impl RustWriter {
 
     fn emit_nota_support(&mut self) {
         self.line("pub use nota_next::{");
-        self.line("    NotaBlock, NotaDecode, NotaDecodeError, NotaEncode, NotaSource,");
+        self.line("    NotaDecode, NotaDecodeError, NotaEncode, NotaSource,");
         self.line("};");
     }
 
@@ -294,7 +290,7 @@ impl RustWriter {
     }
 
     fn emit_root_enum(&mut self, root_enum: &EnumDeclaration) {
-        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
+        self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line(format!("pub enum {} {{", root_enum.name));
         for variant in &root_enum.variants {
             self.emit_variant(variant);
@@ -313,180 +309,14 @@ impl RustWriter {
         }
     }
 
-    fn emit_nota_type_impl(&mut self, declaration: &TypeDeclaration) {
-        match declaration {
-            TypeDeclaration::Struct(declaration) => self.emit_nota_struct_impl(declaration),
-            TypeDeclaration::Newtype(declaration) => self.emit_nota_newtype_impl(declaration),
-            TypeDeclaration::Enum(declaration) => {
-                self.emit_nota_enum_impl(&declaration.name, &declaration.variants)
-            }
-        }
-    }
-
-    fn emit_nota_newtype_impl(&mut self, declaration: &StructDeclaration) {
-        let field = declaration.fields.first().expect("newtype has one field");
-        self.line(format!("impl NotaDecode for {} {{", declaration.name));
-        self.line(
-            "    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {",
-        );
-        self.line(format!(
-            "        Ok(Self({}))",
-            self.parse_expression(&field.reference, "block")
-        ));
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line(format!("impl NotaEncode for {} {{", declaration.name));
-        self.line("    fn to_nota(&self) -> String {");
-        self.line(format!(
-            "        {}",
-            self.format_expression(&field.reference, "self.0", false)
-        ));
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.emit_nota_inherent_bridge(&declaration.name);
-    }
-
-    fn emit_nota_struct_impl(&mut self, declaration: &StructDeclaration) {
-        self.line(format!("impl NotaDecode for {} {{", declaration.name));
-        self.line(
-            "    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {",
-        );
-        self.line(format!(
-            "        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, \"parenthesis\", \"{}\", {})?;",
-            declaration.name,
-            declaration.fields.len()
-        ));
-        self.line("        Ok(Self {");
-        for (index, field) in declaration.fields.iter().enumerate() {
-            self.line(format!(
-                "            {}: {},",
-                field.name.as_str(),
-                self.parse_expression(&field.reference, &format!("&children[{index}]"))
-            ));
-        }
-        self.line("        })");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line(format!("impl NotaEncode for {} {{", declaration.name));
-        self.line("    fn to_nota(&self) -> String {");
-        self.line("        let fields = [");
-        for field in &declaration.fields {
-            self.line(format!(
-                "            {},",
-                self.format_expression(
-                    &field.reference,
-                    &format!("self.{}", field.name.as_str()),
-                    false,
-                )
-            ));
-        }
-        self.line("        ];");
-        self.line("        format!(\"({})\", fields.join(\" \"))");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.emit_nota_inherent_bridge(&declaration.name);
-    }
-
-    fn emit_nota_enum_impl(&mut self, name: &Name, variants: &[EnumVariant]) {
-        let unit_variants: Vec<_> = variants
-            .iter()
-            .filter(|variant| variant.payload.is_none())
-            .collect();
-        let payload_variants: Vec<_> = variants
-            .iter()
-            .filter(|variant| variant.payload.is_some())
-            .collect();
-        self.line(format!("impl NotaDecode for {name} {{"));
-        self.line(
-            "    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {",
-        );
-        self.line("        if let Some(variant) = block.demote_to_string() {");
-        if unit_variants.is_empty() {
-            self.line(format!(
-                "            return Err(NotaDecodeError::UnknownVariant {{ enum_name: \"{name}\", variant: variant.to_owned() }});"
-            ));
-        } else {
-            self.line("            return match variant {");
-            for variant in unit_variants {
-                self.line(format!(
-                    "                \"{}\" => Ok(Self::{}),",
-                    variant.name, variant.name
-                ));
-            }
-            self.line(format!(
-                "                other => Err(NotaDecodeError::UnknownVariant {{ enum_name: \"{name}\", variant: other.to_owned() }}),"
-            ));
-            self.line("            };");
-        }
-        self.line("        }");
-        if payload_variants.is_empty() {
-            self.line(format!(
-                "        Err(NotaDecodeError::ExpectedAtom {{ type_name: \"{name}\" }})"
-            ));
-            self.line("    }");
+    fn emit_nota_type_bridges(&mut self, declarations: &[TypeDeclaration]) {
+        for declaration in declarations {
+            self.emit_nota_inherent_bridge(declaration.name().as_str());
             self.blank();
-            self.line("}");
-            self.blank();
-            self.emit_nota_enum_formatter(name, variants);
-            self.blank();
-            self.emit_nota_inherent_bridge(name);
-            return;
         }
-        self.line(format!(
-            "        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, \"parenthesis\", \"{name}\", 2)?;"
-        ));
-        self.line("        let variant = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: \"enum variant\" })?;");
-        self.line("        match variant {");
-        for variant in payload_variants {
-            let payload = variant.payload.as_ref().expect("filtered payload");
-            self.line(format!(
-                "            \"{}\" => Ok(Self::{}({})),",
-                variant.name,
-                variant.name,
-                self.parse_expression(payload, "&children[1]")
-            ));
-        }
-        self.line(format!(
-            "            other => Err(NotaDecodeError::UnknownVariant {{ enum_name: \"{name}\", variant: other.to_owned() }}),"
-        ));
-        self.line("        }");
-        self.line("    }");
-        self.blank();
-        self.line("}");
-        self.blank();
-        self.emit_nota_enum_formatter(name, variants);
-        self.blank();
-        self.emit_nota_inherent_bridge(name);
     }
 
-    fn emit_nota_enum_formatter(&mut self, _name: &Name, variants: &[EnumVariant]) {
-        self.line(format!("impl NotaEncode for {_name} {{"));
-        self.line("    fn to_nota(&self) -> String {");
-        self.line("        match self {");
-        for variant in variants {
-            match &variant.payload {
-                Some(payload) => self.line(format!(
-                    "            Self::{}(payload) => format!(\"({} {{}})\", {}),",
-                    variant.name,
-                    variant.name,
-                    self.format_expression(payload, "payload", true)
-                )),
-                None => self.line(format!(
-                    "            Self::{} => \"{}\".to_owned(),",
-                    variant.name, variant.name
-                )),
-            }
-        }
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
-    }
-
-    fn emit_nota_inherent_bridge(&mut self, name: &Name) {
+    fn emit_nota_inherent_bridge(&mut self, name: &str) {
         self.line(format!("impl {name} {{"));
         self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
         self.line("        <Self as NotaDecode>::from_nota_block(block)");
@@ -498,8 +328,8 @@ impl RustWriter {
         self.line("}");
     }
 
-    fn emit_nota_root_enum_impl(&mut self, root_enum: &EnumDeclaration) {
-        self.emit_nota_enum_impl(&root_enum.name, &root_enum.variants);
+    fn emit_nota_root_enum_support(&mut self, root_enum: &EnumDeclaration) {
+        self.emit_nota_inherent_bridge(root_enum.name.as_str());
         self.blank();
         self.line(format!("impl std::str::FromStr for {} {{", root_enum.name));
         self.line("    type Err = NotaDecodeError;");
@@ -684,15 +514,15 @@ impl RustWriter {
     }
 
     fn emit_mail_event_support(&mut self, root_enums: &[&EnumDeclaration]) {
-        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
+        self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub struct MessageIdentifier(pub Integer);");
-        self.emit_integer_support_newtype_codec("MessageIdentifier");
+        self.emit_nota_inherent_bridge("MessageIdentifier");
         self.blank();
-        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
+        self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub struct OriginRoute(pub Integer);");
-        self.emit_integer_support_newtype_codec("OriginRoute");
+        self.emit_nota_inherent_bridge("OriginRoute");
         self.blank();
-        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
+        self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub enum MessageRoot {");
         for root_enum in root_enums {
             self.line(format!("    {},", root_enum.name));
@@ -825,33 +655,6 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-    }
-
-    fn emit_integer_support_newtype_codec(&mut self, name: &str) {
-        self.blank();
-        self.line(format!("impl NotaDecode for {name} {{"));
-        self.line(
-            "    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {",
-        );
-        self.line("        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line(format!("impl NotaEncode for {name} {{"));
-        self.line("    fn to_nota(&self) -> String {");
-        self.line("        NotaEncode::to_nota(&self.0)");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line(format!("impl {name} {{"));
-        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
-        self.line("        <Self as NotaDecode>::from_nota_block(block)");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn to_nota(self) -> String {");
-        self.line("        <Self as NotaEncode>::to_nota(&self)");
-        self.line("    }");
-        self.line("}");
     }
 
     fn emit_schema_plane_support(&mut self) {
@@ -1087,62 +890,6 @@ impl RustWriter {
             }
             TypeDeclaration::Enum(declaration) => declaration.name.clone(),
         }
-    }
-
-    /// The expression that decodes a NOTA `block` into this reference's
-    /// value, applying `?` so it can sit directly at a field position.
-    ///
-    /// Scalar leaves call the scalar codecs. Plain declared-name leaves
-    /// call `from_nota_block`.
-    /// Collection references decode structurally: a `Vec` reads a
-    /// square-bracket block's children, a `KeyValue` map reads a brace
-    /// block's key/value pairs into a `BTreeMap`, an `Option` reads the
-    /// paren forms `None` / `(Some inner)`. Each recurses through
-    /// `parse_expression_result` on the inner reference, so nested
-    /// collections compose.
-    fn parse_expression(&self, reference: &TypeReference, block: &str) -> String {
-        format!("{}?", self.parse_expression_result(reference, block))
-    }
-
-    /// The `Result`-typed decode expression (no trailing `?`).
-    ///
-    /// Collection closures consume this form directly — a closure body
-    /// of `Service::from_nota_block(element)` rather than
-    /// `Ok(Service::from_nota_block(element)?)`, so the emitted code is
-    /// clippy-clean (no needless `Ok` / `?`). Field positions wrap it
-    /// with `?` via `parse_expression`. The collection elements receive
-    /// a per-element decoder from `parse_decoder` — a bare function path
-    /// for a plain leaf (so clippy sees no redundant closure) and a
-    /// genuine closure only when the element decode itself needs one
-    /// (scalars and nested collections).
-    fn parse_expression_result(&self, reference: &TypeReference, block: &str) -> String {
-        format!(
-            "<{} as NotaDecode>::from_nota_block({block})",
-            self.rust_type(reference)
-        )
-    }
-
-    /// The expression that encodes this reference's Rust `value` back
-    /// into a NOTA string. Mirror of `parse_expression`: `Vec` emits a
-    /// square-bracket of encoded elements, `KeyValue` emits a brace of
-    /// `key value` pairs, `Option` emits `None` / `(Some inner)`.
-    ///
-    /// `value_is_reference` tracks whether `value` is already a `&T` —
-    /// true for collection closure binders (`element`, `key`, `value`,
-    /// `inner`) and for enum-variant payloads matched by reference;
-    /// false for owned struct fields (`self.field`) and newtype bodies
-    /// (`self.0`). The collection associated functions take a slice /
-    /// map / option reference, so an owned value is borrowed and an
-    /// already-reference value is passed through — avoiding clippy's
-    /// needless-borrow on `&payload`.
-    fn format_expression(
-        &self,
-        _reference: &TypeReference,
-        value: &str,
-        value_is_reference: bool,
-    ) -> String {
-        let borrow = if value_is_reference { "" } else { "&" };
-        format!("NotaEncode::to_nota({borrow}{value})")
     }
 
     /// The Rust type for a reference.

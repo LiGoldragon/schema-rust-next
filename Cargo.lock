@@ -124,7 +124,20 @@ dependencies = [
 [[package]]
 name = "nota-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#c5894905aa5dd849e7df462e584e1ed0044460af"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#a0c39b75742e9203cc81a5119df2fed644fc596f"
+dependencies = [
+ "nota-next-derive",
+]
+
+[[package]]
+name = "nota-next-derive"
+version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#a0c39b75742e9203cc81a5119df2fed644fc596f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "once_cell"

@@ -6,26 +6,26 @@ pub type Boolean = bool;
 pub type Path = std::string::String;
 
 pub use nota_next::{
-    NotaBlock, NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
+    NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
 };
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]
 pub struct NodeName(pub String);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct NodeConfig(pub String);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Service(pub String);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Query(pub Topic);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Topic(pub String);
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Cluster {
     pub services: Vec<Service>,
     pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,
@@ -34,28 +34,16 @@ pub struct Cluster {
     pub config_path: Path,
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Input {
     Register(Cluster),
     Observe(Query),
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Output {
     Projected(std::collections::BTreeMap<NodeName, NodeConfig>),
     Listed(Vec<NodeName>),
-}
-
-impl NotaDecode for NodeName {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for NodeName {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
 }
 
 impl NodeName {
@@ -65,18 +53,6 @@ impl NodeName {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for NodeConfig {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for NodeConfig {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
     }
 }
 
@@ -90,18 +66,6 @@ impl NodeConfig {
     }
 }
 
-impl NotaDecode for Service {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for Service {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl Service {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -109,18 +73,6 @@ impl Service {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for Query {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Topic as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for Query {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
     }
 }
 
@@ -134,18 +86,6 @@ impl Query {
     }
 }
 
-impl NotaDecode for Topic {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for Topic {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl Topic {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -156,32 +96,6 @@ impl Topic {
     }
 }
 
-impl NotaDecode for Cluster {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Cluster", 5)?;
-        Ok(Self {
-            services: <Vec<Service> as NotaDecode>::from_nota_block(&children[0])?,
-            nodes: <std::collections::BTreeMap<NodeName, NodeConfig> as NotaDecode>::from_nota_block(&children[1])?,
-            cache: <Option<NodeConfig> as NotaDecode>::from_nota_block(&children[2])?,
-            healthy: <Boolean as NotaDecode>::from_nota_block(&children[3])?,
-            config_path: <Path as NotaDecode>::from_nota_block(&children[4])?,
-        })
-    }
-}
-
-impl NotaEncode for Cluster {
-    fn to_nota(&self) -> String {
-        let fields = [
-            NotaEncode::to_nota(&self.services),
-            NotaEncode::to_nota(&self.nodes),
-            NotaEncode::to_nota(&self.cache),
-            NotaEncode::to_nota(&self.healthy),
-            NotaEncode::to_nota(&self.config_path),
-        ];
-        format!("({})", fields.join(" "))
-    }
-}
-
 impl Cluster {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -189,31 +103,6 @@ impl Cluster {
 
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-impl NotaDecode for Input {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        if let Some(variant) = block.demote_to_string() {
-            return Err(NotaDecodeError::UnknownVariant { enum_name: "Input", variant: variant.to_owned() });
-        }
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Input", 2)?;
-        let variant = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "enum variant" })?;
-        match variant {
-            "Register" => Ok(Self::Register(<Cluster as NotaDecode>::from_nota_block(&children[1])?)),
-            "Observe" => Ok(Self::Observe(<Query as NotaDecode>::from_nota_block(&children[1])?)),
-            other => Err(NotaDecodeError::UnknownVariant { enum_name: "Input", variant: other.to_owned() }),
-        }
-    }
-
-}
-
-impl NotaEncode for Input {
-    fn to_nota(&self) -> String {
-        match self {
-            Self::Register(payload) => format!("(Register {})", NotaEncode::to_nota(payload)),
-            Self::Observe(payload) => format!("(Observe {})", NotaEncode::to_nota(payload)),
-        }
     }
 }
 
@@ -238,31 +127,6 @@ impl std::str::FromStr for Input {
 impl std::fmt::Display for Input {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&<Self as NotaEncode>::to_nota(self))
-    }
-}
-
-impl NotaDecode for Output {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        if let Some(variant) = block.demote_to_string() {
-            return Err(NotaDecodeError::UnknownVariant { enum_name: "Output", variant: variant.to_owned() });
-        }
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Output", 2)?;
-        let variant = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "enum variant" })?;
-        match variant {
-            "Projected" => Ok(Self::Projected(<std::collections::BTreeMap<NodeName, NodeConfig> as NotaDecode>::from_nota_block(&children[1])?)),
-            "Listed" => Ok(Self::Listed(<Vec<NodeName> as NotaDecode>::from_nota_block(&children[1])?)),
-            other => Err(NotaDecodeError::UnknownVariant { enum_name: "Output", variant: other.to_owned() }),
-        }
-    }
-
-}
-
-impl NotaEncode for Output {
-    fn to_nota(&self) -> String {
-        match self {
-            Self::Projected(payload) => format!("(Projected {})", NotaEncode::to_nota(payload)),
-            Self::Listed(payload) => format!("(Listed {})", NotaEncode::to_nota(payload)),
-        }
     }
 }
 
@@ -434,57 +298,31 @@ impl Output {
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MessageIdentifier(pub Integer);
-
-impl NotaDecode for MessageIdentifier {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for MessageIdentifier {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl MessageIdentifier {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
 
-    pub fn to_nota(self) -> String {
-        <Self as NotaEncode>::to_nota(&self)
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OriginRoute(pub Integer);
-
-impl NotaDecode for OriginRoute {
-    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
-    }
-}
-
-impl NotaEncode for OriginRoute {
-    fn to_nota(&self) -> String {
-        NotaEncode::to_nota(&self.0)
-    }
-}
-
 impl OriginRoute {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
 
-    pub fn to_nota(self) -> String {
-        <Self as NotaEncode>::to_nota(&self)
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MessageRoot {
     Input,
     Output,

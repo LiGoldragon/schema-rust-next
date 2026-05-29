@@ -1,9 +1,25 @@
 use schema_rust_next::RustEmitter;
-use std::cell::Cell;
+use std::{cell::Cell, path::PathBuf};
 
 mod support;
 
 use support::{FixtureNota, FixtureSchema};
+
+fn generated_fixture_path(file_name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(file_name)
+}
+
+fn assert_generated_fixture(file_name: &str, generated: &str) {
+    let path = generated_fixture_path(file_name);
+    if std::env::var_os("SCHEMA_RUST_NEXT_UPDATE_FIXTURES").is_some() {
+        std::fs::write(&path, generated).expect("write generated fixture");
+    }
+    let expected = std::fs::read_to_string(path).expect("read generated fixture");
+    assert_eq!(generated, expected);
+}
 
 #[allow(dead_code)]
 mod generated {
@@ -67,10 +83,7 @@ fn emits_rust_source_as_a_separate_artifact() {
             .as_str()
             .contains("pub trait UpgradeFrom<Previous>")
     );
-    assert_eq!(
-        generated.code.as_str(),
-        include_str!("fixtures/spirit_generated.rs")
-    );
+    assert_generated_fixture("spirit_generated.rs", generated.code.as_str());
 }
 
 #[test]
@@ -427,8 +440,9 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     // emitting a local collection-support runtime block.
     assert!(code.contains("pub use nota_next::{"));
     assert!(!code.contains("pub struct NotaCollection"));
-    assert!(code.contains("impl NotaDecode for Cluster"));
-    assert!(code.contains("impl NotaEncode for Cluster"));
+    assert!(code.contains("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive"));
+    assert!(!code.contains("impl NotaDecode for Cluster"));
+    assert!(!code.contains("impl NotaEncode for Cluster"));
     // Vec / KeyValue->BTreeMap / Option render at the field positions.
     assert!(code.contains("pub services: Vec<Service>,"));
     assert!(code.contains("pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,"));
@@ -445,8 +459,9 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
         "#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]\npub struct NodeName(pub String);"
     ));
     assert!(code.contains(
-        "#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]\npub struct NodeConfig(pub String);"
+        "#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]\npub struct NodeConfig(pub String);"
     ));
+    assert_generated_fixture("collections_generated.rs", code);
 }
 
 #[test]
@@ -457,10 +472,7 @@ fn collection_free_schema_keeps_checked_generated_source_stable() {
     let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated = RustEmitter::default().emit(&asschema);
 
-    assert_eq!(
-        generated.as_str(),
-        include_str!("fixtures/spirit_generated.rs")
-    );
+    assert_generated_fixture("spirit_generated.rs", generated.as_str());
 }
 
 #[test]
