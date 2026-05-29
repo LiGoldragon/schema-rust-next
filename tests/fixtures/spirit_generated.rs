@@ -359,8 +359,8 @@ impl MessageIdentifier {
         <Self as NotaDecode>::from_nota_block(block)
     }
 
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
+    pub fn to_nota(self) -> String {
+        <Self as NotaEncode>::to_nota(&self)
     }
 }
 
@@ -371,8 +371,8 @@ impl OriginRoute {
         <Self as NotaDecode>::from_nota_block(block)
     }
 
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
+    pub fn to_nota(self) -> String {
+        <Self as NotaEncode>::to_nota(&self)
     }
 }
 

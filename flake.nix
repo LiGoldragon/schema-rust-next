@@ -198,8 +198,9 @@
             ! grep -R --include='*.generated.rs' "pub struct NotaBlock" ${src}/tests/fixtures
             ! grep -R --include='*.generated.rs' "pub struct NotaCollection" ${src}/tests/fixtures
             grep -R --include='*.generated.rs' "pub use nota_next" ${src}/tests/fixtures >/dev/null
-            grep -R --include='*.generated.rs' "impl NotaDecode for Input" ${src}/tests/fixtures >/dev/null
-            grep -R --include='*.generated.rs' "impl NotaEncode for Input" ${src}/tests/fixtures >/dev/null
+            grep -R --include='*.generated.rs' "derive(nota_next::NotaDecode, nota_next::NotaEncode" ${src}/tests/fixtures >/dev/null
+            ! grep -R --include='*.generated.rs' "impl NotaDecode for Input" ${src}/tests/fixtures
+            ! grep -R --include='*.generated.rs' "impl NotaEncode for Input" ${src}/tests/fixtures
             touch $out
           '';
           doc = craneLib.cargoDoc (commonArguments // {

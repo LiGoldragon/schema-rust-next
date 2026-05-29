@@ -333,6 +333,18 @@ impl RustWriter {
         self.line("}");
     }
 
+    fn emit_nota_copy_inherent_bridge(&mut self, name: &str) {
+        self.line(format!("impl {name} {{"));
+        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
+        self.line("        <Self as NotaDecode>::from_nota_block(block)");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn to_nota(self) -> String {");
+        self.line("        <Self as NotaEncode>::to_nota(&self)");
+        self.line("    }");
+        self.line("}");
+    }
+
     fn emit_nota_root_enum_support(&mut self, root_enum: &EnumDeclaration) {
         self.emit_nota_inherent_bridge(root_enum.name.as_str());
         self.blank();
@@ -521,11 +533,11 @@ impl RustWriter {
     fn emit_mail_event_support(&mut self, root_enums: &[&EnumDeclaration]) {
         self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub struct MessageIdentifier(pub Integer);");
-        self.emit_nota_inherent_bridge("MessageIdentifier");
+        self.emit_nota_copy_inherent_bridge("MessageIdentifier");
         self.blank();
         self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub struct OriginRoute(pub Integer);");
-        self.emit_nota_inherent_bridge("OriginRoute");
+        self.emit_nota_copy_inherent_bridge("OriginRoute");
         self.blank();
         self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub enum MessageRoot {");
