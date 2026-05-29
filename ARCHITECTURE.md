@@ -17,6 +17,9 @@ The input contract is assembled schema, not authored schema. `Asschema` has
 already resolved all macros and sugar; the emitter does not read authored macro
 calls, sigils, or structural macro captures. The active test path gets that
 `Asschema` as typed data from `schema-next` lowering real `.schema` fixtures.
+Namespace entries arrive as visibility-tagged declarations: `(Public Name
+Value)` or `(Private Name Value)`. The emitter must project that boundary into
+Rust instead of flattening every type into the same public surface.
 
 The active fixtures use the settled name-first `@` declaration surface:
 `Input@[...]` / `Output@[...]` for root enums, `Name@{...}` for structs,
@@ -32,6 +35,9 @@ parser for the authored form.
 - No authored-schema macro syntax is accepted as an emitter input. Tests lower
   real `.schema` fixtures into typed `Asschema` values before comparing
   generated Rust; no assembled-schema text fixture is accepted.
+- Public asschema declarations emit public Rust types and fields. Private
+  asschema declarations emit `pub(crate)` types and fields, preserving inline
+  PascalCase schema declarations as module-local implementation nouns.
 - Generated Rust is source-visible under `src/schema/`; consumers include or
   compile that source rather than hiding the interface in `OUT_DIR`.
 - Emission is tested by source fixture comparison and by compiling the fixture

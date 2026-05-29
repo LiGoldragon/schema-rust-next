@@ -100,10 +100,10 @@ codecs. The authored schema uses Schema type-reference vocabulary at reference
 positions: `(Vec T)` emits `Vec<T>`, `(Map (K V))` emits
 `std::collections::BTreeMap<K, V>` (ordered so rkyv and NOTA round-trips are
 deterministic), and `(Optional T)` emits `Option<T>`; nested references
-recurse. Square brackets remain raw NOTA vector structure and schema field
-lists in assembled data; authored schema datatype declarations use pipe
-forms, not plain square-bracket declarations. Square brackets are not `Vec`
-reference syntax. The emitter writes a
+recurse. Square brackets remain raw NOTA vector structure and, when paired
+with `@`, enum declaration bodies; authored schema datatype declarations use
+name-first `@` forms, not plain square-bracket declarations. Square brackets
+are not `Vec` reference syntax. The emitter writes a
 shared `nota-next` codec import and derives `nota_next::NotaDecode` /
 `nota_next::NotaEncode` for each generated noun, leaving only small inherent
 bridge methods such as `from_nota_block` and `to_nota` on the emitted noun.
@@ -135,6 +135,12 @@ That assembled data is currently produced in memory from real `.schema`
 fixtures; checked-in assembled-schema text fixtures must not remain in active
 code or fixtures. Rust emission must not compensate for unresolved schema
 sugar.*
+
+*Asschema declaration visibility is a code-generation boundary. A public
+declaration is exported Rust API. A private declaration is a module-local Rust
+noun, emitted as `pub(crate)`, so inline PascalCase schema types can support a
+containing public type without becoming part of the importable schema library
+surface.*
 
 *Tests should keep meaningful schema and NOTA inputs in real fixture files
 under project paths and load them through a shared support surface. Inline Rust

@@ -95,6 +95,18 @@ fn emitted_path_mirrors_schema_module_identity() {
 }
 
 #[test]
+fn inline_private_schema_types_emit_crate_local_rust_boundary() {
+    let asschema = FixtureSchema::new("inline-private-type.schema").lower("example:inline");
+    let generated = RustEmitter::default().emit_file(&asschema);
+    let code = generated.code.as_str();
+
+    assert!(code.contains("pub(crate) struct Receipt"));
+    assert!(code.contains("pub struct Entry"));
+    assert!(code.contains("pub(crate) receipt: Receipt"));
+    assert!(code.contains("pub(crate) later: Receipt"));
+}
+
+#[test]
 fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
     let asschema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
     let generated = RustEmitter::default().emit_file(&asschema);

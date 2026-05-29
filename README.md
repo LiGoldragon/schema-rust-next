@@ -19,9 +19,12 @@ namespace segment is the crate boundary and is not repeated inside the crate's
 generated module tree.
 
 The emitted source includes the data types, `nota-next` codec derives, small
-inherent NOTA bridge methods, rkyv derives, short-header signal frames, Nexus traits, Nexus
-mail lifecycle objects, mail-event hooks, and upgrade/accept traits that
-runtime crates implement against.
+inherent NOTA bridge methods, rkyv derives, short-header signal frames, Nexus
+traits, Nexus mail lifecycle objects, mail-event hooks, and upgrade/accept
+traits that runtime crates implement against. Public asschema declarations emit
+`pub` Rust nouns; private asschema declarations emit `pub(crate)` module-local
+nouns so inline PascalCase schema sugar does not become an exported API by
+accident.
 
 Composite type references come from typed NOTA datatype objects in the
 authored schema: `(Vec Topic)`, `(Map (Topic RecordIdentifier))`, and
