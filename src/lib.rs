@@ -47,6 +47,7 @@ impl RustEmitter {
         writer.line("pub type String = std::string::String;");
         writer.line("pub type Integer = u64;");
         writer.line("pub type Boolean = bool;");
+        writer.line("pub type Path = std::string::String;");
         writer.blank();
         writer.emit_imports(asschema.resolved_imports());
         writer.emit_nota_support();
@@ -165,6 +166,7 @@ impl<'asschema> CollectionScan<'asschema> {
             TypeReference::String
             | TypeReference::Integer
             | TypeReference::Boolean
+            | TypeReference::Path
             | TypeReference::Plain(_) => {}
             TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
                 Self::collect_map_keys(inner, names);
@@ -1157,6 +1159,7 @@ impl RustWriter {
             TypeReference::String => "String".to_owned(),
             TypeReference::Integer => "Integer".to_owned(),
             TypeReference::Boolean => "Boolean".to_owned(),
+            TypeReference::Path => "Path".to_owned(),
             TypeReference::Plain(name) => name.as_str().to_owned(),
             TypeReference::Vector(inner) => format!("Vec<{}>", self.rust_type(inner)),
             TypeReference::Map(key, value) => format!(

@@ -3,6 +3,7 @@
 pub type String = std::string::String;
 pub type Integer = u64;
 pub type Boolean = bool;
+pub type Path = std::string::String;
 
 pub use nota_next::{
     NotaBlock, NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
@@ -30,6 +31,7 @@ pub struct Cluster {
     pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,
     pub cache: Option<NodeConfig>,
     pub healthy: Boolean,
+    pub config_path: Path,
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -156,12 +158,13 @@ impl Topic {
 
 impl NotaDecode for Cluster {
     fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Cluster", 4)?;
+        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Cluster", 5)?;
         Ok(Self {
             services: <Vec<Service> as NotaDecode>::from_nota_block(&children[0])?,
             nodes: <std::collections::BTreeMap<NodeName, NodeConfig> as NotaDecode>::from_nota_block(&children[1])?,
             cache: <Option<NodeConfig> as NotaDecode>::from_nota_block(&children[2])?,
             healthy: <Boolean as NotaDecode>::from_nota_block(&children[3])?,
+            config_path: <Path as NotaDecode>::from_nota_block(&children[4])?,
         })
     }
 }
@@ -173,6 +176,7 @@ impl NotaEncode for Cluster {
             NotaEncode::to_nota(&self.nodes),
             NotaEncode::to_nota(&self.cache),
             NotaEncode::to_nota(&self.healthy),
+            NotaEncode::to_nota(&self.config_path),
         ];
         format!("({})", fields.join(" "))
     }

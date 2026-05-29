@@ -3,6 +3,7 @@
 pub type String = std::string::String;
 pub type Integer = u64;
 pub type Boolean = bool;
+pub type Path = std::string::String;
 
 pub use marker_core::schema::mail::DatabaseMarker as DatabaseMarker;
 pub use marker_core::schema::mail::CommitSequence as CommitSequence;

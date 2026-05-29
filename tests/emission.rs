@@ -434,6 +434,8 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     assert!(code.contains("pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,"));
     assert!(code.contains("pub cache: Option<NodeConfig>,"));
     assert!(code.contains("pub healthy: Boolean,"));
+    assert!(code.contains("pub config_path: Path,"));
+    assert!(code.contains("pub type Path = std::string::String;"));
     // Collection payloads in a root output variant.
     assert!(code.contains("Projected(std::collections::BTreeMap<NodeName, NodeConfig>),"));
     assert!(code.contains("Listed(Vec<NodeName>),"));
@@ -484,6 +486,7 @@ fn generated_collection_struct_round_trips_through_nota() {
         },
         cache: Some(collections_generated::NodeConfig("warm".to_owned())),
         healthy: true,
+        config_path: "/tmp/cluster.nota".to_owned(),
     };
 
     let encoded = cluster.to_nota();
@@ -501,6 +504,7 @@ fn generated_collection_struct_round_trips_through_nota() {
         nodes: std::collections::BTreeMap::new(),
         cache: None,
         healthy: false,
+        config_path: "/tmp/empty.nota".to_owned(),
     };
     let empty_encoded = empty.to_nota();
     let empty_parsed = collections_generated::Cluster::from_nota_block(

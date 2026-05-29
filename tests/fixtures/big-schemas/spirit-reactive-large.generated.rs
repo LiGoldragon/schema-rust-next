@@ -3,6 +3,7 @@
 pub type String = std::string::String;
 pub type Integer = u64;
 pub type Boolean = bool;
+pub type Path = std::string::String;
 
 pub use nota_next::{
     NotaBlock, NotaDecode, NotaDecodeError, NotaEncode, NotaSource,

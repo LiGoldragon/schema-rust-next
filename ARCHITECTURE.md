@@ -84,7 +84,7 @@ calls, sigils, or structural macro captures. The active test path gets that
   mail support closer to schema-authored nouns while the core mail schema is
   still emitted by the support surface.
 - Scalar references are explicit asschema data. `TypeReference::String`,
-  `TypeReference::Integer`, and `TypeReference::Boolean` emit the scalar aliases
+  `TypeReference::Integer`, `TypeReference::Boolean`, and `TypeReference::Path` emit the scalar aliases
   (`String = std::string::String`, `Integer = u64`, `Boolean = bool`) and use
   the shared `nota-next` codec traits.
   `Plain(Name)` no longer carries scalar special cases; it names an emitted or
