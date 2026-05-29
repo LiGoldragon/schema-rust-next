@@ -1,6 +1,9 @@
-use schema_next::{SchemaEngine, SchemaIdentity};
 use schema_rust_next::RustEmitter;
 use std::cell::Cell;
+
+mod support;
+
+use support::{FixtureNota, FixtureSchema};
 
 #[allow(dead_code)]
 mod generated {
@@ -14,10 +17,7 @@ mod collections_generated {
 
 #[test]
 fn emits_rust_source_as_a_separate_artifact() {
-    let source = include_str!("fixtures/spirit-min.schema");
-    let asschema = SchemaEngine::default()
-        .lower_source(source, SchemaIdentity::new("spirit:lib", "0.1.0"))
-        .expect("schema lowers");
+    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated = RustEmitter::default().emit_file(&asschema);
 
     assert_eq!(generated.path, "src/schema/lib.rs");
@@ -75,13 +75,7 @@ fn emits_rust_source_as_a_separate_artifact() {
 
 #[test]
 fn emitted_path_mirrors_schema_module_identity() {
-    let source = include_str!("fixtures/spirit-min.schema");
-    let asschema = SchemaEngine::default()
-        .lower_source(
-            source,
-            SchemaIdentity::new("spirit-next:signal:public", "0.1.0"),
-        )
-        .expect("schema lowers");
+    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit-next:signal:public");
     let generated = RustEmitter::default().emit_file(&asschema);
 
     assert_eq!(generated.path, "src/schema/signal/public.rs");
@@ -89,33 +83,7 @@ fn emitted_path_mirrors_schema_module_identity() {
 
 #[test]
 fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
-    let source = "\
-((Record Entry) (Observe Query))
-((RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport))
-{
-  NexusInput ((Signal Input) (Sema SemaOutput))
-  NexusOutput ((Sema SemaInput) (Signal Output))
-  SemaInput ((Record Entry) (Observe Query))
-  SemaOutput ((Recorded SemaReceipt) (Observed ObservedRecords) (Missed ErrorReport))
-  Topic [String]
-  Description [String]
-  ErrorMessage [String]
-  RecordIdentifier [Integer]
-  CommitSequence [Integer]
-  StateDigest [Integer]
-  DatabaseMarker [CommitSequence StateDigest]
-  SemaReceipt [RecordIdentifier DatabaseMarker]
-  ObservedRecords [RecordSet DatabaseMarker]
-  ErrorReport [ErrorMessage DatabaseMarker]
-  Entry [Topic Kind Description Magnitude]
-  Query [Topic Kind]
-  RecordSet [(Vec Entry)]
-  Kind (Decision Principle Correction Clarification Constraint)
-  Magnitude (Minimum VeryLow Low Medium High VeryHigh Maximum)
-}";
-    let asschema = SchemaEngine::default()
-        .lower_source(source, SchemaIdentity::new("spirit:lib", "0.1.0"))
-        .expect("schema lowers");
+    let asschema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
     let generated = RustEmitter::default().emit_file(&asschema);
 
     assert!(generated.code.as_str().contains("pub trait NexusEngine"));
@@ -152,7 +120,8 @@ fn compiled_fixture_is_usable_rust() {
 
 #[test]
 fn generated_roots_wrap_into_messages_with_automatic_origin_route() {
-    let input = "(Observe ([schema] Principle))"
+    let input = FixtureNota::new("nota/observe-schema-principle.nota")
+        .read()
         .parse::<generated::Input>()
         .expect("parse observe input");
     let message: generated::signal::Signal<generated::signal::Input> =
@@ -172,7 +141,8 @@ fn generated_roots_wrap_into_messages_with_automatic_origin_route() {
 
 #[test]
 fn generated_input_parses_cli_nota_and_emits_nota() {
-    let input = "(Record ([[schema]] Constraint [agent's clarified intent] Maximum))"
+    let source = FixtureNota::new("nota/record-clarified-intent.nota").read();
+    let input = source
         .parse::<generated::Input>()
         .expect("parse generated input");
 
@@ -186,15 +156,13 @@ fn generated_input_parses_cli_nota_and_emits_nota() {
         generated::Input::Observe(_) => panic!("expected record"),
     }
 
-    assert_eq!(
-        input.to_string(),
-        "(Record ([[schema]] Constraint [agent's clarified intent] Maximum))"
-    );
+    assert_eq!(input.to_string(), source);
 }
 
 #[test]
 fn generated_signal_input_round_trips_from_nota_to_rkyv_bytes() {
-    let input = "(Record ([[schema]] Constraint [component messages use binary rkyv] Maximum))"
+    let input = FixtureNota::new("nota/record-component-rkyv.nota")
+        .read()
         .parse::<generated::Input>()
         .expect("parse generated input");
 
@@ -207,7 +175,8 @@ fn generated_signal_input_round_trips_from_nota_to_rkyv_bytes() {
 
 #[test]
 fn generated_signal_frame_methods_round_trip_and_triage_route() {
-    let input = "(Record ([[schema]] Constraint [schema owns signal frames] Maximum))"
+    let input = FixtureNota::new("nota/record-schema-owns-frames.nota")
+        .read()
         .parse::<generated::Input>()
         .expect("parse generated input");
 
@@ -261,7 +230,8 @@ impl generated::MessageProcessedHook<RuntimeReply> for MailHook {
 
 #[test]
 fn generated_signal_roots_emit_typed_message_sent_events() {
-    let input = "(Observe ([schema] Principle))"
+    let input = FixtureNota::new("nota/observe-schema-principle.nota")
+        .read()
         .parse::<generated::Input>()
         .expect("parse observe input");
     let event = input
@@ -344,7 +314,8 @@ impl generated::InputNexus for SpiritNexus {
 #[test]
 fn generated_input_dispatches_mail_through_schema_emitted_nexus_trait_methods() {
     assert_eq!(RuntimeError::StateRejected, RuntimeError::StateRejected);
-    let input = "(Record ([[schema]] Principle [schema objects drive behavior] Maximum))"
+    let input = FixtureNota::new("nota/record-schema-objects-behavior.nota")
+        .read()
         .parse::<generated::Input>()
         .expect("parse generated input");
     let nexus = SpiritNexus::new();
@@ -434,10 +405,7 @@ fn generated_upgrade_trait_accepts_previous_schema_objects_observably() {
 
 #[test]
 fn emits_vec_map_and_option_collection_types_with_runtime_codec() {
-    let source = include_str!("fixtures/collections.schema");
-    let asschema = SchemaEngine::default()
-        .lower_source(source, SchemaIdentity::new("collections:lib", "0.1.0"))
-        .expect("schema lowers");
+    let asschema = FixtureSchema::new("collections.schema").lower("collections:lib");
     let generated = RustEmitter::default().emit(&asschema);
     let code = generated.as_str();
 
@@ -467,10 +435,7 @@ fn collection_free_schema_emits_byte_identical_to_legacy_fixture() {
     // The regression safety net: a schema that uses no collection still
     // emits exactly the checked-in fixture, proving the collection work
     // is purely additive.
-    let source = include_str!("fixtures/spirit-min.schema");
-    let asschema = SchemaEngine::default()
-        .lower_source(source, SchemaIdentity::new("spirit:lib", "0.1.0"))
-        .expect("schema lowers");
+    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated = RustEmitter::default().emit(&asschema);
 
     assert_eq!(

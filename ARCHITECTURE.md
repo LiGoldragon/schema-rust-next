@@ -91,8 +91,10 @@ calls, sigils, or structural macro captures. The active test path gets that
   `from_nota_block` method.
 - Collection references emit standard Rust collections. Authored schemas use
   Schema type-reference vocabulary such as `(Vec Topic)`, `(Map (Topic
-  RecordIdentifier))`, and `(Optional Topic)`; square brackets are not the
-  `Vec` reference syntax. `rust_type` recurses a `TypeReference`: `Vector` →
+  RecordIdentifier))`, and `(Optional Topic)`. Authored datatype declarations
+  use pipe forms (`{| ... |}` and `(| ... |)`); plain square brackets are not
+  datatype declarations and are not the `Vec` reference syntax. `rust_type`
+  recurses a `TypeReference`: `Vector` →
   `Vec<inner>`, `Map` → `std::collections::BTreeMap<key, value>` (fully
   qualified, so no `use` and a deterministic key order for rkyv + NOTA),
   `Optional` → `Option<inner>`. The `parse_expression` / `format_expression`
@@ -114,3 +116,7 @@ calls, sigils, or structural macro captures. The active test path gets that
   both the collection-codec emission and the map-key derive set, so a
   collection-free schema stays byte-identical to the current scalar-floor
   fixture when collection support changes.
+- Integration tests load substantive `.schema` and `.nota` language examples
+  from `tests/fixtures/` through `tests/support::FixtureSchema` and
+  `FixtureNota`. Inline Rust strings remain for short expected generated-code
+  fragments; the actual schema/NOTA input surfaces stay visible as files.

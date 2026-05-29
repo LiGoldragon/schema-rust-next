@@ -1,24 +1,17 @@
-use std::path::PathBuf;
-
 use schema_next::{ImportResolver, MacroContext, SchemaEngine, SchemaIdentity};
 use schema_rust_next::RustEmitter;
 
-fn fixture_schema_dir(crate_dir: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .join(crate_dir)
-        .join("schema")
-}
+mod support;
+
+use support::FixtureSchemaDirectory;
 
 fn emit_consumer() -> String {
-    let resolver = ImportResolver::new().with_dependency(
-        "marker-core",
-        fixture_schema_dir("marker-core"),
-        "0.1.0",
-    );
+    let marker_core = FixtureSchemaDirectory::new("marker-core");
+    let import_consumer = FixtureSchemaDirectory::new("import-consumer");
+    let resolver =
+        ImportResolver::new().with_dependency("marker-core", marker_core.path(), "0.1.0");
     let engine = SchemaEngine::default();
-    let source = std::fs::read_to_string(fixture_schema_dir("import-consumer").join("lib.schema"))
-        .expect("read consumer schema");
+    let source = import_consumer.schema("lib.schema").read();
     let asschema = engine
         .lower_source_with_resolver(
             &source,

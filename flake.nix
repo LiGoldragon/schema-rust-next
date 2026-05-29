@@ -26,6 +26,7 @@
         schemaFilter = path: type:
           type == "regular" && (
             pkgs.lib.hasSuffix ".schema" path
+            || pkgs.lib.hasSuffix ".nota" path
             || pkgs.lib.hasSuffix ".witness.txt" path
           );
         sourceFilter = path: type:
@@ -149,6 +150,14 @@
             fi
             if grep -R -n -E '\((Vec|Option|KeyValue|Map) \[' ${src}/tests; then
               echo "schema-rust-next examples must not put raw vectors inside composite type constructors" >&2
+              exit 1
+            fi
+            if grep -R -n -E '^[[:space:]]+[A-Z][A-Za-z0-9:]*[[:space:]]+\[' ${src}/tests/fixtures --include='*.schema'; then
+              echo "schema-rust-next schema fixtures must use pipe-brace struct declarations, not plain square brackets" >&2
+              exit 1
+            fi
+            if grep -R -n -E '^[[:space:]]+[A-Z][A-Za-z0-9:]*[[:space:]]+\([^|]' ${src}/tests/fixtures --include='*.schema'; then
+              echo "schema-rust-next schema fixtures must use pipe-parenthesis enum declarations, not plain parentheses" >&2
               exit 1
             fi
             if grep -R -n -E '[A-Za-z][A-Za-z0-9]*\*' ${src}/tests/fixtures; then

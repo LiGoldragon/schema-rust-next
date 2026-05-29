@@ -98,7 +98,9 @@ positions: `(Vec T)` emits `Vec<T>`, `(Map (K V))` emits
 `std::collections::BTreeMap<K, V>` (ordered so rkyv and NOTA round-trips are
 deterministic), and `(Optional T)` emits `Option<T>`; nested references
 recurse. Square brackets remain raw NOTA vector structure and schema field
-lists; they are not `Vec` reference syntax. The emitter writes a
+lists in assembled data; authored schema datatype declarations use pipe
+forms, not plain square-bracket declarations. Square brackets are not `Vec`
+reference syntax. The emitter writes a
 `NotaCollection` runtime codec — a vector value is still a square-bracket
 block, a map value is a brace of key/value pairs, an option is `None` /
 `(Some inner)` — and the per-field parse/format expressions recurse through
@@ -120,6 +122,11 @@ That assembled data is currently produced in memory from real `.schema`
 fixtures; checked-in assembled-schema text fixtures must not remain in active
 code or fixtures. Rust emission must not compensate for unresolved schema
 sugar.*
+
+*Tests should keep meaningful schema and NOTA inputs in real fixture files
+under project paths and load them through a shared support surface. Inline Rust
+string literals are acceptable for tiny expected source fragments, but not for
+substantive `.schema` or `.nota` language examples.*
 
 Future forge build logic may eventually turn generated Rust into
 content-addressed crates directly. That is future design; this repo owns the
