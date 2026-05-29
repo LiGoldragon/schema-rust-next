@@ -18,6 +18,12 @@ already resolved all macros and sugar; the emitter does not read authored macro
 calls, sigils, or structural macro captures. The active test path gets that
 `Asschema` as typed data from `schema-next` lowering real `.schema` fixtures.
 
+The active fixtures still use the transitional pipe-family declaration syntax.
+The target authored surface is `Name@{...}` / `Name@(...)` / `name@Type`, but
+that change belongs in `nota-next` and `schema-next`. This emitter should only
+see the resulting `Asschema` data and should not grow a second parser for the
+authored form.
+
 ## Constraints
 
 - No dependency on the old signal macro.
