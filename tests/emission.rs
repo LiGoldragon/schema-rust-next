@@ -97,9 +97,9 @@ fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
   NexusOutput ((Sema SemaInput) (Signal Output))
   SemaInput ((Record Entry) (Observe Query))
   SemaOutput ((Recorded SemaReceipt) (Observed ObservedRecords) (Missed ErrorReport))
-  Topic [Text]
-  Description [Text]
-  ErrorMessage [Text]
+  Topic [String]
+  Description [String]
+  ErrorMessage [String]
   RecordIdentifier [Integer]
   CommitSequence [Integer]
   StateDigest [Integer]
@@ -455,10 +455,10 @@ fn emits_vec_map_and_option_collection_types_with_runtime_codec() {
     // A map key type earns the ordering derives so BTreeMap compiles;
     // a value-only type keeps the original derive set.
     assert!(code.contains(
-        "#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]\npub struct NodeName(pub Text);"
+        "#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]\npub struct NodeName(pub String);"
     ));
     assert!(code.contains(
-        "#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]\npub struct NodeConfig(pub Text);"
+        "#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]\npub struct NodeConfig(pub String);"
     ));
 }
 

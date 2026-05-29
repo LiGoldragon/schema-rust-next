@@ -83,9 +83,9 @@ calls, sigils, or structural macro captures. The active test path gets that
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is
   still emitted by the support surface.
-- Scalar references are explicit asschema data. `TypeReference::Text`,
+- Scalar references are explicit asschema data. `TypeReference::String`,
   `TypeReference::Integer`, and `TypeReference::Boolean` emit the scalar aliases
-  (`Text = String`, `Integer = u64`, `Boolean = bool`) plus their NOTA codecs.
+  (`String = std::string::String`, `Integer = u64`, `Boolean = bool`) plus their NOTA codecs.
   `Plain(Name)` no longer carries scalar special cases; it names an emitted or
   imported schema type and therefore decodes through that type's
   `from_nota_block` method.

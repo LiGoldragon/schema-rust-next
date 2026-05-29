@@ -86,9 +86,11 @@ message identifier.*
 moved toward a shared schema-authored core.*
 
 *Rust emission consumes scalar pass-throughs from asschema as data, not as
-emitter-side magic. `TypeReference::Text`, `TypeReference::Integer`, and
+emitter-side magic. `TypeReference::String`, `TypeReference::Integer`, and
 `TypeReference::Boolean` emit the scalar aliases and NOTA codecs directly;
-`Plain(Name)` means a declared schema type or imported namespace name.*
+`Plain(Name)` means a declared schema type or imported namespace name. The
+scalar floor uses `String`, `Integer`, and `Boolean`; `Bool` is not a spelling,
+and `Text` is a schema-declared newtype when a domain wants that noun.*
 
 *Collection references emit the standard Rust collections plus their NOTA
 codecs. The authored schema uses typed NOTA datatype objects at reference
