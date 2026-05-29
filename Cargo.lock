@@ -124,7 +124,7 @@ dependencies = [
 [[package]]
 name = "nota-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#bca1af83a5b0b1fec35f26ffc266cb56b3953eb8"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#c5894905aa5dd849e7df462e584e1ed0044460af"
 
 [[package]]
 name = "once_cell"

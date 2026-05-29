@@ -51,11 +51,6 @@ impl RustEmitter {
         writer.emit_imports(asschema.resolved_imports());
         writer.emit_nota_support();
         writer.blank();
-        writer.emit_imported_error_bridges(asschema.resolved_imports());
-        if CollectionScan::new(asschema).uses_collections() {
-            writer.emit_collection_support();
-            writer.blank();
-        }
 
         for declaration in asschema.namespace() {
             writer.emit_type(declaration);
@@ -124,14 +119,7 @@ impl RustModulePath {
     }
 }
 
-/// Decides whether an assembled schema references any collection.
-///
-/// The collection-support runtime block (`NotaCollection` with the
-/// vector / map / option codecs) is emitted only when the schema
-/// actually uses `Vec` / `KeyValue` / `Option` at some reference
-/// position. Schemas with no collections emit byte-identical output to
-/// the pre-collection emitter, preserving the checked-in legacy
-/// fixtures.
+/// Decides which assembled schema type names appear as map keys.
 #[derive(Clone, Copy, Debug)]
 struct CollectionScan<'asschema> {
     asschema: &'asschema Asschema,
@@ -140,46 +128,6 @@ struct CollectionScan<'asschema> {
 impl<'asschema> CollectionScan<'asschema> {
     fn new(asschema: &'asschema Asschema) -> Self {
         Self { asschema }
-    }
-
-    fn uses_collections(&self) -> bool {
-        let namespace_uses =
-            self.asschema
-                .namespace()
-                .iter()
-                .any(|declaration| match declaration {
-                    TypeDeclaration::Struct(declaration)
-                    | TypeDeclaration::Newtype(declaration) => declaration
-                        .fields
-                        .iter()
-                        .any(|field| Self::reference_uses_collection(&field.reference)),
-                    TypeDeclaration::Enum(declaration) => Self::enum_uses_collections(declaration),
-                });
-        let root_uses = self
-            .asschema
-            .input_and_output()
-            .iter()
-            .any(|root_enum| Self::enum_uses_collections(root_enum));
-        namespace_uses || root_uses
-    }
-
-    fn enum_uses_collections(declaration: &EnumDeclaration) -> bool {
-        declaration.variants.iter().any(|variant| {
-            variant
-                .payload
-                .as_ref()
-                .is_some_and(Self::reference_uses_collection)
-        })
-    }
-
-    fn reference_uses_collection(reference: &TypeReference) -> bool {
-        match reference {
-            TypeReference::String
-            | TypeReference::Integer
-            | TypeReference::Boolean
-            | TypeReference::Plain(_) => false,
-            TypeReference::Vector(_) | TypeReference::Map(..) | TypeReference::Optional(_) => true,
-        }
     }
 
     /// The plain type names that appear as a `BTreeMap` key anywhere in
@@ -295,29 +243,6 @@ impl RustWriter {
         self.blank();
     }
 
-    /// Bridge each imported module's `NotaDecodeError` into the local
-    /// error type so generated codecs compose across crate boundaries.
-    fn emit_imported_error_bridges(&mut self, imports: &[ResolvedImport]) {
-        let mut bridged_modules: Vec<String> = Vec::new();
-        for import in imports {
-            let module_path = import.module_path();
-            if bridged_modules.contains(&module_path) {
-                continue;
-            }
-            bridged_modules.push(module_path.clone());
-            self.line(format!(
-                "impl From<{module_path}::NotaDecodeError> for NotaDecodeError {{"
-            ));
-            self.line(format!(
-                "    fn from(error: {module_path}::NotaDecodeError) -> Self {{"
-            ));
-            self.line("        Self::Parse(error.to_string())");
-            self.line("    }");
-            self.line("}");
-            self.blank();
-        }
-    }
-
     fn emit_type(&mut self, declaration: &TypeDeclaration) {
         match declaration {
             TypeDeclaration::Struct(declaration) => self.emit_struct(declaration),
@@ -327,236 +252,9 @@ impl RustWriter {
     }
 
     fn emit_nota_support(&mut self) {
-        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
-        self.line("pub enum NotaDecodeError {");
-        self.line("    Parse(String),");
-        self.line("    ExpectedSingleRoot { found: usize },");
-        self.line("    ExpectedDelimited { type_name: &'static str, delimiter: &'static str },");
-        self.line(
-            "    ExpectedRootCount { type_name: &'static str, expected: usize, found: usize },",
-        );
-        self.line("    ExpectedAtom { type_name: &'static str },");
-        self.line("    UnknownVariant { enum_name: &'static str, variant: String },");
-        self.line("    InvalidInteger { value: String },");
-        self.line("}");
-        self.blank();
-        self.line("impl std::fmt::Display for NotaDecodeError {");
-        self.line(
-            "    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
-        );
-        self.line("        match self {");
-        self.line("            Self::Parse(error) => write!(formatter, \"{error}\"),");
-        self.line("            Self::ExpectedSingleRoot { found } => write!(formatter, \"expected exactly one NOTA root object, found {found}\"),");
-        self.line("            Self::ExpectedDelimited { type_name, delimiter } => write!(formatter, \"expected {type_name} to be a {delimiter} block\"),");
-        self.line("            Self::ExpectedRootCount { type_name, expected, found } => write!(formatter, \"expected {type_name} to hold {expected} root objects, found {found}\"),");
-        self.line("            Self::ExpectedAtom { type_name } => write!(formatter, \"expected {type_name} atom\"),");
-        self.line("            Self::UnknownVariant { enum_name, variant } => write!(formatter, \"unknown {enum_name} variant {variant}\"),");
-        self.line("            Self::InvalidInteger { value } => write!(formatter, \"invalid integer {value}\"),");
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line("impl std::error::Error for NotaDecodeError {}");
-        self.blank();
-        self.line("pub struct NotaSource<'a> {");
-        self.line("    source: &'a str,");
-        self.line("}");
-        self.blank();
-        self.line("impl<'a> NotaSource<'a> {");
-        self.line("    pub fn new(source: &'a str) -> Self {");
-        self.line("        Self { source }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn parse_root(&self) -> Result<nota_next::Block, NotaDecodeError> {");
-        self.line("        let document = nota_next::Document::parse(self.source).map_err(|error| NotaDecodeError::Parse(error.to_string()))?;");
-        self.line("        if document.holds_root_objects() != 1 {");
-        self.line("            return Err(NotaDecodeError::ExpectedSingleRoot { found: document.holds_root_objects() });");
-        self.line("        }");
-        self.line("        Ok(document.root_object_at(0).expect(\"root count checked\").clone())");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line("pub struct NotaBlock<'a> {");
-        self.line("    block: &'a nota_next::Block,");
-        self.line("}");
-        self.blank();
-        self.line("impl<'a> NotaBlock<'a> {");
-        self.line("    pub fn new(block: &'a nota_next::Block) -> Self {");
-        self.line("        Self { block }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn expect_children(");
-        self.line("        &self,");
-        self.line("        delimiter: nota_next::Delimiter,");
-        self.line("        delimiter_name: &'static str,");
-        self.line("        type_name: &'static str,");
-        self.line("        expected: usize,");
-        self.line("    ) -> Result<&'a [nota_next::Block], NotaDecodeError> {");
-        self.line("        match self.block {");
-        self.line("            nota_next::Block::Delimited { delimiter: found, root_objects, .. } if *found == delimiter => {");
-        self.line("                if root_objects.len() != expected {");
-        self.line("                    return Err(NotaDecodeError::ExpectedRootCount { type_name, expected, found: root_objects.len() });");
-        self.line("                }");
-        self.line("                Ok(root_objects)");
-        self.line("            }");
-        self.line("            _ => Err(NotaDecodeError::ExpectedDelimited { type_name, delimiter: delimiter_name }),");
-        self.line("        }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn parse_string(&self) -> Result<String, NotaDecodeError> {");
-        self.line("        if let Some(text) = self.block.demote_to_string() {");
-        self.line("            return Ok(text.to_owned());");
-        self.line("        }");
-        self.line("        match self.block {");
-        self.line("            nota_next::Block::Delimited { delimiter: nota_next::Delimiter::SquareBracket, root_objects, .. } => {");
-        self.line("                root_objects.iter().map(|block| NotaBlock::new(block).parse_string()).collect::<Result<Vec<_>, _>>().map(|parts| parts.join(\" \"))");
-        self.line("            }");
-        self.line("            _ => Err(NotaDecodeError::ExpectedDelimited { type_name: \"String\", delimiter: \"string atom or square bracket\" }),");
-        self.line("        }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn parse_integer(&self) -> Result<Integer, NotaDecodeError> {");
-        self.line("        let value = self.block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: \"Integer\" })?;");
-        self.line("        value.parse::<Integer>().map_err(|_| NotaDecodeError::InvalidInteger { value: value.to_owned() })");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn parse_boolean(&self) -> Result<Boolean, NotaDecodeError> {");
-        self.line("        let value = self.block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: \"Boolean\" })?;");
-        self.line("        match value {");
-        self.line("            \"True\" => Ok(true),");
-        self.line("            \"False\" => Ok(false),");
-        self.line("            other => Err(NotaDecodeError::UnknownVariant { enum_name: \"Boolean\", variant: other.to_owned() }),");
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line("pub struct NotaString<'a> {");
-        self.line("    value: &'a str,");
-        self.line("}");
-        self.blank();
-        self.line("impl<'a> NotaString<'a> {");
-        self.line("    pub fn new(value: &'a str) -> Self {");
-        self.line("        Self { value }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn format(&self) -> String {");
-        self.line("        if self.value.contains(\"|]\") {");
-        self.line("            format!(\"[{}]\", self.value.replace(']', \" ]\"))");
-        self.line("        } else if self.value.chars().any(|character| matches!(character, '[' | ']' | '(' | ')' | '{' | '}' | ';' | '\\n')) {");
-        self.line("            format!(\"[|{}|]\", self.value)");
-        self.line("        } else {");
-        self.line("            format!(\"[{}]\", self.value)");
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
-    }
-
-    /// Emit the `NotaCollection` runtime codec for `Vec` / `BTreeMap` /
-    /// `Option` fields.
-    ///
-    /// NOTA shapes: a `Vec` is a square-bracket block `[e1 e2 ...]`; a
-    /// `BTreeMap` (the `KeyValue` keyword) is a brace block of `key
-    /// value` pairs `{k1 v1 ...}` (even child count); an `Option` is the
-    /// atom `None` or the paren `(Some inner)`. The parse methods take a
-    /// per-element closure so nested collections compose; the format
-    /// associated functions mirror them. Only emitted when the schema
-    /// uses a collection, so collection-free schemas keep byte-identical
-    /// output.
-    fn emit_collection_support(&mut self) {
-        self.line("pub struct NotaCollection<'a> {");
-        self.line("    block: &'a nota_next::Block,");
-        self.line("}");
-        self.blank();
-        self.line("impl<'a> NotaCollection<'a> {");
-        self.line("    pub fn new(block: &'a nota_next::Block) -> Self {");
-        self.line("        Self { block }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn parse_vector<Element, Parse>(&self, parse: Parse) -> Result<Vec<Element>, NotaDecodeError>");
-        self.line("    where");
-        self.line("        Parse: FnMut(&nota_next::Block) -> Result<Element, NotaDecodeError>,");
-        self.line("    {");
-        self.line("        match self.block {");
-        self.line("            nota_next::Block::Delimited { delimiter: nota_next::Delimiter::SquareBracket, root_objects, .. } => {");
-        self.line("                root_objects.iter().map(parse).collect()");
-        self.line("            }");
-        self.line("            _ => Err(NotaDecodeError::ExpectedDelimited { type_name: \"Vec\", delimiter: \"square bracket\" }),");
-        self.line("        }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn parse_map<Key, Value, ParseKey, ParseValue>(&self, mut parse_key: ParseKey, mut parse_value: ParseValue) -> Result<std::collections::BTreeMap<Key, Value>, NotaDecodeError>");
-        self.line("    where");
-        self.line("        Key: Ord,");
-        self.line("        ParseKey: FnMut(&nota_next::Block) -> Result<Key, NotaDecodeError>,");
-        self.line(
-            "        ParseValue: FnMut(&nota_next::Block) -> Result<Value, NotaDecodeError>,",
-        );
-        self.line("    {");
-        self.line("        match self.block {");
-        self.line("            nota_next::Block::Delimited { delimiter: nota_next::Delimiter::Brace, root_objects, .. } => {");
-        self.line("                if root_objects.len() % 2 != 0 {");
-        self.line("                    return Err(NotaDecodeError::ExpectedRootCount { type_name: \"BTreeMap\", expected: root_objects.len() + 1, found: root_objects.len() });");
-        self.line("                }");
-        self.line("                let mut map = std::collections::BTreeMap::new();");
-        self.line("                let mut index = 0;");
-        self.line("                while index < root_objects.len() {");
-        self.line("                    let key = parse_key(&root_objects[index])?;");
-        self.line("                    let value = parse_value(&root_objects[index + 1])?;");
-        self.line("                    map.insert(key, value);");
-        self.line("                    index += 2;");
-        self.line("                }");
-        self.line("                Ok(map)");
-        self.line("            }");
-        self.line("            _ => Err(NotaDecodeError::ExpectedDelimited { type_name: \"BTreeMap\", delimiter: \"brace\" }),");
-        self.line("        }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn parse_option<Inner, Parse>(&self, mut parse: Parse) -> Result<Option<Inner>, NotaDecodeError>");
-        self.line("    where");
-        self.line("        Parse: FnMut(&nota_next::Block) -> Result<Inner, NotaDecodeError>,");
-        self.line("    {");
-        self.line("        if self.block.demote_to_string() == Some(\"None\") {");
-        self.line("            return Ok(None);");
-        self.line("        }");
-        self.line("        let children = NotaBlock::new(self.block).expect_children(nota_next::Delimiter::Parenthesis, \"parenthesis\", \"Option\", 2)?;");
-        self.line("        let tag = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: \"Option tag\" })?;");
-        self.line("        if tag != \"Some\" {");
-        self.line("            return Err(NotaDecodeError::UnknownVariant { enum_name: \"Option\", variant: tag.to_owned() });");
-        self.line("        }");
-        self.line("        Ok(Some(parse(&children[1])?))");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn format_vector<Element, Format>(elements: &[Element], format: Format) -> String");
-        self.line("    where");
-        self.line("        Format: FnMut(&Element) -> String,");
-        self.line("    {");
-        self.line("        let parts: Vec<String> = elements.iter().map(format).collect();");
-        self.line("        format!(\"[{}]\", parts.join(\" \"))");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn format_map<Key, Value, FormatKey, FormatValue>(map: &std::collections::BTreeMap<Key, Value>, mut format_key: FormatKey, mut format_value: FormatValue) -> String");
-        self.line("    where");
-        self.line("        FormatKey: FnMut(&Key) -> String,");
-        self.line("        FormatValue: FnMut(&Value) -> String,");
-        self.line("    {");
-        self.line("        let mut parts: Vec<String> = Vec::new();");
-        self.line("        for (key, value) in map {");
-        self.line("            parts.push(format_key(key));");
-        self.line("            parts.push(format_value(value));");
-        self.line("        }");
-        self.line("        format!(\"{{{}}}\", parts.join(\" \"))");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn format_option<Inner, Format>(value: &Option<Inner>, mut format: Format) -> String");
-        self.line("    where");
-        self.line("        Format: FnMut(&Inner) -> String,");
-        self.line("    {");
-        self.line("        match value {");
-        self.line("            Some(inner) => format!(\"(Some {})\", format(inner)),");
-        self.line("            None => \"None\".to_owned(),");
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
+        self.line("pub use nota_next::{");
+        self.line("    NotaBlock, NotaDecode, NotaDecodeError, NotaEncode, NotaSource,");
+        self.line("};");
     }
 
     fn emit_newtype(&mut self, declaration: &StructDeclaration) {
@@ -626,26 +324,34 @@ impl RustWriter {
 
     fn emit_nota_newtype_impl(&mut self, declaration: &StructDeclaration) {
         let field = declaration.fields.first().expect("newtype has one field");
-        self.line(format!("impl {} {{", declaration.name));
-        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
+        self.line(format!("impl NotaDecode for {} {{", declaration.name));
+        self.line(
+            "    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {",
+        );
         self.line(format!(
             "        Ok(Self({}))",
             self.parse_expression(&field.reference, "block")
         ));
         self.line("    }");
+        self.line("}");
         self.blank();
-        self.line("    pub fn to_nota(&self) -> String {");
+        self.line(format!("impl NotaEncode for {} {{", declaration.name));
+        self.line("    fn to_nota(&self) -> String {");
         self.line(format!(
             "        {}",
             self.format_expression(&field.reference, "self.0", false)
         ));
         self.line("    }");
         self.line("}");
+        self.blank();
+        self.emit_nota_inherent_bridge(&declaration.name);
     }
 
     fn emit_nota_struct_impl(&mut self, declaration: &StructDeclaration) {
-        self.line(format!("impl {} {{", declaration.name));
-        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
+        self.line(format!("impl NotaDecode for {} {{", declaration.name));
+        self.line(
+            "    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {",
+        );
         self.line(format!(
             "        let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, \"parenthesis\", \"{}\", {})?;",
             declaration.name,
@@ -661,8 +367,10 @@ impl RustWriter {
         }
         self.line("        })");
         self.line("    }");
+        self.line("}");
         self.blank();
-        self.line("    pub fn to_nota(&self) -> String {");
+        self.line(format!("impl NotaEncode for {} {{", declaration.name));
+        self.line("    fn to_nota(&self) -> String {");
         self.line("        let fields = [");
         for field in &declaration.fields {
             self.line(format!(
@@ -678,6 +386,8 @@ impl RustWriter {
         self.line("        format!(\"({})\", fields.join(\" \"))");
         self.line("    }");
         self.line("}");
+        self.blank();
+        self.emit_nota_inherent_bridge(&declaration.name);
     }
 
     fn emit_nota_enum_impl(&mut self, name: &Name, variants: &[EnumVariant]) {
@@ -689,8 +399,10 @@ impl RustWriter {
             .iter()
             .filter(|variant| variant.payload.is_some())
             .collect();
-        self.line(format!("impl {name} {{"));
-        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
+        self.line(format!("impl NotaDecode for {name} {{"));
+        self.line(
+            "    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {",
+        );
         self.line("        if let Some(variant) = block.demote_to_string() {");
         if unit_variants.is_empty() {
             self.line(format!(
@@ -716,8 +428,11 @@ impl RustWriter {
             ));
             self.line("    }");
             self.blank();
-            self.emit_nota_enum_formatter(name, variants);
             self.line("}");
+            self.blank();
+            self.emit_nota_enum_formatter(name, variants);
+            self.blank();
+            self.emit_nota_inherent_bridge(name);
             return;
         }
         self.line(format!(
@@ -740,12 +455,16 @@ impl RustWriter {
         self.line("        }");
         self.line("    }");
         self.blank();
-        self.emit_nota_enum_formatter(name, variants);
         self.line("}");
+        self.blank();
+        self.emit_nota_enum_formatter(name, variants);
+        self.blank();
+        self.emit_nota_inherent_bridge(name);
     }
 
     fn emit_nota_enum_formatter(&mut self, _name: &Name, variants: &[EnumVariant]) {
-        self.line("    pub fn to_nota(&self) -> String {");
+        self.line(format!("impl NotaEncode for {_name} {{"));
+        self.line("    fn to_nota(&self) -> String {");
         self.line("        match self {");
         for variant in variants {
             match &variant.payload {
@@ -763,6 +482,19 @@ impl RustWriter {
         }
         self.line("        }");
         self.line("    }");
+        self.line("}");
+    }
+
+    fn emit_nota_inherent_bridge(&mut self, name: &Name) {
+        self.line(format!("impl {name} {{"));
+        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
+        self.line("        <Self as NotaDecode>::from_nota_block(block)");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn to_nota(&self) -> String {");
+        self.line("        <Self as NotaEncode>::to_nota(self)");
+        self.line("    }");
+        self.line("}");
     }
 
     fn emit_nota_root_enum_impl(&mut self, root_enum: &EnumDeclaration) {
@@ -772,8 +504,7 @@ impl RustWriter {
         self.line("    type Err = NotaDecodeError;");
         self.blank();
         self.line("    fn from_str(source: &str) -> Result<Self, Self::Err> {");
-        self.line("        let root = NotaSource::new(source).parse_root()?;");
-        self.line("        Self::from_nota_block(&root)");
+        self.line("        NotaSource::new(source).parse::<Self>()");
         self.line("    }");
         self.line("}");
         self.blank();
@@ -781,7 +512,7 @@ impl RustWriter {
         self.line(
             "    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
         );
-        self.line("        formatter.write_str(&self.to_nota())");
+        self.line("        formatter.write_str(&<Self as NotaEncode>::to_nota(self))");
         self.line("    }");
         self.line("}");
     }
@@ -1368,43 +1099,10 @@ impl RustWriter {
     /// genuine closure only when the element decode itself needs one
     /// (scalars and nested collections).
     fn parse_expression_result(&self, reference: &TypeReference, block: &str) -> String {
-        match reference {
-            TypeReference::String => format!("NotaBlock::new({block}).parse_string()"),
-            TypeReference::Integer => format!("NotaBlock::new({block}).parse_integer()"),
-            TypeReference::Boolean => format!("NotaBlock::new({block}).parse_boolean()"),
-            TypeReference::Plain(name) => format!("{}::from_nota_block({block})", name.as_str()),
-            TypeReference::Vector(inner) => format!(
-                "NotaCollection::new({block}).parse_vector({})",
-                self.parse_decoder(inner, "element")
-            ),
-            TypeReference::Map(key, value) => format!(
-                "NotaCollection::new({block}).parse_map({}, {})",
-                self.parse_decoder(key, "key_block"),
-                self.parse_decoder(value, "value_block")
-            ),
-            TypeReference::Optional(inner) => format!(
-                "NotaCollection::new({block}).parse_option({})",
-                self.parse_decoder(inner, "inner_block")
-            ),
-        }
-    }
-
-    /// A per-element decoder for a collection parse call.
-    ///
-    /// A plain non-scalar leaf decodes through its associated function,
-    /// so the bare path `Type::from_nota_block` is passed directly —
-    /// clippy flags `|x| Type::from_nota_block(x)` as a redundant
-    /// closure. Scalars and nested collections genuinely need a closure
-    /// around the structural decode, so those keep the `|binder| expr`
-    /// form.
-    fn parse_decoder(&self, reference: &TypeReference, binder: &str) -> String {
-        match reference {
-            TypeReference::Plain(name) => format!("{}::from_nota_block", name.as_str()),
-            _ => format!(
-                "|{binder}| {}",
-                self.parse_expression_result(reference, binder)
-            ),
-        }
+        format!(
+            "<{} as NotaDecode>::from_nota_block({block})",
+            self.rust_type(reference)
+        )
     }
 
     /// The expression that encodes this reference's Rust `value` back
@@ -1422,39 +1120,12 @@ impl RustWriter {
     /// needless-borrow on `&payload`.
     fn format_expression(
         &self,
-        reference: &TypeReference,
+        _reference: &TypeReference,
         value: &str,
         value_is_reference: bool,
     ) -> String {
         let borrow = if value_is_reference { "" } else { "&" };
-        match reference {
-            TypeReference::String => format!("NotaString::new({borrow}{value}).format()"),
-            TypeReference::Integer => format!("{value}.to_string()"),
-            TypeReference::Boolean => self.format_boolean(value, value_is_reference),
-            TypeReference::Plain(_) => format!("{value}.to_nota()"),
-            TypeReference::Vector(inner) => format!(
-                "NotaCollection::format_vector({borrow}{value}, |element| {})",
-                self.format_expression(inner, "element", true)
-            ),
-            TypeReference::Map(key, value_reference) => format!(
-                "NotaCollection::format_map({borrow}{value}, |key| {}, |value| {})",
-                self.format_expression(key, "key", true),
-                self.format_expression(value_reference, "value", true)
-            ),
-            TypeReference::Optional(inner) => format!(
-                "NotaCollection::format_option({borrow}{value}, |inner| {})",
-                self.format_expression(inner, "inner", true)
-            ),
-        }
-    }
-
-    fn format_boolean(&self, value: &str, value_is_reference: bool) -> String {
-        let condition = if value_is_reference {
-            format!("*{value}")
-        } else {
-            value.to_owned()
-        };
-        format!("if {condition} {{ \"True\".to_owned() }} else {{ \"False\".to_owned() }}")
+        format!("NotaEncode::to_nota({borrow}{value})")
     }
 
     /// The Rust type for a reference.

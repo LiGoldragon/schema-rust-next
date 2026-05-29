@@ -85,29 +85,26 @@ calls, sigils, or structural macro captures. The active test path gets that
   still emitted by the support surface.
 - Scalar references are explicit asschema data. `TypeReference::String`,
   `TypeReference::Integer`, and `TypeReference::Boolean` emit the scalar aliases
-  (`String = std::string::String`, `Integer = u64`, `Boolean = bool`) plus their NOTA codecs.
+  (`String = std::string::String`, `Integer = u64`, `Boolean = bool`) and use
+  the shared `nota-next` codec traits.
   `Plain(Name)` no longer carries scalar special cases; it names an emitted or
   imported schema type and therefore decodes through that type's
-  `from_nota_block` method.
+  `NotaDecode` implementation.
 - Collection references emit standard Rust collections. Authored schemas use
   Schema type-reference vocabulary such as `(Vec Topic)`, `(Map (Topic
   RecordIdentifier))`, and `(Optional Topic)`. Authored datatype declarations
   use pipe forms (`{| ... |}` and `(| ... |)`); plain square brackets are not
-  datatype declarations and are not the `Vec` reference syntax. `rust_type`
-  recurses a `TypeReference`: `Vector` →
-  `Vec<inner>`, `Map` → `std::collections::BTreeMap<key, value>` (fully
-  qualified, so no `use` and a deterministic key order for rkyv + NOTA),
-  `Optional` → `Option<inner>`. The `parse_expression` / `format_expression`
-  recursions mirror the type:
-  `parse_vector` / `parse_map` / `parse_option` decode and `format_vector` /
-  `format_map` / `format_option` encode, each taking a per-element closure so
-  nesting composes. A plain non-scalar element passes its `from_nota_block`
-  associated function directly (no redundant closure); a map / vector / option
-  value already held by reference is passed without a needless borrow.
-- A `NotaCollection` runtime codec block is emitted only when the schema uses a
-  collection. Its NOTA shapes: a `Vec` is a square-bracket block `[e1 e2 ...]`,
-  a `BTreeMap` is a brace block of `key value` pairs `{k1 v1 ...}`, an `Option`
-  is the atom `None` or the paren `(Some inner)`.
+  datatype declarations and are not the `Vec` reference syntax. The emitter's
+  Rust type projection recurses a `TypeReference`: `Vector` → `Vec<inner>`,
+  `Map` → `std::collections::BTreeMap<key, value>` (fully qualified, so no
+  `use` and a deterministic key order for rkyv + NOTA), `Optional` →
+  `Option<inner>`.
+- Generated code imports `nota-next`'s shared codec surface and implements
+  `NotaDecode` / `NotaEncode` for generated nouns. It does not emit private
+  `NotaSource`, `NotaBlock`, or `NotaCollection` helper types. Its NOTA value
+  shapes stay the shared codec shapes: a `Vec` is a square-bracket block
+  `[e1 e2 ...]`, a `BTreeMap` is a brace block of `key value` pairs
+  `{k1 v1 ...}`, and an `Option` is the atom `None` or the paren `(Some inner)`.
 - NOTA owns those value shapes. Schema owns the type-name keywords that select
   scalar and composite type references in `.schema` files.
 - A type used anywhere as a `BTreeMap` key earns the ordering derives

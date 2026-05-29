@@ -4,217 +4,9 @@ pub type String = std::string::String;
 pub type Integer = u64;
 pub type Boolean = bool;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum NotaDecodeError {
-    Parse(String),
-    ExpectedSingleRoot { found: usize },
-    ExpectedDelimited { type_name: &'static str, delimiter: &'static str },
-    ExpectedRootCount { type_name: &'static str, expected: usize, found: usize },
-    ExpectedAtom { type_name: &'static str },
-    UnknownVariant { enum_name: &'static str, variant: String },
-    InvalidInteger { value: String },
-}
-
-impl std::fmt::Display for NotaDecodeError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Parse(error) => write!(formatter, "{error}"),
-            Self::ExpectedSingleRoot { found } => write!(formatter, "expected exactly one NOTA root object, found {found}"),
-            Self::ExpectedDelimited { type_name, delimiter } => write!(formatter, "expected {type_name} to be a {delimiter} block"),
-            Self::ExpectedRootCount { type_name, expected, found } => write!(formatter, "expected {type_name} to hold {expected} root objects, found {found}"),
-            Self::ExpectedAtom { type_name } => write!(formatter, "expected {type_name} atom"),
-            Self::UnknownVariant { enum_name, variant } => write!(formatter, "unknown {enum_name} variant {variant}"),
-            Self::InvalidInteger { value } => write!(formatter, "invalid integer {value}"),
-        }
-    }
-}
-
-impl std::error::Error for NotaDecodeError {}
-
-pub struct NotaSource<'a> {
-    source: &'a str,
-}
-
-impl<'a> NotaSource<'a> {
-    pub fn new(source: &'a str) -> Self {
-        Self { source }
-    }
-
-    pub fn parse_root(&self) -> Result<nota_next::Block, NotaDecodeError> {
-        let document = nota_next::Document::parse(self.source).map_err(|error| NotaDecodeError::Parse(error.to_string()))?;
-        if document.holds_root_objects() != 1 {
-            return Err(NotaDecodeError::ExpectedSingleRoot { found: document.holds_root_objects() });
-        }
-        Ok(document.root_object_at(0).expect("root count checked").clone())
-    }
-}
-
-pub struct NotaBlock<'a> {
-    block: &'a nota_next::Block,
-}
-
-impl<'a> NotaBlock<'a> {
-    pub fn new(block: &'a nota_next::Block) -> Self {
-        Self { block }
-    }
-
-    pub fn expect_children(
-        &self,
-        delimiter: nota_next::Delimiter,
-        delimiter_name: &'static str,
-        type_name: &'static str,
-        expected: usize,
-    ) -> Result<&'a [nota_next::Block], NotaDecodeError> {
-        match self.block {
-            nota_next::Block::Delimited { delimiter: found, root_objects, .. } if *found == delimiter => {
-                if root_objects.len() != expected {
-                    return Err(NotaDecodeError::ExpectedRootCount { type_name, expected, found: root_objects.len() });
-                }
-                Ok(root_objects)
-            }
-            _ => Err(NotaDecodeError::ExpectedDelimited { type_name, delimiter: delimiter_name }),
-        }
-    }
-
-    pub fn parse_string(&self) -> Result<String, NotaDecodeError> {
-        if let Some(text) = self.block.demote_to_string() {
-            return Ok(text.to_owned());
-        }
-        match self.block {
-            nota_next::Block::Delimited { delimiter: nota_next::Delimiter::SquareBracket, root_objects, .. } => {
-                root_objects.iter().map(|block| NotaBlock::new(block).parse_string()).collect::<Result<Vec<_>, _>>().map(|parts| parts.join(" "))
-            }
-            _ => Err(NotaDecodeError::ExpectedDelimited { type_name: "String", delimiter: "string atom or square bracket" }),
-        }
-    }
-
-    pub fn parse_integer(&self) -> Result<Integer, NotaDecodeError> {
-        let value = self.block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "Integer" })?;
-        value.parse::<Integer>().map_err(|_| NotaDecodeError::InvalidInteger { value: value.to_owned() })
-    }
-
-    pub fn parse_boolean(&self) -> Result<Boolean, NotaDecodeError> {
-        let value = self.block.demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "Boolean" })?;
-        match value {
-            "True" => Ok(true),
-            "False" => Ok(false),
-            other => Err(NotaDecodeError::UnknownVariant { enum_name: "Boolean", variant: other.to_owned() }),
-        }
-    }
-}
-
-pub struct NotaString<'a> {
-    value: &'a str,
-}
-
-impl<'a> NotaString<'a> {
-    pub fn new(value: &'a str) -> Self {
-        Self { value }
-    }
-
-    pub fn format(&self) -> String {
-        if self.value.contains("|]") {
-            format!("[{}]", self.value.replace(']', " ]"))
-        } else if self.value.chars().any(|character| matches!(character, '[' | ']' | '(' | ')' | '{' | '}' | ';' | '\n')) {
-            format!("[|{}|]", self.value)
-        } else {
-            format!("[{}]", self.value)
-        }
-    }
-}
-
-pub struct NotaCollection<'a> {
-    block: &'a nota_next::Block,
-}
-
-impl<'a> NotaCollection<'a> {
-    pub fn new(block: &'a nota_next::Block) -> Self {
-        Self { block }
-    }
-
-    pub fn parse_vector<Element, Parse>(&self, parse: Parse) -> Result<Vec<Element>, NotaDecodeError>
-    where
-        Parse: FnMut(&nota_next::Block) -> Result<Element, NotaDecodeError>,
-    {
-        match self.block {
-            nota_next::Block::Delimited { delimiter: nota_next::Delimiter::SquareBracket, root_objects, .. } => {
-                root_objects.iter().map(parse).collect()
-            }
-            _ => Err(NotaDecodeError::ExpectedDelimited { type_name: "Vec", delimiter: "square bracket" }),
-        }
-    }
-
-    pub fn parse_map<Key, Value, ParseKey, ParseValue>(&self, mut parse_key: ParseKey, mut parse_value: ParseValue) -> Result<std::collections::BTreeMap<Key, Value>, NotaDecodeError>
-    where
-        Key: Ord,
-        ParseKey: FnMut(&nota_next::Block) -> Result<Key, NotaDecodeError>,
-        ParseValue: FnMut(&nota_next::Block) -> Result<Value, NotaDecodeError>,
-    {
-        match self.block {
-            nota_next::Block::Delimited { delimiter: nota_next::Delimiter::Brace, root_objects, .. } => {
-                if root_objects.len() % 2 != 0 {
-                    return Err(NotaDecodeError::ExpectedRootCount { type_name: "BTreeMap", expected: root_objects.len() + 1, found: root_objects.len() });
-                }
-                let mut map = std::collections::BTreeMap::new();
-                let mut index = 0;
-                while index < root_objects.len() {
-                    let key = parse_key(&root_objects[index])?;
-                    let value = parse_value(&root_objects[index + 1])?;
-                    map.insert(key, value);
-                    index += 2;
-                }
-                Ok(map)
-            }
-            _ => Err(NotaDecodeError::ExpectedDelimited { type_name: "BTreeMap", delimiter: "brace" }),
-        }
-    }
-
-    pub fn parse_option<Inner, Parse>(&self, mut parse: Parse) -> Result<Option<Inner>, NotaDecodeError>
-    where
-        Parse: FnMut(&nota_next::Block) -> Result<Inner, NotaDecodeError>,
-    {
-        if self.block.demote_to_string() == Some("None") {
-            return Ok(None);
-        }
-        let children = NotaBlock::new(self.block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Option", 2)?;
-        let tag = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "Option tag" })?;
-        if tag != "Some" {
-            return Err(NotaDecodeError::UnknownVariant { enum_name: "Option", variant: tag.to_owned() });
-        }
-        Ok(Some(parse(&children[1])?))
-    }
-
-    pub fn format_vector<Element, Format>(elements: &[Element], format: Format) -> String
-    where
-        Format: FnMut(&Element) -> String,
-    {
-        let parts: Vec<String> = elements.iter().map(format).collect();
-        format!("[{}]", parts.join(" "))
-    }
-
-    pub fn format_map<Key, Value, FormatKey, FormatValue>(map: &std::collections::BTreeMap<Key, Value>, mut format_key: FormatKey, mut format_value: FormatValue) -> String
-    where
-        FormatKey: FnMut(&Key) -> String,
-        FormatValue: FnMut(&Value) -> String,
-    {
-        let mut parts: Vec<String> = Vec::new();
-        for (key, value) in map {
-            parts.push(format_key(key));
-            parts.push(format_value(value));
-        }
-        format!("{{{}}}", parts.join(" "))
-    }
-
-    pub fn format_option<Inner, Format>(value: &Option<Inner>, mut format: Format) -> String
-    where
-        Format: FnMut(&Inner) -> String,
-    {
-        match value {
-            Some(inner) => format!("(Some {})", format(inner)),
-            None => "None".to_owned(),
-        }
-    }
-}
+pub use nota_next::{
+    NotaBlock, NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
+};
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]
@@ -252,97 +44,182 @@ pub enum Output {
     Listed(Vec<NodeName>),
 }
 
+impl NotaDecode for NodeName {
+    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
+    }
+}
+
+impl NotaEncode for NodeName {
+    fn to_nota(&self) -> String {
+        NotaEncode::to_nota(&self.0)
+    }
+}
+
 impl NodeName {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(NotaBlock::new(block).parse_string()?))
+        <Self as NotaDecode>::from_nota_block(block)
     }
 
     pub fn to_nota(&self) -> String {
-        NotaString::new(&self.0).format()
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+impl NotaDecode for NodeConfig {
+    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
+    }
+}
+
+impl NotaEncode for NodeConfig {
+    fn to_nota(&self) -> String {
+        NotaEncode::to_nota(&self.0)
     }
 }
 
 impl NodeConfig {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(NotaBlock::new(block).parse_string()?))
+        <Self as NotaDecode>::from_nota_block(block)
     }
 
     pub fn to_nota(&self) -> String {
-        NotaString::new(&self.0).format()
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+impl NotaDecode for Service {
+    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
+    }
+}
+
+impl NotaEncode for Service {
+    fn to_nota(&self) -> String {
+        NotaEncode::to_nota(&self.0)
     }
 }
 
 impl Service {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(NotaBlock::new(block).parse_string()?))
+        <Self as NotaDecode>::from_nota_block(block)
     }
 
     pub fn to_nota(&self) -> String {
-        NotaString::new(&self.0).format()
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+impl NotaDecode for Query {
+    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(<Topic as NotaDecode>::from_nota_block(block)?))
+    }
+}
+
+impl NotaEncode for Query {
+    fn to_nota(&self) -> String {
+        NotaEncode::to_nota(&self.0)
     }
 }
 
 impl Query {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(Topic::from_nota_block(block)?))
+        <Self as NotaDecode>::from_nota_block(block)
     }
 
     pub fn to_nota(&self) -> String {
-        self.0.to_nota()
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+impl NotaDecode for Topic {
+    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(<String as NotaDecode>::from_nota_block(block)?))
+    }
+}
+
+impl NotaEncode for Topic {
+    fn to_nota(&self) -> String {
+        NotaEncode::to_nota(&self.0)
     }
 }
 
 impl Topic {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(NotaBlock::new(block).parse_string()?))
+        <Self as NotaDecode>::from_nota_block(block)
     }
 
     pub fn to_nota(&self) -> String {
-        NotaString::new(&self.0).format()
+        <Self as NotaEncode>::to_nota(self)
     }
 }
 
-impl Cluster {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+impl NotaDecode for Cluster {
+    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Cluster", 4)?;
         Ok(Self {
-            services: NotaCollection::new(&children[0]).parse_vector(Service::from_nota_block)?,
-            nodes: NotaCollection::new(&children[1]).parse_map(NodeName::from_nota_block, NodeConfig::from_nota_block)?,
-            cache: NotaCollection::new(&children[2]).parse_option(NodeConfig::from_nota_block)?,
-            healthy: NotaBlock::new(&children[3]).parse_boolean()?,
+            services: <Vec<Service> as NotaDecode>::from_nota_block(&children[0])?,
+            nodes: <std::collections::BTreeMap<NodeName, NodeConfig> as NotaDecode>::from_nota_block(&children[1])?,
+            cache: <Option<NodeConfig> as NotaDecode>::from_nota_block(&children[2])?,
+            healthy: <Boolean as NotaDecode>::from_nota_block(&children[3])?,
         })
     }
+}
 
-    pub fn to_nota(&self) -> String {
+impl NotaEncode for Cluster {
+    fn to_nota(&self) -> String {
         let fields = [
-            NotaCollection::format_vector(&self.services, |element| element.to_nota()),
-            NotaCollection::format_map(&self.nodes, |key| key.to_nota(), |value| value.to_nota()),
-            NotaCollection::format_option(&self.cache, |inner| inner.to_nota()),
-            if self.healthy { "True".to_owned() } else { "False".to_owned() },
+            NotaEncode::to_nota(&self.services),
+            NotaEncode::to_nota(&self.nodes),
+            NotaEncode::to_nota(&self.cache),
+            NotaEncode::to_nota(&self.healthy),
         ];
         format!("({})", fields.join(" "))
     }
 }
 
-impl Input {
+impl Cluster {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+impl NotaDecode for Input {
+    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         if let Some(variant) = block.demote_to_string() {
             return Err(NotaDecodeError::UnknownVariant { enum_name: "Input", variant: variant.to_owned() });
         }
         let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Input", 2)?;
         let variant = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "enum variant" })?;
         match variant {
-            "Register" => Ok(Self::Register(Cluster::from_nota_block(&children[1])?)),
-            "Observe" => Ok(Self::Observe(Query::from_nota_block(&children[1])?)),
+            "Register" => Ok(Self::Register(<Cluster as NotaDecode>::from_nota_block(&children[1])?)),
+            "Observe" => Ok(Self::Observe(<Query as NotaDecode>::from_nota_block(&children[1])?)),
             other => Err(NotaDecodeError::UnknownVariant { enum_name: "Input", variant: other.to_owned() }),
         }
     }
 
-    pub fn to_nota(&self) -> String {
+}
+
+impl NotaEncode for Input {
+    fn to_nota(&self) -> String {
         match self {
-            Self::Register(payload) => format!("(Register {})", payload.to_nota()),
-            Self::Observe(payload) => format!("(Observe {})", payload.to_nota()),
+            Self::Register(payload) => format!("(Register {})", NotaEncode::to_nota(payload)),
+            Self::Observe(payload) => format!("(Observe {})", NotaEncode::to_nota(payload)),
         }
+    }
+}
+
+impl Input {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
     }
 }
 
@@ -350,36 +227,48 @@ impl std::str::FromStr for Input {
     type Err = NotaDecodeError;
 
     fn from_str(source: &str) -> Result<Self, Self::Err> {
-        let root = NotaSource::new(source).parse_root()?;
-        Self::from_nota_block(&root)
+        NotaSource::new(source).parse::<Self>()
     }
 }
 
 impl std::fmt::Display for Input {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.to_nota())
+        formatter.write_str(&<Self as NotaEncode>::to_nota(self))
     }
 }
 
-impl Output {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+impl NotaDecode for Output {
+    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         if let Some(variant) = block.demote_to_string() {
             return Err(NotaDecodeError::UnknownVariant { enum_name: "Output", variant: variant.to_owned() });
         }
         let children = NotaBlock::new(block).expect_children(nota_next::Delimiter::Parenthesis, "parenthesis", "Output", 2)?;
         let variant = children[0].demote_to_string().ok_or(NotaDecodeError::ExpectedAtom { type_name: "enum variant" })?;
         match variant {
-            "Projected" => Ok(Self::Projected(NotaCollection::new(&children[1]).parse_map(NodeName::from_nota_block, NodeConfig::from_nota_block)?)),
-            "Listed" => Ok(Self::Listed(NotaCollection::new(&children[1]).parse_vector(NodeName::from_nota_block)?)),
+            "Projected" => Ok(Self::Projected(<std::collections::BTreeMap<NodeName, NodeConfig> as NotaDecode>::from_nota_block(&children[1])?)),
+            "Listed" => Ok(Self::Listed(<Vec<NodeName> as NotaDecode>::from_nota_block(&children[1])?)),
             other => Err(NotaDecodeError::UnknownVariant { enum_name: "Output", variant: other.to_owned() }),
         }
     }
 
-    pub fn to_nota(&self) -> String {
+}
+
+impl NotaEncode for Output {
+    fn to_nota(&self) -> String {
         match self {
-            Self::Projected(payload) => format!("(Projected {})", NotaCollection::format_map(payload, |key| key.to_nota(), |value| value.to_nota())),
-            Self::Listed(payload) => format!("(Listed {})", NotaCollection::format_vector(payload, |element| element.to_nota())),
+            Self::Projected(payload) => format!("(Projected {})", NotaEncode::to_nota(payload)),
+            Self::Listed(payload) => format!("(Listed {})", NotaEncode::to_nota(payload)),
         }
+    }
+}
+
+impl Output {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
     }
 }
 
@@ -387,14 +276,13 @@ impl std::str::FromStr for Output {
     type Err = NotaDecodeError;
 
     fn from_str(source: &str) -> Result<Self, Self::Err> {
-        let root = NotaSource::new(source).parse_root()?;
-        Self::from_nota_block(&root)
+        NotaSource::new(source).parse::<Self>()
     }
 }
 
 impl std::fmt::Display for Output {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.to_nota())
+        formatter.write_str(&<Self as NotaEncode>::to_nota(self))
     }
 }
 

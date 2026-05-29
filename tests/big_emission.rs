@@ -1,11 +1,8 @@
-use std::{
-    fmt::Write,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use schema_next::{
-    Asschema, EnumDeclaration, EnumVariant, ImportResolver, MacroContext, Name, SchemaEngine,
-    SchemaIdentity, TypeDeclaration, TypeReference,
+    Asschema, EnumDeclaration, ImportResolver, MacroContext, SchemaEngine, SchemaIdentity,
+    TypeDeclaration,
 };
 use schema_rust_next::RustEmitter;
 
@@ -22,7 +19,6 @@ struct BigRustFixture<'fixture> {
     name: &'fixture str,
     identity: &'fixture str,
     source_path: PathBuf,
-    witness_path: PathBuf,
     rust_path: PathBuf,
     resolver: Option<ImportResolver>,
 }
@@ -33,7 +29,6 @@ impl<'fixture> BigRustFixture<'fixture> {
             name,
             identity,
             source_path: fixture_path(name, "schema"),
-            witness_path: fixture_path(name, "witness.txt"),
             rust_path: fixture_path(name, "generated.rs"),
             resolver: None,
         }
@@ -49,7 +44,6 @@ impl<'fixture> BigRustFixture<'fixture> {
             name,
             identity,
             source_path: fixture_path(name, "schema"),
-            witness_path: fixture_path(name, "witness.txt"),
             rust_path: fixture_path(name, "generated.rs"),
             resolver: Some(ImportResolver::new().with_dependency(
                 "marker-core",
@@ -88,24 +82,14 @@ impl<'fixture> BigRustFixture<'fixture> {
         RustEmitter::default().emit(&asschema).as_str().to_owned()
     }
 
-    fn assert_matches_checked_in_witness(&self) {
+    fn assert_lowers_to_typed_asschema_data(&self) {
         let (asschema, context) = self.lower();
-        self.assert_asschema_data_shape(&asschema);
-
-        let witness = AsschemaWitness::new(self.name, &asschema, &context).render();
-        if std::env::var_os("SCHEMA_RUST_NEXT_UPDATE_BIG_EXAMPLES").is_some() {
-            std::fs::write(&self.witness_path, &witness).expect("write witness fixture");
-        }
-        let expected_witness =
-            std::fs::read_to_string(&self.witness_path).expect("read witness fixture");
-        assert_eq!(
-            witness, expected_witness,
-            "assembled schema witness drifted for {}",
-            self.name
-        );
+        self.assert_asschema_data_shape(&asschema, &context);
     }
 
-    fn assert_asschema_data_shape(&self, asschema: &Asschema) {
+    fn assert_asschema_data_shape(&self, asschema: &Asschema, context: &MacroContext) {
+        assert_eq!(asschema.identity().component().as_str(), self.identity);
+        assert_eq!(asschema.identity().version(), "0.1.0");
         assert!(
             !asschema.namespace().is_empty(),
             "{} must lower into typed namespace data",
@@ -120,6 +104,63 @@ impl<'fixture> BigRustFixture<'fixture> {
             !asschema.output().variants.is_empty(),
             "{} must lower typed output variants",
             self.name
+        );
+        assert!(
+            context.macros_applied().iter().any(|name| {
+                name.contains("Struct") || name.contains("Enum") || name == "RootNamespace"
+            }),
+            "{} must exercise schema macro lowering",
+            self.name
+        );
+        assert!(
+            context.positions_seen().iter().any(|position| {
+                position.as_str() == "RootNamespace" || position.as_str() == "NamespaceDeclaration"
+            }),
+            "{} must record structural macro positions",
+            self.name
+        );
+
+        match self.name {
+            "spirit-reactive-large" => {
+                Self::assert_has_type(asschema.namespace(), "Entry");
+                Self::assert_has_type(asschema.namespace(), "RecordSet");
+                Self::assert_has_variant(asschema.input(), "Record");
+                Self::assert_has_variant(asschema.output(), "Recorded");
+            }
+            "triad-reactive-large" => {
+                Self::assert_has_type(asschema.namespace(), "SignalRequest");
+                Self::assert_has_type(asschema.namespace(), "NexusRequest");
+                Self::assert_has_type(asschema.namespace(), "SemaRequest");
+                Self::assert_has_variant(asschema.input(), "SignalIn");
+                Self::assert_has_variant(asschema.output(), "SignalOut");
+            }
+            "imported-mail-consumer" => {
+                assert!(!asschema.imports().is_empty());
+                assert!(!asschema.resolved_imports().is_empty());
+                Self::assert_has_variant(asschema.output(), "Marked");
+            }
+            _ => panic!("unhandled big fixture {}", self.name),
+        }
+    }
+
+    fn assert_has_type(declarations: &[TypeDeclaration], name: &str) {
+        let found = declarations.iter().any(|declaration| match declaration {
+            TypeDeclaration::Struct(declaration) | TypeDeclaration::Newtype(declaration) => {
+                declaration.name.as_str() == name
+            }
+            TypeDeclaration::Enum(declaration) => declaration.name.as_str() == name,
+        });
+        assert!(found, "missing namespace type {name}");
+    }
+
+    fn assert_has_variant(declaration: &EnumDeclaration, name: &str) {
+        assert!(
+            declaration
+                .variants
+                .iter()
+                .any(|variant| variant.name.as_str() == name),
+            "missing variant {name} on {}",
+            declaration.name.as_str()
         );
     }
 
@@ -138,9 +179,9 @@ impl<'fixture> BigRustFixture<'fixture> {
 }
 
 #[test]
-fn large_spirit_schema_lowers_to_checked_witness_snapshot() {
+fn large_spirit_schema_lowers_to_typed_asschema_data() {
     BigRustFixture::local("spirit-reactive-large", "example:spirit-reactive-large")
-        .assert_matches_checked_in_witness();
+        .assert_lowers_to_typed_asschema_data();
 }
 
 #[test]
@@ -150,9 +191,9 @@ fn large_spirit_schema_emits_checked_rust_snapshot() {
 }
 
 #[test]
-fn large_triad_schema_lowers_to_checked_witness_snapshot() {
+fn large_triad_schema_lowers_to_typed_asschema_data() {
     BigRustFixture::local("triad-reactive-large", "example:triad-reactive-large")
-        .assert_matches_checked_in_witness();
+        .assert_lowers_to_typed_asschema_data();
 }
 
 #[test]
@@ -162,9 +203,9 @@ fn large_triad_schema_emits_checked_rust_snapshot() {
 }
 
 #[test]
-fn large_imported_schema_lowers_to_checked_witness_snapshot() {
+fn large_imported_schema_lowers_to_typed_asschema_data() {
     BigRustFixture::imported("imported-mail-consumer", "example:imported-mail-consumer")
-        .assert_matches_checked_in_witness();
+        .assert_lowers_to_typed_asschema_data();
 }
 
 #[test]
@@ -336,163 +377,4 @@ fn fixture_path(name: &str, extension: &str) -> PathBuf {
 
 fn manifest_dir() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-}
-
-struct AsschemaWitness<'schema> {
-    name: &'schema str,
-    asschema: &'schema Asschema,
-    context: &'schema MacroContext,
-}
-
-impl<'schema> AsschemaWitness<'schema> {
-    fn new(
-        name: &'schema str,
-        asschema: &'schema Asschema,
-        context: &'schema MacroContext,
-    ) -> Self {
-        Self {
-            name,
-            asschema,
-            context,
-        }
-    }
-
-    fn render(&self) -> String {
-        let mut output = String::new();
-        writeln!(output, "fixture {}", self.name).expect("write string");
-        writeln!(
-            output,
-            "identity {} {}",
-            self.asschema.identity().component().as_str(),
-            self.asschema.identity().version()
-        )
-        .expect("write string");
-        self.render_imports(&mut output);
-        self.render_macro_trace(&mut output);
-        self.render_enum(&mut output, "input", self.asschema.input());
-        self.render_enum(&mut output, "output", self.asschema.output());
-        writeln!(output, "namespace").expect("write string");
-        for declaration in self.asschema.namespace() {
-            self.render_declaration(&mut output, declaration);
-        }
-        output
-    }
-
-    fn render_imports(&self, output: &mut String) {
-        writeln!(output, "imports").expect("write string");
-        if self.asschema.imports().is_empty() {
-            writeln!(output, "  none").expect("write string");
-        }
-        for import in self.asschema.imports() {
-            writeln!(
-                output,
-                "  {} = {}",
-                import.local_name.as_str(),
-                self.render_reference(&import.source)
-            )
-            .expect("write string");
-        }
-        writeln!(output, "resolved_imports").expect("write string");
-        if self.asschema.resolved_imports().is_empty() {
-            writeln!(output, "  none").expect("write string");
-        }
-        for import in self.asschema.resolved_imports() {
-            writeln!(
-                output,
-                "  {} = {}",
-                import.local_name().as_str(),
-                import.source().rust_path()
-            )
-            .expect("write string");
-        }
-    }
-
-    fn render_macro_trace(&self, output: &mut String) {
-        writeln!(output, "macro_trace").expect("write string");
-        writeln!(
-            output,
-            "  applied {}",
-            self.context.macros_applied().join(" -> ")
-        )
-        .expect("write string");
-        let positions = self
-            .context
-            .positions_seen()
-            .iter()
-            .map(|position| position.as_str())
-            .collect::<Vec<_>>()
-            .join(" -> ");
-        writeln!(output, "  positions {positions}").expect("write string");
-    }
-
-    fn render_enum(&self, output: &mut String, label: &str, declaration: &EnumDeclaration) {
-        writeln!(output, "{label} {}", declaration.name.as_str()).expect("write string");
-        for variant in &declaration.variants {
-            writeln!(output, "  {}", self.render_variant(variant)).expect("write string");
-        }
-    }
-
-    fn render_declaration(&self, output: &mut String, declaration: &TypeDeclaration) {
-        match declaration {
-            TypeDeclaration::Struct(declaration) => {
-                writeln!(output, "  struct {}", declaration.name.as_str()).expect("write string");
-                for field in &declaration.fields {
-                    writeln!(
-                        output,
-                        "    {}: {}",
-                        field.name.as_str(),
-                        self.render_reference(&field.reference)
-                    )
-                    .expect("write string");
-                }
-            }
-            TypeDeclaration::Newtype(declaration) => {
-                let field = declaration.fields.first().expect("newtype field");
-                writeln!(
-                    output,
-                    "  newtype {} = {}",
-                    declaration.name.as_str(),
-                    self.render_reference(&field.reference)
-                )
-                .expect("write string");
-            }
-            TypeDeclaration::Enum(declaration) => {
-                writeln!(output, "  enum {}", declaration.name.as_str()).expect("write string");
-                for variant in &declaration.variants {
-                    writeln!(output, "    {}", self.render_variant(variant)).expect("write string");
-                }
-            }
-        }
-    }
-
-    fn render_variant(&self, variant: &EnumVariant) -> String {
-        match &variant.payload {
-            Some(payload) => format!(
-                "{}({})",
-                variant.name.as_str(),
-                self.render_reference(payload)
-            ),
-            None => variant.name.as_str().to_owned(),
-        }
-    }
-
-    fn render_reference(&self, reference: &TypeReference) -> String {
-        match reference {
-            TypeReference::String => "String".to_owned(),
-            TypeReference::Integer => "Integer".to_owned(),
-            TypeReference::Boolean => "Boolean".to_owned(),
-            TypeReference::Plain(name) => self.render_name(name),
-            TypeReference::Vector(inner) => format!("Vec<{}>", self.render_reference(inner)),
-            TypeReference::Map(key, value) => format!(
-                "KeyValue<{}, {}>",
-                self.render_reference(key),
-                self.render_reference(value)
-            ),
-            TypeReference::Optional(inner) => format!("Option<{}>", self.render_reference(inner)),
-        }
-    }
-
-    fn render_name(&self, name: &Name) -> String {
-        name.as_str().to_owned()
-    }
 }

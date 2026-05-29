@@ -18,10 +18,10 @@ such as `spirit-next:lib` emits to `src/schema/lib.rs`; an identity such as
 namespace segment is the crate boundary and is not repeated inside the crate's
 generated module tree.
 
-The emitted source includes the data types, NOTA conversion methods, rkyv
-derives, short-header signal frames, Nexus traits, Nexus mail lifecycle
-objects, mail-event hooks, and upgrade/accept traits that runtime crates
-implement against.
+The emitted source includes the data types, `nota-next` codec trait
+implementations, rkyv derives, short-header signal frames, Nexus traits, Nexus
+mail lifecycle objects, mail-event hooks, and upgrade/accept traits that
+runtime crates implement against.
 
 Composite type references come from typed NOTA datatype objects in the
 authored schema: `(Vec Topic)`, `(Map (Topic RecordIdentifier))`, and

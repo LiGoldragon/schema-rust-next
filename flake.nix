@@ -27,7 +27,6 @@
           type == "regular" && (
             pkgs.lib.hasSuffix ".schema" path
             || pkgs.lib.hasSuffix ".nota" path
-            || pkgs.lib.hasSuffix ".witness.txt" path
           );
         sourceFilter = path: type:
           (craneLib.filterCargoSources path type) || (schemaFilter path type);
@@ -129,6 +128,10 @@
               echo "obsolete .asschema syntax fixtures must not remain in schema-rust-next" >&2
               exit 1
             fi
+            if find ${src} -name '*.witness.txt' -print -quit | grep .; then
+              echo "line-format .witness.txt goldens must not remain in schema-rust-next" >&2
+              exit 1
+            fi
             if grep -R -n -E '\[Input \[|\[Output \[|\(Struct \[|\(Enum \[|\(Newtype \[|\(Map \[\(Plain|\(Carries \(Plain' ${src}/tests ${src}/src; then
               echo "obsolete ASSchema vector-record syntax must not remain in active Rust-emission code or fixtures" >&2
               exit 1
@@ -191,8 +194,12 @@
             ! grep -R --include='*.generated.rs' "parse_nota_root" ${src}/tests/fixtures
             ! grep -R --include='*.generated.rs' "UnknownHeader { surface" ${src}/tests/fixtures
             ! grep -R "pub struct RustEmitter;" ${src}/src
-            grep -R --include='*.generated.rs' "pub struct NotaSource" ${src}/tests/fixtures >/dev/null
-            grep -R --include='*.generated.rs' "pub struct NotaBlock" ${src}/tests/fixtures >/dev/null
+            ! grep -R --include='*.generated.rs' "pub struct NotaSource" ${src}/tests/fixtures
+            ! grep -R --include='*.generated.rs' "pub struct NotaBlock" ${src}/tests/fixtures
+            ! grep -R --include='*.generated.rs' "pub struct NotaCollection" ${src}/tests/fixtures
+            grep -R --include='*.generated.rs' "pub use nota_next" ${src}/tests/fixtures >/dev/null
+            grep -R --include='*.generated.rs' "impl NotaDecode for Input" ${src}/tests/fixtures >/dev/null
+            grep -R --include='*.generated.rs' "impl NotaEncode for Input" ${src}/tests/fixtures >/dev/null
             touch $out
           '';
           doc = craneLib.cargoDoc (commonArguments // {

@@ -101,14 +101,13 @@ recurse. Square brackets remain raw NOTA vector structure and schema field
 lists in assembled data; authored schema datatype declarations use pipe
 forms, not plain square-bracket declarations. Square brackets are not `Vec`
 reference syntax. The emitter writes a
-`NotaCollection` runtime codec — a vector value is still a square-bracket
-block, a map value is a brace of key/value pairs, an option is `None` /
-`(Some inner)` — and the per-field parse/format expressions recurse through
-it. A type used as a map key earns the ordering derives (`PartialOrd, Ord` on
-both the type and its archived form); other types keep the original derive
-set. The collection codec and the ordering derives are emitted only when the
-schema actually uses a collection, so a collection-free schema remains stable
-against the current scalar-floor fixture.*
+shared `nota-next` codec import and implements `NotaDecode` / `NotaEncode` for
+each generated noun. A vector value is still a square-bracket block, a map
+value is a brace of key/value pairs, and an option is `None` / `(Some inner)`,
+but those value shapes live in `nota-next` rather than in a per-file generated
+runtime. A type used as a map key earns the ordering derives (`PartialOrd, Ord`
+on both the type and its archived form); other types keep the original derive
+set.*
 
 *NOTA owns raw delimiter structure and serialization shapes. Schema owns all
 type-name keywords: scalar names such as `String`, `Integer`, and `Boolean`,

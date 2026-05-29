@@ -404,14 +404,17 @@ fn generated_upgrade_trait_accepts_previous_schema_objects_observably() {
 }
 
 #[test]
-fn emits_vec_map_and_option_collection_types_with_runtime_codec() {
+fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     let asschema = FixtureSchema::new("collections.schema").lower("collections:lib");
     let generated = RustEmitter::default().emit(&asschema);
     let code = generated.as_str();
 
-    // The collection-support runtime block is emitted because the
-    // schema uses collections.
-    assert!(code.contains("pub struct NotaCollection"));
+    // The generated code imports the shared NOTA codec instead of
+    // emitting a local collection-support runtime block.
+    assert!(code.contains("pub use nota_next::{"));
+    assert!(!code.contains("pub struct NotaCollection"));
+    assert!(code.contains("impl NotaDecode for Cluster"));
+    assert!(code.contains("impl NotaEncode for Cluster"));
     // Vec / KeyValue->BTreeMap / Option render at the field positions.
     assert!(code.contains("pub services: Vec<Service>,"));
     assert!(code.contains("pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,"));
@@ -431,7 +434,7 @@ fn emits_vec_map_and_option_collection_types_with_runtime_codec() {
 }
 
 #[test]
-fn collection_free_schema_emits_byte_identical_to_legacy_fixture() {
+fn collection_free_schema_keeps_checked_generated_source_stable() {
     // The regression safety net: a schema that uses no collection still
     // emits exactly the checked-in fixture, proving the collection work
     // is purely additive.
