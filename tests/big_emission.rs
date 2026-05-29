@@ -83,11 +83,11 @@ impl<'fixture> BigRustFixture<'fixture> {
     }
 
     fn assert_lowers_to_typed_asschema_data(&self) {
-        let (asschema, context) = self.lower();
-        self.assert_asschema_data_shape(&asschema, &context);
+        let (asschema, _) = self.lower();
+        self.assert_asschema_data_shape(&asschema);
     }
 
-    fn assert_asschema_data_shape(&self, asschema: &Asschema, context: &MacroContext) {
+    fn assert_asschema_data_shape(&self, asschema: &Asschema) {
         assert_eq!(asschema.identity().component().as_str(), self.identity);
         assert_eq!(asschema.identity().version(), "0.1.0");
         assert!(
@@ -105,18 +105,20 @@ impl<'fixture> BigRustFixture<'fixture> {
             "{} must lower typed output variants",
             self.name
         );
-        assert!(
-            context.macros_applied().iter().any(|name| {
-                name.contains("Struct") || name.contains("Enum") || name == "RootNamespace"
-            }),
-            "{} must exercise schema macro lowering",
+        assert_eq!(
+            asschema.roots().len(),
+            2,
+            "{} must expose root declarations as assembled data",
             self.name
         );
         assert!(
-            context.positions_seen().iter().any(|position| {
-                position.as_str() == "RootNamespace" || position.as_str() == "NamespaceDeclaration"
-            }),
-            "{} must record structural macro positions",
+            asschema.root_named("Input").is_some(),
+            "{} must expose Input as a root declaration",
+            self.name
+        );
+        assert!(
+            asschema.root_named("Output").is_some(),
+            "{} must expose Output as a root declaration",
             self.name
         );
 

@@ -21,10 +21,12 @@ data-bearing objects, not free helper functions. Nexus is the execution-IO
 schema plane for internal effects, external calls, and UI surfaces.*
 
 *Signal, Nexus, and SEMA schemas share the same authored shape:
-imports/exports, input, output, and namespace. Rust emission mirrors that
-shape into source-visible modules under `src/schema/`, using single-colon
-schema paths as the source naming convention and Rust modules as the emitted
-form.*
+imports/exports, roots, and namespace. Rust emission mirrors that shape into
+source-visible modules under `src/schema/`, using single-colon schema paths as
+the source naming convention and Rust modules as the emitted form. The current
+schema files still provide Input and Output as the first two roots, but the
+emitter consumes ordered root declarations from `Asschema` rather than a
+hard-coded pair.*
 
 *Plane payload names are scoped by emitted namespaces. The generated public
 surface should read `signal::Input`, `nexus::Input`, and `sema::Input`

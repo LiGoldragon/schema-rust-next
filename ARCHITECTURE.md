@@ -29,7 +29,7 @@ calls, sigils, or structural macro captures. The active test path gets that
   compile that source rather than hiding the interface in `OUT_DIR`.
 - Emission is tested by source fixture comparison and by compiling the fixture
   as Rust code.
-- Root input/output enums emit Nexus traits. Runtime code implements those
+- Root declarations emit Nexus traits. Runtime code implements those
   traits on data-bearing engine objects, and the generated enum dispatches
   in-flight `NexusMail<Payload>` to one method per variant. Nexus names the
   execution-IO plane and mail keeper; it replaces the older executor wording.
