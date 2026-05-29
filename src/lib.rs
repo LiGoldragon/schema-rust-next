@@ -77,7 +77,6 @@ impl RustEmitter {
         writer.emit_signal_frame_support(&asschema.input_and_output());
         writer.emit_mail_event_support(&asschema.input_and_output());
         writer.emit_plane_namespaces(asschema.namespace(), &asschema.input_and_output());
-        writer.emit_message_identifier_support();
         writer.emit_nexus_support(&asschema.input_and_output());
         writer.emit_schema_plane_trait_support(asschema.namespace());
         writer.emit_upgrade_support();
@@ -685,9 +684,11 @@ impl RustWriter {
     fn emit_mail_event_support(&mut self, root_enums: &[&EnumDeclaration]) {
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub struct MessageIdentifier(pub Integer);");
+        self.emit_integer_support_newtype_codec("MessageIdentifier");
         self.blank();
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub struct OriginRoute(pub Integer);");
+        self.emit_integer_support_newtype_codec("OriginRoute");
         self.blank();
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
         self.line("pub enum MessageRoot {");
@@ -824,6 +825,33 @@ impl RustWriter {
         }
     }
 
+    fn emit_integer_support_newtype_codec(&mut self, name: &str) {
+        self.blank();
+        self.line(format!("impl NotaDecode for {name} {{"));
+        self.line(
+            "    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {",
+        );
+        self.line("        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line(format!("impl NotaEncode for {name} {{"));
+        self.line("    fn to_nota(&self) -> String {");
+        self.line("        NotaEncode::to_nota(&self.0)");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line(format!("impl {name} {{"));
+        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
+        self.line("        <Self as NotaDecode>::from_nota_block(block)");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn to_nota(self) -> String {");
+        self.line("        <Self as NotaEncode>::to_nota(&self)");
+        self.line("    }");
+        self.line("}");
+    }
+
     fn emit_schema_plane_support(&mut self) {
         self.line("pub mod schema {");
         self.line("    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
@@ -877,19 +905,6 @@ impl RustWriter {
         ));
         self.line("    }");
         self.line("}");
-    }
-
-    fn emit_message_identifier_support(&mut self) {
-        self.line("impl OriginRoute {");
-        self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
-        self.line("        Ok(Self(NotaBlock::new(block).parse_integer()?))");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn to_nota(self) -> String {");
-        self.line("        self.0.to_string()");
-        self.line("    }");
-        self.line("}");
-        self.blank();
     }
 
     fn emit_plane_namespaces(

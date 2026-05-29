@@ -251,6 +251,20 @@ fn generated_signal_roots_emit_typed_message_sent_events() {
         }],
     );
     assert_eq!(event.origin_route(), generated::OriginRoute(900));
+    assert_eq!(
+        generated::NotaSource::new("900")
+            .parse::<generated::OriginRoute>()
+            .expect("origin route decodes through shared codec"),
+        generated::OriginRoute(900)
+    );
+    assert_eq!(generated::OriginRoute(900).to_nota(), "900");
+    assert_eq!(
+        generated::NotaSource::new("42")
+            .parse::<generated::MessageIdentifier>()
+            .expect("message identifier decodes through shared codec"),
+        generated::MessageIdentifier(42)
+    );
+    assert_eq!(generated::MessageIdentifier(42).to_nota(), "42");
     assert_ne!(
         event.origin_route(),
         generated::OriginRoute(event.identifier.0),

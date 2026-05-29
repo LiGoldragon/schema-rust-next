@@ -1955,8 +1955,52 @@ impl Output {
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MessageIdentifier(pub Integer);
 
+impl NotaDecode for MessageIdentifier {
+    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
+    }
+}
+
+impl NotaEncode for MessageIdentifier {
+    fn to_nota(&self) -> String {
+        NotaEncode::to_nota(&self.0)
+    }
+}
+
+impl MessageIdentifier {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+
+    pub fn to_nota(self) -> String {
+        <Self as NotaEncode>::to_nota(&self)
+    }
+}
+
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OriginRoute(pub Integer);
+
+impl NotaDecode for OriginRoute {
+    fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        Ok(Self(<Integer as NotaDecode>::from_nota_block(block)?))
+    }
+}
+
+impl NotaEncode for OriginRoute {
+    fn to_nota(&self) -> String {
+        NotaEncode::to_nota(&self.0)
+    }
+}
+
+impl OriginRoute {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+
+    pub fn to_nota(self) -> String {
+        <Self as NotaEncode>::to_nota(&self)
+    }
+}
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MessageRoot {
@@ -2198,16 +2242,6 @@ pub mod signal {
     pub type Input = super::Input;
     pub type Output = super::Output;
     pub type Signal<Root> = super::Signal<Root>;
-}
-
-impl OriginRoute {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        Ok(Self(NotaBlock::new(block).parse_integer()?))
-    }
-
-    pub fn to_nota(self) -> String {
-        self.0.to_string()
-    }
 }
 
 pub trait InputNexus {
