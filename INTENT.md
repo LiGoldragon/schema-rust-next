@@ -89,11 +89,12 @@ moved toward a shared schema-authored core.*
 
 *Rust emission consumes scalar pass-throughs from asschema as data, not as
 emitter-side magic. `TypeReference::String`, `TypeReference::Integer`,
-`TypeReference::Boolean`, and `TypeReference::Path` emit the scalar aliases and
-shared NOTA derives directly;
+`TypeReference::Boolean`, and `TypeReference::Path` emit the scalar aliases.
 `Plain(Name)` means a declared schema type or imported namespace name. The
 scalar floor uses `String`, `Integer`, and `Boolean`; `Bool` is not a spelling,
-and `Text` is a schema-declared newtype when a domain wants that noun.*
+and `Text` is a schema-declared newtype when a domain wants that noun. Binary
+`rkyv` support is universal; NOTA encode/decode support is an optional emitted
+surface for text-facing clients, not a daemon-default surface.*
 
 *Collection references emit the standard Rust collections plus their NOTA
 codecs. The authored schema uses Schema type-reference vocabulary at reference
@@ -103,15 +104,16 @@ deterministic), and `(Optional T)` emits `Option<T>`; nested references
 recurse. Square brackets remain raw NOTA vector structure and, when paired
 with `@`, enum declaration bodies; authored schema datatype declarations use
 name-first `@` forms, not plain square-bracket declarations. Square brackets
-are not `Vec` reference syntax. The emitter writes a
-shared `nota-next` codec import and derives `nota_next::NotaDecode` /
-`nota_next::NotaEncode` for each generated noun, leaving only small inherent
-bridge methods such as `from_nota_block` and `to_nota` on the emitted noun.
-It must not hand-write per-type codec implementations. A vector value is still
-a square-bracket block, a map
-value is a brace of key/value pairs, and an option is `None` / `(Some inner)`,
-but those value shapes live in `nota-next` rather than in a per-file generated
-runtime. A type used as a map key earns the ordering derives (`PartialOrd, Ord`
+are not `Vec` reference syntax. The emitter can write a shared `nota-next`
+codec import and derive `nota_next::NotaDecode` / `nota_next::NotaEncode` for
+generated nouns, but that surface is selected explicitly: always enabled,
+feature-gated for text clients, or omitted for binary-only daemon consumers.
+When NOTA is selected, only small inherent bridge methods such as
+`from_nota_block` and `to_nota` live on the emitted noun. It must not hand-write
+per-type codec implementations. A vector value is still a square-bracket block,
+a map value is a brace of key/value pairs, and an option is `None` / `(Some
+inner)`, but those value shapes live in `nota-next` rather than in a per-file
+generated runtime. A type used as a map key earns the ordering derives (`PartialOrd, Ord`
 on both the type and its archived form); other types keep the original derive
 set.*
 

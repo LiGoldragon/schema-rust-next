@@ -1,4 +1,4 @@
-use schema_rust_next::RustEmitter;
+use schema_rust_next::{RustEmissionOptions, RustEmitter};
 use std::{cell::Cell, path::PathBuf};
 
 mod support;
@@ -84,6 +84,42 @@ fn emits_rust_source_as_a_separate_artifact() {
             .contains("pub trait UpgradeFrom<Previous>")
     );
     assert_generated_fixture("spirit_generated.rs", generated.code.as_str());
+}
+
+#[test]
+fn emission_can_disable_nota_surface_for_binary_only_consumers() {
+    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let generated = RustEmitter::new(RustEmissionOptions::binary_only()).emit(&asschema);
+    let code = generated.as_str();
+
+    assert!(code.contains("rkyv::Archive"));
+    assert!(code.contains("pub fn encode_signal_frame"));
+    assert!(code.contains("pub fn decode_signal_frame"));
+    assert!(!code.contains("nota_next"));
+    assert!(!code.contains("NotaDecode"));
+    assert!(!code.contains("NotaEncode"));
+    assert!(!code.contains("from_nota_block"));
+    assert!(!code.contains("to_nota"));
+    assert!(!code.contains("impl std::str::FromStr for Input"));
+    assert!(!code.contains("impl std::fmt::Display for Input"));
+}
+
+#[test]
+fn emission_can_gate_nota_surface_behind_text_client_feature() {
+    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let generated =
+        RustEmitter::new(RustEmissionOptions::feature_gated_nota("nota-text")).emit(&asschema);
+    let code = generated.as_str();
+
+    assert!(code.contains(
+        "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]"
+    ));
+    assert!(code.contains("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize"));
+    assert!(code.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"));
+    assert!(code.contains("#[cfg(feature = \"nota-text\")]\nimpl std::str::FromStr for Input"));
+    assert!(code.contains("#[cfg(feature = \"nota-text\")]\nimpl std::fmt::Display for Output"));
+    assert!(code.contains("pub fn encode_signal_frame"));
+    assert!(code.contains("pub fn decode_signal_frame"));
 }
 
 #[test]

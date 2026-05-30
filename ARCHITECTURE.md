@@ -101,12 +101,12 @@ authored form.
   mail support closer to schema-authored nouns while the core mail schema is
   still emitted by the support surface.
 - Scalar references are explicit asschema data. `TypeReference::String`,
-  `TypeReference::Integer`, `TypeReference::Boolean`, and `TypeReference::Path` emit the scalar aliases
-  (`String = std::string::String`, `Integer = u64`, `Boolean = bool`) and use
-  the shared `nota-next` codec traits.
+  `TypeReference::Integer`, `TypeReference::Boolean`, and `TypeReference::Path`
+  emit the scalar aliases (`String = std::string::String`, `Integer = u64`,
+  `Boolean = bool`). Binary `rkyv` support is emitted for every consumer; NOTA
+  codec derives are an optional text-client surface.
   `Plain(Name)` no longer carries scalar special cases; it names an emitted or
-  imported schema type and therefore decodes through that type's
-  `NotaDecode` implementation.
+  imported schema type.
 - Collection references emit standard Rust collections. Authored schemas use
   Schema type-reference vocabulary such as `(Vec Topic)`, `(Map (Topic
   RecordIdentifier))`, and `(Optional Topic)`. Authored datatype declarations
@@ -117,15 +117,17 @@ authored form.
   `Map` → `std::collections::BTreeMap<key, value>` (fully qualified, so no
   `use` and a deterministic key order for rkyv + NOTA), `Optional` →
   `Option<inner>`.
-- Generated code imports `nota-next`'s shared codec surface and derives
-  `nota_next::NotaDecode` / `nota_next::NotaEncode` for generated nouns. It
-  keeps small inherent bridge methods (`from_nota_block`, `to_nota`) on the
-  owning noun, but does not hand-write per-type codec trait implementations.
-  It does not emit private `NotaSource`, `NotaBlock`, or `NotaCollection`
-  helper types. Its NOTA value
-  shapes stay the shared codec shapes: a `Vec` is a square-bracket block
-  `[e1 e2 ...]`, a `BTreeMap` is a brace block of `key value` pairs
-  `{k1 v1 ...}`, and an `Option` is the atom `None` or the paren `(Some inner)`.
+- Generated code can import `nota-next`'s shared codec surface and derive
+  `nota_next::NotaDecode` / `nota_next::NotaEncode` for generated nouns, but
+  that surface is selected by `RustEmissionOptions`: always enabled,
+  feature-gated for text clients, or disabled for binary-only consumers. When
+  NOTA is selected, small inherent bridge methods (`from_nota_block`,
+  `to_nota`) stay on the owning noun, but the emitter does not hand-write
+  per-type codec trait implementations. It does not emit private `NotaSource`,
+  `NotaBlock`, or `NotaCollection` helper types. Its NOTA value shapes stay the
+  shared codec shapes: a `Vec` is a square-bracket block `[e1 e2 ...]`, a
+  `BTreeMap` is a brace block of `key value` pairs `{k1 v1 ...}`, and an
+  `Option` is the atom `None` or the paren `(Some inner)`.
 - NOTA owns those value shapes. Schema owns the type-name keywords that select
   scalar and composite type references in `.schema` files.
 - A type used anywhere as a `BTreeMap` key earns the ordering derives

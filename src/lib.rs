@@ -21,17 +21,26 @@ impl RustCode {
 #[derive(Clone, Debug)]
 pub struct RustEmitter {
     generator_name: &'static str,
+    options: RustEmissionOptions,
 }
 
 impl Default for RustEmitter {
     fn default() -> Self {
         Self {
             generator_name: "schema-rust-next",
+            options: RustEmissionOptions::always_enabled_nota(),
         }
     }
 }
 
 impl RustEmitter {
+    pub fn new(options: RustEmissionOptions) -> Self {
+        Self {
+            generator_name: "schema-rust-next",
+            options,
+        }
+    }
+
     pub fn emit_file(&self, asschema: &Asschema) -> GeneratedFile {
         GeneratedFile {
             path: RustModulePath::new(asschema.identity().component().clone()).to_file_path(),
@@ -40,7 +49,7 @@ impl RustEmitter {
     }
 
     pub fn emit(&self, asschema: &Asschema) -> RustCode {
-        let mut writer = RustWriter::default();
+        let mut writer = RustWriter::new(self.options.clone());
         let roots = asschema
             .roots()
             .iter()
@@ -57,7 +66,9 @@ impl RustEmitter {
         writer.blank();
         writer.emit_imports(asschema.resolved_imports());
         writer.emit_nota_support();
-        writer.blank();
+        if writer.nota_surface().emits_nota() {
+            writer.blank();
+        }
 
         for declaration in asschema.namespace() {
             writer.emit_type(declaration);
@@ -84,6 +95,70 @@ impl RustEmitter {
         writer.emit_schema_plane_trait_support(asschema.namespace());
         writer.emit_upgrade_support();
         RustCode(writer.finish())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustEmissionOptions {
+    nota_surface: NotaSurface,
+}
+
+impl RustEmissionOptions {
+    pub fn always_enabled_nota() -> Self {
+        Self {
+            nota_surface: NotaSurface::AlwaysEnabled,
+        }
+    }
+
+    pub fn feature_gated_nota(feature: impl Into<String>) -> Self {
+        Self {
+            nota_surface: NotaSurface::FeatureGated {
+                feature: feature.into(),
+            },
+        }
+    }
+
+    pub fn binary_only() -> Self {
+        Self {
+            nota_surface: NotaSurface::Disabled,
+        }
+    }
+
+    fn nota_surface(&self) -> &NotaSurface {
+        &self.nota_surface
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum NotaSurface {
+    AlwaysEnabled,
+    FeatureGated { feature: String },
+    Disabled,
+}
+
+impl NotaSurface {
+    fn emits_nota(&self) -> bool {
+        !matches!(self, Self::Disabled)
+    }
+
+    fn feature_gate_attribute(&self) -> Option<String> {
+        match self {
+            Self::AlwaysEnabled | Self::Disabled => None,
+            Self::FeatureGated { feature } => Some(format!("#[cfg(feature = \"{feature}\")]")),
+        }
+    }
+
+    fn feature_gated_derive_attribute(&self) -> Option<String> {
+        match self {
+            Self::AlwaysEnabled | Self::Disabled => None,
+            Self::FeatureGated { feature } => Some(format!(
+                "#[cfg_attr(feature = \"{feature}\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]"
+            )),
+        }
+    }
+
+    fn includes_nota_in_derive(&self) -> bool {
+        matches!(self, Self::AlwaysEnabled)
     }
 }
 
@@ -198,14 +273,27 @@ impl<'asschema> CollectionScan<'asschema> {
     }
 }
 
-#[derive(Default)]
 struct RustWriter {
     output: String,
     map_key_types: Vec<String>,
     private_type_names: Vec<String>,
+    nota_surface: NotaSurface,
 }
 
 impl RustWriter {
+    fn new(options: RustEmissionOptions) -> Self {
+        Self {
+            output: String::new(),
+            map_key_types: Vec::new(),
+            private_type_names: Vec::new(),
+            nota_surface: options.nota_surface().clone(),
+        }
+    }
+
+    fn nota_surface(&self) -> &NotaSurface {
+        &self.nota_surface
+    }
+
     /// Record the set of type names used as a `BTreeMap` key anywhere
     /// in the schema. A map key type additionally derives `PartialOrd,
     /// Ord` (and the archived form does too) so `BTreeMap<Key, _>`
@@ -226,15 +314,51 @@ impl RustWriter {
     /// The derive attribute line for a data-bearing emitted type. Adds
     /// the ordering derives when the type is used as a map key.
     fn data_type_derive(&self, type_name: &Name) -> String {
-        if self
-            .map_key_types
-            .iter()
-            .any(|key| key == type_name.as_str())
-        {
-            "#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]\n#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]".to_owned()
-        } else {
-            "#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]".to_owned()
+        self.derive_attribute(
+            false,
+            self.map_key_types
+                .iter()
+                .any(|key| key == type_name.as_str()),
+        )
+    }
+
+    fn copy_data_type_derive(&self) -> String {
+        self.derive_attribute(true, false)
+    }
+
+    fn root_data_type_derive(&self) -> String {
+        self.derive_attribute(false, false)
+    }
+
+    fn derive_attribute(&self, includes_copy: bool, includes_ordering: bool) -> String {
+        let mut lines = Vec::new();
+        if let Some(attribute) = self.nota_surface.feature_gated_derive_attribute() {
+            lines.push(attribute);
         }
+        let mut derives = Vec::new();
+        if self.nota_surface.includes_nota_in_derive() {
+            derives.push("nota_next::NotaDecode");
+            derives.push("nota_next::NotaEncode");
+        }
+        derives.push("rkyv::Archive");
+        derives.push("rkyv::Serialize");
+        derives.push("rkyv::Deserialize");
+        derives.push("Clone");
+        if includes_copy {
+            derives.push("Copy");
+        }
+        derives.push("Debug");
+        derives.push("PartialEq");
+        derives.push("Eq");
+        if includes_ordering {
+            derives.push("PartialOrd");
+            derives.push("Ord");
+        }
+        lines.push(format!("#[derive({})]", derives.join(", ")));
+        if includes_ordering {
+            lines.push("#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]".to_owned());
+        }
+        lines.join("\n")
     }
 
     fn line(&mut self, line: impl AsRef<str>) {
@@ -309,6 +433,10 @@ impl RustWriter {
     }
 
     fn emit_nota_support(&mut self) {
+        if !self.nota_surface.emits_nota() {
+            return;
+        }
+        self.emit_nota_gate();
         self.line("pub use nota_next::{");
         self.line("    NotaDecode, NotaDecodeError, NotaEncode, NotaSource,");
         self.line("};");
@@ -360,7 +488,7 @@ impl RustWriter {
     }
 
     fn emit_root_enum(&mut self, root_enum: &EnumDeclaration) {
-        self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
+        self.line(self.root_data_type_derive());
         self.line(format!("pub enum {} {{", root_enum.name));
         for variant in &root_enum.variants {
             self.emit_variant(variant);
@@ -380,6 +508,9 @@ impl RustWriter {
     }
 
     fn emit_nota_type_bridges(&mut self, declarations: &[Declaration]) {
+        if !self.nota_surface.emits_nota() {
+            return;
+        }
         for declaration in declarations {
             self.emit_nota_inherent_bridge(declaration.name().as_str());
             self.blank();
@@ -387,6 +518,7 @@ impl RustWriter {
     }
 
     fn emit_nota_inherent_bridge(&mut self, name: &str) {
+        self.emit_nota_gate();
         self.line(format!("impl {name} {{"));
         self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
         self.line("        <Self as NotaDecode>::from_nota_block(block)");
@@ -399,6 +531,7 @@ impl RustWriter {
     }
 
     fn emit_nota_copy_inherent_bridge(&mut self, name: &str) {
+        self.emit_nota_gate();
         self.line(format!("impl {name} {{"));
         self.line("    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {");
         self.line("        <Self as NotaDecode>::from_nota_block(block)");
@@ -411,8 +544,12 @@ impl RustWriter {
     }
 
     fn emit_nota_root_enum_support(&mut self, root_enum: &EnumDeclaration) {
+        if !self.nota_surface.emits_nota() {
+            return;
+        }
         self.emit_nota_inherent_bridge(root_enum.name.as_str());
         self.blank();
+        self.emit_nota_gate();
         self.line(format!("impl std::str::FromStr for {} {{", root_enum.name));
         self.line("    type Err = NotaDecodeError;");
         self.blank();
@@ -421,6 +558,7 @@ impl RustWriter {
         self.line("    }");
         self.line("}");
         self.blank();
+        self.emit_nota_gate();
         self.line(format!("impl std::fmt::Display for {} {{", root_enum.name));
         self.line(
             "    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
@@ -428,6 +566,12 @@ impl RustWriter {
         self.line("        formatter.write_str(&<Self as NotaEncode>::to_nota(self))");
         self.line("    }");
         self.line("}");
+    }
+
+    fn emit_nota_gate(&mut self) {
+        if let Some(attribute) = self.nota_surface.feature_gate_attribute() {
+            self.line(attribute);
+        }
     }
 
     fn emit_short_headers(&mut self, root_enums: &[&EnumDeclaration]) {
@@ -596,15 +740,19 @@ impl RustWriter {
     }
 
     fn emit_mail_event_support(&mut self, root_enums: &[&EnumDeclaration]) {
-        self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
+        self.line(self.copy_data_type_derive());
         self.line("pub struct MessageIdentifier(pub Integer);");
-        self.emit_nota_copy_inherent_bridge("MessageIdentifier");
+        if self.nota_surface.emits_nota() {
+            self.emit_nota_copy_inherent_bridge("MessageIdentifier");
+        }
         self.blank();
-        self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
+        self.line(self.copy_data_type_derive());
         self.line("pub struct OriginRoute(pub Integer);");
-        self.emit_nota_copy_inherent_bridge("OriginRoute");
+        if self.nota_surface.emits_nota() {
+            self.emit_nota_copy_inherent_bridge("OriginRoute");
+        }
         self.blank();
-        self.line("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]");
+        self.line(self.copy_data_type_derive());
         self.line("pub enum MessageRoot {");
         for root_enum in root_enums {
             self.line(format!("    {},", root_enum.name));
