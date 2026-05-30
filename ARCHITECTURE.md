@@ -23,10 +23,11 @@ Rust instead of flattening every type into the same public surface.
 
 The active fixtures use the settled name-first `@` declaration surface:
 `Input@[...]` / `Output@[...]` for root enums, `Name@{...}` for structs,
-`Name@[...]` for enums, and parenthesized `name@(Vec Type)` /
-`name@(Optional Type)` / `name@(Map (...))` for composite references. This
-emitter only sees the resulting `Asschema` data and must not grow a second
-parser for the authored form.
+`Name@[...]` for enums, `@Type` for derived same-name fields or data variants,
+and parenthesized `name@(Vec Type)` / `name@(Optional Type)` /
+`name@(Map (...))` for explicit composite references. This emitter only sees
+the resulting `Asschema` data and must not grow a second parser for the
+authored form.
 
 ## Constraints
 
@@ -38,6 +39,9 @@ parser for the authored form.
 - Public asschema declarations emit public Rust types and fields. Private
   asschema declarations emit `pub(crate)` types and fields, preserving inline
   PascalCase schema declarations as module-local implementation nouns.
+- `TypeDeclaration::Newtype` carries a single contained `TypeReference`, not a
+  field map. It emits as a tuple newtype. `TypeDeclaration::Struct` is the
+  named-field map shape.
 - Generated Rust is source-visible under `src/schema/`; consumers include or
   compile that source rather than hiding the interface in `OUT_DIR`.
 - Emission is tested by source fixture comparison and by compiling the fixture

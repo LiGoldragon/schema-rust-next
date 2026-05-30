@@ -124,11 +124,18 @@ are Schema vocabulary.*
 
 *The authored schema declaration surface is the name-first `@` syntax:
 `Input@[...]` and `Output@[...]` for root enums, `Name@{...}` for structs,
-`Name@[...]` for enums, and `name@Type` / `name@(Composite Type)` for fields
-or variant payloads. Namespace braces contain self-named declarations, not
-duplicated `Name Name@{...}` key/value pairs. Rust emission should not care
-which authored surface produced the assembled data: it consumes the
-macro-free `Asschema` roots and type declarations.*
+`Name@[...]` for enums, `@Type` for same-name field or variant derivation, and
+`name@Type` / `name@(Composite Type)` for explicit field or variant payload
+bindings. Namespace braces contain self-named declarations, not duplicated
+`Name Name@{...}` key/value pairs. Rust emission should not care which
+authored surface produced the assembled data: it consumes the macro-free
+`Asschema` roots and type declarations.*
+
+*Asschema newtypes are their own data shape. A newtype carries exactly one
+contained `TypeReference`; it is not a one-field struct map with an invented
+field name. The emitter projects that shape directly to an ergonomic Rust tuple
+newtype such as `pub struct Topic(pub String);`, while multi-field structs keep
+named fields.*
 
 *The emitter starts from assembled schema data, not from authored macro syntax.
 That assembled data is currently produced in memory from real `.schema`
