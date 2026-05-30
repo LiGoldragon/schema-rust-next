@@ -82,6 +82,22 @@ impl<'fixture> BigRustFixture<'fixture> {
         RustEmitter::default().emit(&asschema).as_str().to_owned()
     }
 
+    fn generate_rust_after_asschema_roundtrip(&self) -> String {
+        let (asschema, _) = self.lower();
+        let nota = asschema.to_nota();
+        let from_nota =
+            Asschema::from_nota_source(&nota).expect("asschema NOTA artifact reads back");
+        let bytes = from_nota
+            .to_binary_bytes()
+            .expect("asschema rkyv artifact writes");
+        let from_binary =
+            Asschema::from_binary_bytes(&bytes).expect("asschema rkyv artifact reads back");
+        RustEmitter::default()
+            .emit(&from_binary)
+            .as_str()
+            .to_owned()
+    }
+
     fn assert_lowers_to_typed_asschema_data(&self) {
         let (asschema, _) = self.lower();
         self.assert_asschema_data_shape(&asschema);
@@ -179,6 +195,15 @@ impl<'fixture> BigRustFixture<'fixture> {
             self.name
         );
     }
+
+    fn assert_emission_uses_live_asschema_artifact(&self) {
+        assert_eq!(
+            self.generate_rust_after_asschema_roundtrip(),
+            self.generate_rust(),
+            "emission for {} must be driven by readable assembled schema data",
+            self.name
+        );
+    }
 }
 
 #[test]
@@ -215,6 +240,16 @@ fn large_imported_schema_lowers_to_typed_asschema_data() {
 fn large_imported_schema_emits_checked_cross_crate_rust_snapshot() {
     BigRustFixture::imported("imported-mail-consumer", "example:imported-mail-consumer")
         .assert_matches_checked_in_rust();
+}
+
+#[test]
+fn rust_emission_is_stable_after_live_asschema_nota_and_rkyv_roundtrip() {
+    BigRustFixture::local("spirit-reactive-large", "example:spirit-reactive-large")
+        .assert_emission_uses_live_asschema_artifact();
+    BigRustFixture::local("triad-reactive-large", "example:triad-reactive-large")
+        .assert_emission_uses_live_asschema_artifact();
+    BigRustFixture::imported("imported-mail-consumer", "example:imported-mail-consumer")
+        .assert_emission_uses_live_asschema_artifact();
 }
 
 #[test]

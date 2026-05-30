@@ -158,10 +158,10 @@ newtype such as `pub struct Topic(pub String);`, while multi-field structs keep
 named fields.*
 
 *The emitter starts from assembled schema data, not from authored macro syntax.
-That assembled data is currently produced in memory from real `.schema`
-fixtures; checked-in assembled-schema text fixtures must not remain in active
-code or fixtures. Rust emission must not compensate for unresolved schema
-sugar.*
+That assembled data is live: it can be written as NOTA, read back, written as
+rkyv bytes, and read back before emission. Checked-in assembled-schema text
+fixtures must not remain in active code or fixtures. Rust emission must not
+compensate for unresolved schema sugar.*
 
 *Asschema declaration visibility is a code-generation boundary. A public
 declaration is exported Rust API. A private declaration is a module-local Rust
