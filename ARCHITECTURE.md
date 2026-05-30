@@ -18,8 +18,13 @@ already resolved all macros and sugar; the emitter does not read authored macro
 calls, sigils, or structural macro captures. The active test path gets that
 `Asschema` as typed data from `schema-next` lowering real `.schema` fixtures,
 then proves the emitter can consume the same value after an asschema NOTA
-round-trip and an asschema rkyv round-trip. That keeps Rust emission attached
-to the live assembled data object rather than to hidden parser state.
+artifact file read and an asschema rkyv artifact file read. That keeps Rust
+emission attached to the live assembled data object rather than to hidden
+parser state.
+`RustEmitter::emit_file_from_artifact`, `emit_file_from_nota_path`, and
+`emit_file_from_binary_path` are the explicit artifact handoff methods; the
+plain `emit_file(&Asschema)` path remains for callers that already hold the
+typed value in-process.
 Namespace entries arrive as visibility-tagged declarations: `(Public Name
 Value)` or `(Private Name Value)`. The emitter must project that boundary into
 Rust instead of flattening every type into the same public surface.

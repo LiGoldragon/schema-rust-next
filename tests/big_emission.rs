@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use schema_next::{
-    Asschema, Declaration, EnumDeclaration, ImportResolver, MacroContext, SchemaEngine,
-    SchemaIdentity, TypeDeclaration,
+    Asschema, AsschemaArtifact, Declaration, EnumDeclaration, ImportResolver, MacroContext,
+    SchemaEngine, SchemaIdentity, TypeDeclaration,
 };
 use schema_rust_next::RustEmitter;
 
@@ -82,20 +82,38 @@ impl<'fixture> BigRustFixture<'fixture> {
         RustEmitter::default().emit(&asschema).as_str().to_owned()
     }
 
-    fn generate_rust_after_asschema_roundtrip(&self) -> String {
+    fn generate_rust_after_asschema_artifact_files(&self) -> String {
         let (asschema, _) = self.lower();
-        let nota = asschema.to_nota();
-        let from_nota =
-            Asschema::from_nota_source(&nota).expect("asschema NOTA artifact reads back");
-        let bytes = from_nota
-            .to_binary_bytes()
-            .expect("asschema rkyv artifact writes");
-        let from_binary =
-            Asschema::from_binary_bytes(&bytes).expect("asschema rkyv artifact reads back");
-        RustEmitter::default()
-            .emit(&from_binary)
+        let artifact = AsschemaArtifact::new(asschema);
+        let paths = BigAsschemaArtifactPaths::new(self.name);
+
+        artifact
+            .write_nota_file(paths.nota_path())
+            .expect("write asschema NOTA artifact");
+        artifact
+            .write_binary_file(paths.binary_path())
+            .expect("write asschema rkyv artifact");
+
+        let from_nota = RustEmitter::default()
+            .emit_file_from_nota_path(paths.nota_path())
+            .expect("emit Rust from asschema NOTA artifact")
+            .code
             .as_str()
-            .to_owned()
+            .to_owned();
+        let from_binary = RustEmitter::default()
+            .emit_file_from_binary_path(paths.binary_path())
+            .expect("emit Rust from asschema rkyv artifact")
+            .code
+            .as_str()
+            .to_owned();
+
+        assert_eq!(
+            from_nota, from_binary,
+            "NOTA and rkyv asschema artifacts must emit the same Rust for {}",
+            self.name
+        );
+        paths.remove();
+        from_nota
     }
 
     fn assert_lowers_to_typed_asschema_data(&self) {
@@ -198,11 +216,45 @@ impl<'fixture> BigRustFixture<'fixture> {
 
     fn assert_emission_uses_live_asschema_artifact(&self) {
         assert_eq!(
-            self.generate_rust_after_asschema_roundtrip(),
+            self.generate_rust_after_asschema_artifact_files(),
             self.generate_rust(),
             "emission for {} must be driven by readable assembled schema data",
             self.name
         );
+    }
+}
+
+struct BigAsschemaArtifactPaths {
+    directory: PathBuf,
+    nota_path: PathBuf,
+    binary_path: PathBuf,
+}
+
+impl BigAsschemaArtifactPaths {
+    fn new(name: &str) -> Self {
+        let directory = std::env::temp_dir().join(format!(
+            "schema-rust-next-asschema-artifact-{}-{name}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).expect("create asschema artifact directory");
+        Self {
+            nota_path: directory.join("lib.asschema"),
+            binary_path: directory.join("lib.asschema.rkyv"),
+            directory,
+        }
+    }
+
+    fn nota_path(&self) -> &Path {
+        &self.nota_path
+    }
+
+    fn binary_path(&self) -> &Path {
+        &self.binary_path
+    }
+
+    fn remove(&self) {
+        let _ = std::fs::remove_dir_all(&self.directory);
     }
 }
 
@@ -243,7 +295,7 @@ fn large_imported_schema_emits_checked_cross_crate_rust_snapshot() {
 }
 
 #[test]
-fn rust_emission_is_stable_after_live_asschema_nota_and_rkyv_roundtrip() {
+fn rust_emission_is_stable_after_live_asschema_artifact_files() {
     BigRustFixture::local("spirit-reactive-large", "example:spirit-reactive-large")
         .assert_emission_uses_live_asschema_artifact();
     BigRustFixture::local("triad-reactive-large", "example:triad-reactive-large")

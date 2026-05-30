@@ -1,6 +1,9 @@
+use std::path::Path;
+
 use schema_next::{
-    Asschema, Declaration, EnumDeclaration, EnumVariant, Name, NewtypeDeclaration, ResolvedImport,
-    StructDeclaration, TypeDeclaration, TypeReference, Visibility,
+    Asschema, AsschemaArtifact, Declaration, EnumDeclaration, EnumVariant, Name,
+    NewtypeDeclaration, ResolvedImport, SchemaError, StructDeclaration, TypeDeclaration,
+    TypeReference, Visibility,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,6 +49,26 @@ impl RustEmitter {
             path: RustModulePath::new(asschema.identity().component().clone()).to_file_path(),
             code: self.emit(asschema),
         }
+    }
+
+    pub fn emit_file_from_artifact(&self, artifact: &AsschemaArtifact) -> GeneratedFile {
+        self.emit_file(artifact.asschema())
+    }
+
+    pub fn emit_file_from_nota_path(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<GeneratedFile, SchemaError> {
+        let artifact = AsschemaArtifact::read_nota_file(path)?;
+        Ok(self.emit_file_from_artifact(&artifact))
+    }
+
+    pub fn emit_file_from_binary_path(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<GeneratedFile, SchemaError> {
+        let artifact = AsschemaArtifact::read_binary_file(path)?;
+        Ok(self.emit_file_from_artifact(&artifact))
     }
 
     pub fn emit(&self, asschema: &Asschema) -> RustCode {

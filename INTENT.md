@@ -163,6 +163,12 @@ rkyv bytes, and read back before emission. Checked-in assembled-schema text
 fixtures must not remain in active code or fixtures. Rust emission must not
 compensate for unresolved schema sugar.*
 
+*Rust emission can consume the assembled schema as an explicit artifact. The
+emitter still accepts `&Asschema` for in-process callers, but it also accepts
+`AsschemaArtifact` and `.asschema` / `.asschema.rkyv` file paths, so build
+pipelines can prove the handoff is serialized data before generated Rust
+appears.*
+
 *Asschema declaration visibility is a code-generation boundary. A public
 declaration is exported Rust API. A private declaration is a module-local Rust
 noun, emitted as `pub(crate)`, so inline PascalCase schema types can support a
