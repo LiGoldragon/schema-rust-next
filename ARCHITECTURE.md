@@ -128,6 +128,19 @@ authored form.
   shared codec shapes: a `Vec` is a square-bracket block `[e1 e2 ...]`, a
   `BTreeMap` is a brace block of `key value` pairs `{k1 v1 ...}`, and an
   `Option` is the atom `None` or the paren `(Some inner)`.
+- `RustEmissionOptions` carries one field — `pub nota_surface: NotaSurface` —
+  which is the only knob today. Callers either construct positionally
+  (`RustEmissionOptions { nota_surface: NotaSurface::Disabled }`) or through
+  the named constructors (`::binary_only`, `::feature_gated_nota("…")`,
+  `::always_enabled_nota`). `RustEmissionOptions::default()` and
+  `RustEmitter::default()` both pick `NotaSurface::FeatureGated { feature:
+  "nota-text" }` — the recommended shape per the codec opt-in design (rkyv is
+  universal, NOTA derives gate behind a cargo feature so binary-only
+  consumers don't compile `nota-next`). `NotaSurface::Disabled` removes the
+  NOTA surface entirely: no derives, no `use nota_next::*` items, no
+  `from_nota_block` / `to_nota` bridges, no root `FromStr` / `Display`
+  impls. `NotaSurface::AlwaysEnabled` keeps the older unconditional emission
+  for callers (mostly tests) that always want NOTA on.
 - NOTA owns those value shapes. Schema owns the type-name keywords that select
   scalar and composite type references in `.schema` files.
 - A type used anywhere as a `BTreeMap` key earns the ordering derives

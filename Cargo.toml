@@ -15,6 +15,17 @@ path = "src/lib.rs"
 [dependencies]
 schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "main" }
 
+[features]
+# Activates the `#[cfg(feature = "nota-text")]` blocks inside any
+# schema-emitted fixture this crate's tests `include!`. The emitter
+# itself doesn't gate any of its own code on this feature; it only
+# controls whether the included generated source carries its NOTA
+# bridges. Defaulting it on keeps the existing test paths
+# (`generated::Input::from_str`, `generated::*::to_nota`, the
+# `nota_next::*` re-exports) live without per-test cargo flags.
+default   = ["nota-text"]
+nota-text = []
+
 [dev-dependencies]
 nota-next = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }
 rkyv = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }

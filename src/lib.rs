@@ -28,7 +28,7 @@ impl Default for RustEmitter {
     fn default() -> Self {
         Self {
             generator_name: "schema-rust-next",
-            options: RustEmissionOptions::always_enabled_nota(),
+            options: RustEmissionOptions::default(),
         }
     }
 }
@@ -98,18 +98,48 @@ impl RustEmitter {
     }
 }
 
+/// The emission knobs passed to [`RustEmitter::new`]. The
+/// `nota_surface` field is public so a caller can construct an options
+/// value either positionally (`RustEmissionOptions { nota_surface:
+/// NotaSurface::Disabled }`) or through the named constructors below.
+///
+/// The default is [`NotaSurface::FeatureGated`] with feature name
+/// `"nota-text"`. That is the recommended shape per the codec opt-in
+/// design: rkyv is the universal base, and NOTA encode/decode are an
+/// opt-in surface that text-facing clients (CLIs, launchers, REPLs)
+/// enable through a cargo feature. Binary-only consumers (daemons,
+/// future binary-only clients) build the contract crate with the
+/// default features off and carry no `nota-next` in their dependency
+/// closure.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustEmissionOptions {
-    nota_surface: NotaSurface,
+    pub nota_surface: NotaSurface,
+}
+
+impl Default for RustEmissionOptions {
+    fn default() -> Self {
+        Self::feature_gated_nota("nota-text")
+    }
 }
 
 impl RustEmissionOptions {
+    /// Always emit `nota_next::NotaDecode` / `nota_next::NotaEncode`
+    /// derives, the inherent `from_nota_block` / `to_nota` bridges, the
+    /// root `FromStr` / `Display` impls, and the `use nota_next::*`
+    /// pull-in — without any cargo-feature gate.
     pub fn always_enabled_nota() -> Self {
         Self {
             nota_surface: NotaSurface::AlwaysEnabled,
         }
     }
 
+    /// Emit the NOTA surface guarded by `#[cfg_attr(feature = "<feature>",
+    /// derive(...))]` on data types and `#[cfg(feature = "<feature>")]`
+    /// on the inherent bridges, FromStr/Display impls, and the
+    /// `use nota_next::*` items. Consumers enable the feature only in
+    /// text-facing crates (CLI, launcher) and leave it off in
+    /// daemon-only crates so `nota-next` stays out of the binary-only
+    /// dependency closure.
     pub fn feature_gated_nota(feature: impl Into<String>) -> Self {
         Self {
             nota_surface: NotaSurface::FeatureGated {
@@ -118,6 +148,13 @@ impl RustEmissionOptions {
         }
     }
 
+    /// Emit no NOTA surface at all. The generated source contains no
+    /// `nota_next::*` references, no `FromStr` / `Display` impls
+    /// (since both depend on `NotaDecode` / `NotaEncode`), and no
+    /// inherent `from_nota_block` / `to_nota` bridge methods. The
+    /// resulting Rust file compiles without `nota-next` in the
+    /// dependency closure. This is the daemon-only / binary-only
+    /// shape.
     pub fn binary_only() -> Self {
         Self {
             nota_surface: NotaSurface::Disabled,

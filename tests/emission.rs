@@ -1,4 +1,4 @@
-use schema_rust_next::{RustEmissionOptions, RustEmitter};
+use schema_rust_next::{NotaSurface, RustEmissionOptions, RustEmitter};
 use std::{cell::Cell, path::PathBuf};
 
 mod support;
@@ -88,8 +88,16 @@ fn emits_rust_source_as_a_separate_artifact() {
 
 #[test]
 fn emission_can_disable_nota_surface_for_binary_only_consumers() {
+    // Binary-only shape — daemons and other binary-only consumers
+    // ship zero NOTA derives and zero `nota_next::*` references.
+    // The emitted source carries only the `rkyv` + signal-frame
+    // surface, so the generated module compiles when the consumer
+    // does not depend on `nota-next` at all.
     let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
-    let generated = RustEmitter::new(RustEmissionOptions::binary_only()).emit(&asschema);
+    let generated = RustEmitter::new(RustEmissionOptions {
+        nota_surface: NotaSurface::Disabled,
+    })
+    .emit(&asschema);
     let code = generated.as_str();
 
     assert!(code.contains("rkyv::Archive"));
@@ -100,15 +108,32 @@ fn emission_can_disable_nota_surface_for_binary_only_consumers() {
     assert!(!code.contains("NotaEncode"));
     assert!(!code.contains("from_nota_block"));
     assert!(!code.contains("to_nota"));
-    assert!(!code.contains("impl std::str::FromStr for Input"));
+    assert!(!code.contains("FromStr"));
     assert!(!code.contains("impl std::fmt::Display for Input"));
+    assert!(!code.contains("impl std::fmt::Display for Output"));
+    // No leftover `#[cfg(feature = ...)]` directives either —
+    // `Disabled` removes the whole NOTA surface, it doesn't gate it.
+    assert!(!code.contains("#[cfg(feature ="));
+    assert!(!code.contains("#[cfg_attr(feature ="));
+    // Lock in the exact emitted source so any future drift forces a
+    // conscious fixture update.
+    assert_generated_fixture("spirit_generated_binary_only.rs", code);
 }
 
 #[test]
 fn emission_can_gate_nota_surface_behind_text_client_feature() {
+    // Feature-gated shape (the default) — every NOTA surface lands
+    // behind `#[cfg(feature = "nota-text")]` on impls / `use` items
+    // and `#[cfg_attr(...)]` on derives, so a single emitted module
+    // serves both text-facing CLIs (with the feature on) and
+    // binary-only daemons (with the feature off).
     let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
-    let generated =
-        RustEmitter::new(RustEmissionOptions::feature_gated_nota("nota-text")).emit(&asschema);
+    let generated = RustEmitter::new(RustEmissionOptions {
+        nota_surface: NotaSurface::FeatureGated {
+            feature: "nota-text".to_owned(),
+        },
+    })
+    .emit(&asschema);
     let code = generated.as_str();
 
     assert!(code.contains(
@@ -120,6 +145,27 @@ fn emission_can_gate_nota_surface_behind_text_client_feature() {
     assert!(code.contains("#[cfg(feature = \"nota-text\")]\nimpl std::fmt::Display for Output"));
     assert!(code.contains("pub fn encode_signal_frame"));
     assert!(code.contains("pub fn decode_signal_frame"));
+    // The default shape is identical to this explicit
+    // construction — the checked-in `spirit_generated.rs` snapshot
+    // is the binding form. Constructed-positional and default-
+    // constructed emissions must stay byte-identical.
+    let default_generated = RustEmitter::default().emit(&asschema);
+    assert_eq!(code, default_generated.as_str());
+}
+
+#[test]
+fn rust_emission_options_default_is_feature_gated_nota_text() {
+    // `RustEmissionOptions::default()` and `RustEmitter::default()`
+    // both pick the compatibility-oriented opt-in shape per the
+    // codec opt-in design: rkyv is universal, NOTA is gated by the
+    // `nota-text` feature.
+    let options = RustEmissionOptions::default();
+    assert_eq!(
+        options.nota_surface,
+        NotaSurface::FeatureGated {
+            feature: "nota-text".to_owned(),
+        },
+    );
 }
 
 #[test]
@@ -485,10 +531,15 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     let code = generated.as_str();
 
     // The generated code imports the shared NOTA codec instead of
-    // emitting a local collection-support runtime block.
-    assert!(code.contains("pub use nota_next::{"));
+    // emitting a local collection-support runtime block. Under the
+    // default `feature_gated_nota("nota-text")` shape, the `use
+    // nota_next::*` and `cfg_attr(...)` derives sit behind the
+    // `nota-text` feature.
+    assert!(code.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"));
     assert!(!code.contains("pub struct NotaCollection"));
-    assert!(code.contains("#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive"));
+    assert!(code.contains(
+        "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]"
+    ));
     assert!(!code.contains("impl NotaDecode for Cluster"));
     assert!(!code.contains("impl NotaEncode for Cluster"));
     // Vec / KeyValue->BTreeMap / Option render at the field positions.
@@ -502,13 +553,17 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     assert!(code.contains("Projected(std::collections::BTreeMap<NodeName, NodeConfig>),"));
     assert!(code.contains("Listed(Vec<NodeName>),"));
     // A map key type earns the ordering derives so BTreeMap compiles;
-    // a value-only type keeps the original derive set.
+    // a value-only type keeps the original derive set. Both forms
+    // gain a feature-gated NOTA derive above the unconditional rkyv
+    // derive under the default emission shape.
     assert!(code.contains(
         "#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]\npub struct NodeName(pub String);"
     ));
-    assert!(code.contains(
-        "#[derive(nota_next::NotaDecode, nota_next::NotaEncode, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]\npub struct NodeConfig(pub String);"
-    ));
+    assert!(code.contains(concat!(
+        "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]\n",
+        "#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]\n",
+        "pub struct NodeConfig(pub String);",
+    )));
     assert_generated_fixture("collections_generated.rs", code);
 }
 

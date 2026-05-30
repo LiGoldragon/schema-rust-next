@@ -117,6 +117,24 @@ generated runtime. A type used as a map key earns the ordering derives (`Partial
 on both the type and its archived form); other types keep the original derive
 set.*
 
+*The codec opt-in is configured through `RustEmissionOptions { nota_surface:
+NotaSurface }` passed to `RustEmitter::new`. The `nota_surface` field is
+public so callers can construct the options positionally
+(`RustEmissionOptions { nota_surface: NotaSurface::Disabled }`) or through the
+named constructors (`RustEmissionOptions::binary_only`,
+`::feature_gated_nota`, `::always_enabled_nota`). The default
+(`RustEmissionOptions::default()`, used by `RustEmitter::default()`) is
+`NotaSurface::FeatureGated { feature: "nota-text" }`: emitted source carries
+the NOTA derives, the `use nota_next::*` items, the inherent bridges, and the
+root `FromStr` / `Display` impls behind `#[cfg_attr(feature = "nota-text",
+…)]` / `#[cfg(feature = "nota-text")]`. A text-facing client crate enables
+the `nota-text` feature on its contract dependency; a binary-only daemon
+crate builds the contract dependency with `default-features = false` and
+carries no `nota_next` in its dependency closure. `NotaSurface::Disabled`
+omits the NOTA surface entirely — the emitted source has no `nota_next::*`
+references and no `FromStr` / `Display` impls, so the resulting Rust file
+compiles without `nota-next` in the closure at all.*
+
 *NOTA owns raw delimiter structure and serialization shapes. Schema owns all
 type-name keywords: scalar names such as `String`, `Integer`, and `Boolean`,
 and composite names such as `Vec`, `Optional`, and `Map`. The generated NOTA
