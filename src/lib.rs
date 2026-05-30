@@ -1,6 +1,6 @@
 use schema_next::{
-    Asschema, Declaration, EnumDeclaration, EnumVariant, Name, ResolvedImport, StructDeclaration,
-    TypeDeclaration, TypeReference, Visibility,
+    Asschema, Declaration, EnumDeclaration, EnumVariant, Name, NewtypeDeclaration, ResolvedImport,
+    StructDeclaration, TypeDeclaration, TypeReference, Visibility,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -139,10 +139,11 @@ impl<'asschema> CollectionScan<'asschema> {
         let mut names = Vec::new();
         for declaration in self.asschema.namespace() {
             match declaration.value() {
-                TypeDeclaration::Struct(declaration) | TypeDeclaration::Newtype(declaration) => {
-                    for field in &declaration.fields {
-                        Self::collect_map_keys(&field.reference, &mut names);
-                    }
+                TypeDeclaration::Struct(declaration) => {
+                    Self::collect_declaration_map_keys(declaration, &mut names);
+                }
+                TypeDeclaration::Newtype(declaration) => {
+                    Self::collect_newtype_map_keys(declaration, &mut names);
                 }
                 TypeDeclaration::Enum(declaration) => {
                     Self::collect_enum_map_keys(declaration, &mut names);
@@ -161,6 +162,16 @@ impl<'asschema> CollectionScan<'asschema> {
                 Self::collect_map_keys(payload, names);
             }
         }
+    }
+
+    fn collect_declaration_map_keys(declaration: &StructDeclaration, names: &mut Vec<String>) {
+        for field in &declaration.fields {
+            Self::collect_map_keys(&field.reference, names);
+        }
+    }
+
+    fn collect_newtype_map_keys(declaration: &NewtypeDeclaration, names: &mut Vec<String>) {
+        Self::collect_map_keys(&declaration.reference, names);
     }
 
     fn collect_map_keys(reference: &TypeReference, names: &mut Vec<String>) {
@@ -303,8 +314,7 @@ impl RustWriter {
         self.line("};");
     }
 
-    fn emit_newtype(&mut self, visibility: Visibility, declaration: &StructDeclaration) {
-        let field = declaration.fields.first().expect("newtype has one field");
+    fn emit_newtype(&mut self, visibility: Visibility, declaration: &NewtypeDeclaration) {
         let derive = self.data_type_derive(&declaration.name);
         self.line(derive);
         self.line(format!(
@@ -312,7 +322,7 @@ impl RustWriter {
             self.rust_visibility(visibility),
             declaration.name,
             self.rust_visibility(visibility),
-            self.rust_type(&field.reference)
+            self.rust_type(&declaration.reference)
         ));
     }
 
