@@ -5,6 +5,9 @@
 ## Interfaces
 
 - `RustEmitter` is the code-generation engine.
+- `RustModule` is the data model between assembled schema and rendered Rust
+  text. It carries scalar aliases, cross-crate imports, generated Rust
+  declarations, root enums, and support metadata before anything is rendered.
 - `RustCode` is the generated source text.
 - `GeneratedFile` names a generated path plus source text.
 - `RustModulePath` maps single-colon schema identities to crate-local generated
@@ -25,6 +28,9 @@ parser state.
 `emit_file_from_binary_path` are the explicit artifact handoff methods; the
 plain `emit_file(&Asschema)` path remains for callers that already hold the
 typed value in-process.
+All of those paths now converge through `RustEmitter::emit_module(&Asschema)`.
+The rendered source is `RustModule::render()`, so tests can inspect the module
+data shape before comparing strings.
 Namespace entries arrive as visibility-tagged declarations: `(Public Name
 Value)` or `(Private Name Value)`. The emitter must project that boundary into
 Rust instead of flattening every type into the same public surface.

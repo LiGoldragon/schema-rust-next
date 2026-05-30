@@ -12,6 +12,12 @@ That `Asschema` value is produced in memory by `schema-next` from real
 `.schema` fixtures. Checked-in assembled-schema text fixtures are no longer
 part of this repository's active test surface.
 
+Emission is two-step inside the crate: `Asschema` lowers into a typed
+`RustModule`, and `RustModule::render()` produces `RustCode`. The module object
+carries scalar aliases, imports, declarations, roots, and support metadata, so
+tests can inspect the code-generation model before comparing rendered source
+snapshots.
+
 Generated paths mirror crate-local schema modules. An assembled schema identity
 such as `spirit-next:lib` emits to `src/schema/lib.rs`; an identity such as
 `spirit-next:signal:public` emits to `src/schema/signal/public.rs`. The first

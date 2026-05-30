@@ -169,6 +169,12 @@ emitter still accepts `&Asschema` for in-process callers, but it also accepts
 pipelines can prove the handoff is serialized data before generated Rust
 appears.*
 
+*Rust emission is data before it is text. The emitter maps `Asschema` into a
+typed `RustModule` object carrying scalar aliases, cross-crate imports, Rust
+declarations, root enums, and support metadata; rendering `RustModule` produces
+`RustCode`. Tests assert the module data shape directly so the core mapping is
+not hidden inside string-writer side effects.*
+
 *Asschema declaration visibility is a code-generation boundary. A public
 declaration is exported Rust API. A private declaration is a module-local Rust
 noun, emitted as `pub(crate)`, so inline PascalCase schema types can support a

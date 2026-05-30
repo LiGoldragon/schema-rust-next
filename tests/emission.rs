@@ -1,4 +1,4 @@
-use schema_rust_next::{NotaSurface, RustEmissionOptions, RustEmitter};
+use schema_rust_next::{NotaSurface, RustEmissionOptions, RustEmitter, RustTypeDeclaration};
 use std::{cell::Cell, path::PathBuf};
 
 mod support;
@@ -84,6 +84,41 @@ fn emits_rust_source_as_a_separate_artifact() {
             .contains("pub trait UpgradeFrom<Previous>")
     );
     assert_generated_fixture("spirit_generated.rs", generated.code.as_str());
+}
+
+#[test]
+fn emitter_builds_rust_module_data_before_rendering_text() {
+    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let emitter = RustEmitter::default();
+    let module = emitter.emit_module(&asschema);
+
+    assert_eq!(module.file_path(), "src/schema/lib.rs");
+    assert_eq!(module.root_enums().len(), 2);
+    assert_eq!(module.root_enums()[0].name().as_str(), "Input");
+    assert_eq!(module.root_enums()[1].name().as_str(), "Output");
+    assert!(
+        module
+            .scalar_aliases()
+            .iter()
+            .any(|alias| alias.name() == "Integer" && alias.rust_type() == "u64"),
+        "scalar floor should be data on RustModule"
+    );
+
+    let topic = module
+        .declaration_named("Topic")
+        .expect("Topic declaration exists");
+    assert!(matches!(topic.value(), RustTypeDeclaration::Newtype(_)));
+
+    let entry = module
+        .declaration_named("Entry")
+        .expect("Entry declaration exists");
+    let RustTypeDeclaration::Struct(entry_struct) = entry.value() else {
+        panic!("Entry should model as a Rust struct declaration");
+    };
+    assert_eq!(entry_struct.fields()[0].name().as_str(), "topics");
+    assert_eq!(entry_struct.fields()[1].name().as_str(), "kind");
+
+    assert_eq!(module.render(), emitter.emit(&asschema));
 }
 
 #[test]
