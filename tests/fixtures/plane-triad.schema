@@ -1,23 +1,23 @@
 [(Record Entry) (Observe Query)]
 [(RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport)]
 {
-  NexusInput@[(Signal Input) (Sema SemaOutput)]
-  NexusOutput@[(Sema SemaInput) (Signal Output)]
-  SemaInput@[(Record Entry) (Observe Query)]
-  SemaOutput@[(Recorded SemaReceipt) (Observed ObservedRecords) (Missed ErrorReport)]
-  Topic@{ string@String }
-  Description@{ string@String }
-  ErrorMessage@{ string@String }
-  RecordIdentifier@{ integer@Integer }
-  CommitSequence@{ integer@Integer }
-  StateDigest@{ integer@Integer }
-  DatabaseMarker@{ commitSequence@CommitSequence stateDigest@StateDigest }
-  SemaReceipt@{ recordIdentifier@RecordIdentifier databaseMarker@DatabaseMarker }
-  ObservedRecords@{ recordSet@RecordSet databaseMarker@DatabaseMarker }
-  ErrorReport@{ errorMessage@ErrorMessage databaseMarker@DatabaseMarker }
-  Entry@{ topic@Topic kind@Kind description@Description magnitude@Magnitude }
-  Query@{ topic@Topic kind@Kind }
-  RecordSet@{ entries@(Vec Entry) }
-  Kind@[Decision Principle Correction Clarification Constraint]
-  Magnitude@[Minimum VeryLow Low Medium High VeryHigh Maximum]
+  NexusInput [(Signal Input) (Sema SemaOutput)]
+  NexusOutput [(Sema SemaInput) (Signal Output)]
+  SemaInput [(Record Entry) (Observe Query)]
+  SemaOutput [(Recorded SemaReceipt) (Observed ObservedRecords) (Missed ErrorReport)]
+  Topic String
+  Description String
+  ErrorMessage String
+  RecordIdentifier Integer
+  CommitSequence Integer
+  StateDigest Integer
+  DatabaseMarker { CommitSequence * stateDigest StateDigest }
+  SemaReceipt { RecordIdentifier * databaseMarker DatabaseMarker }
+  ObservedRecords { RecordSet * databaseMarker DatabaseMarker }
+  ErrorReport { ErrorMessage * databaseMarker DatabaseMarker }
+  Entry { Topic * kind Kind description Description magnitude Magnitude }
+  Query { Topic * kind Kind }
+  RecordSet (Vec Entry)
+  Kind [Decision Principle Correction Clarification Constraint]
+  Magnitude [Minimum VeryLow Low Medium High VeryHigh Maximum]
 }

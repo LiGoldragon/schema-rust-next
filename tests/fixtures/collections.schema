@@ -1,10 +1,10 @@
 [(Register Cluster) (Observe Query)]
 [(Projected (Map (NodeName NodeConfig))) (Listed (Vec NodeName))]
 {
-  NodeName@{ string@String }
-  NodeConfig@{ string@String }
-  Service@{ string@String }
-  Query@{ topic@Topic }
-  Topic@{ string@String }
-  Cluster@{ services@(Vec Service) nodes@(Map (NodeName NodeConfig)) cache@(Optional NodeConfig) healthy@Boolean configPath@Path }
+  NodeName String
+  NodeConfig String
+  Service String
+  Query Topic
+  Topic String
+  Cluster { services (Vec Service) nodes (Map (NodeName NodeConfig)) cache (Optional NodeConfig) healthy Boolean configPath Path }
 }

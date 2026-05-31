@@ -145,11 +145,9 @@ are Schema vocabulary.*
 
 *Authored enum bodies are vectors of variant-signature objects. A unit variant
 is a bare PascalCase symbol, and a data-carrying variant is a parenthesized
-record `(Variant PayloadType)`. The retired sigil-pair spelling is not
-structurally honest inside square brackets because a vector delimiter carries
-one element type. Rust emission should not care which authored surface produced
-the assembled data: it consumes the macro-free `Asschema` roots and type
-declarations.*
+record `(Variant PayloadType)`. Rust emission consumes the macro-free
+`Asschema` roots and type declarations, so it must not grow a parser for any
+older authored spelling.*
 
 *Asschema newtypes are their own data shape. A newtype carries exactly one
 contained `TypeReference`; it is not a one-field struct map with an invented

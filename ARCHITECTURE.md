@@ -38,9 +38,8 @@ Rust instead of flattening every type into the same public surface.
 The active fixtures use the current enum-body signature shape: square
 brackets contain one vector element type, so unit variants are bare symbols
 and data-carrying variants are parenthesized records such as
-`(Record Entry)`. The retired sigil-pair spelling is not a valid vector
-element. This emitter only sees the resulting `Asschema` data and must
-not grow a second parser for the authored form.
+`(Record Entry)`. This emitter only sees the resulting `Asschema` data and
+must not grow a second parser for the authored form.
 
 ## Constraints
 
@@ -123,8 +122,9 @@ not grow a second parser for the authored form.
 - Collection references emit standard Rust collections. Authored schemas use
   Schema type-reference vocabulary such as `(Vec Topic)`, `(Map (Topic
   RecordIdentifier))`, and `(Optional Topic)`. Authored datatype declarations
-  use name-first `@` forms (`Name@{...}` and `Name@[...]`); plain square
-  brackets are not datatype declarations and are not the `Vec` reference
+  are strict namespace key/value entries: `Topic String`,
+  `Entry { topic Topic }`, and `Kind [Decision Correction]`. Square brackets
+  declare enum bodies at enum positions; they are not the `Vec` reference
   syntax. The emitter's
   Rust type projection recurses a `TypeReference`: `Vector` → `Vec<inner>`,
   `Map` → `std::collections::BTreeMap<key, value>` (fully qualified, so no

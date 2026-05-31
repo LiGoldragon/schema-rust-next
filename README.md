@@ -34,10 +34,10 @@ accident.
 
 Composite type references come from typed NOTA datatype objects in the
 authored schema: `(Vec Topic)`, `(Map (Topic RecordIdentifier))`, and
-`(Optional Topic)`. Authored datatype declarations use name-first `@` forms
-such as `Entry@{ topic@Topic }` and `Kind@[Decision Correction]`. Square brackets
-are still used by NOTA values; they are not schema datatype declarations and
-they are not the schema surface for declaring `Vec`.
+`(Optional Topic)`. Authored datatype declarations are strict key/value
+namespace entries such as `Topic String`, `Entry { topic Topic }`, and
+`Kind [Decision Correction]`. Square brackets declare enum bodies at enum
+positions; they are not the schema surface for declaring `Vec`.
 
 Tests keep meaningful schema and NOTA examples in fixture files under
 `tests/fixtures/`. Rust tests load those fixtures through the support helpers
