@@ -262,7 +262,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "schema-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#0201dec848e86126193086f0f4ee21d670719f93"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#0732a129fc6b66ad3f8b41c581b1f33b6f8f7d7e"
 dependencies = [
  "nota-next",
  "redb",

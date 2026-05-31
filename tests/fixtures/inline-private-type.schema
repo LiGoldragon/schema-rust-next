@@ -1,5 +1,5 @@
-Input@[]
-Output@[]
+[]
+[]
 {
   Entry@{ Receipt@{ recordIdentifier@Integer message@String } later@Receipt }
 }

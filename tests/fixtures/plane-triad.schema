@@ -1,5 +1,5 @@
-Input@[(Record Entry) (Observe Query)]
-Output@[(RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport)]
+[(Record Entry) (Observe Query)]
+[(RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport)]
 {
   NexusInput@[(Signal Input) (Sema SemaOutput)]
   NexusOutput@[(Sema SemaInput) (Signal Output)]
