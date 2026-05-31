@@ -38,8 +38,8 @@ Rust instead of flattening every type into the same public surface.
 The active fixtures use the current enum-body signature shape: square
 brackets contain one vector element type, so unit variants are bare symbols
 and data-carrying variants are parenthesized records such as
-`(Record Entry)`. The retired `Variant@ Payload` spelling is not a valid
-vector element. This emitter only sees the resulting `Asschema` data and must
+`(Record Entry)`. The retired sigil-pair spelling is not a valid vector
+element. This emitter only sees the resulting `Asschema` data and must
 not grow a second parser for the authored form.
 
 ## Constraints
