@@ -1,5 +1,5 @@
-Input@[Register@Cluster Observe@Query]
-Output@[Projected@(Map (NodeName NodeConfig)) Listed@(Vec NodeName)]
+Input@[(Register Cluster) (Observe Query)]
+Output@[(Projected (Map (NodeName NodeConfig))) (Listed (Vec NodeName))]
 {
   NodeName@{ string@String }
   NodeConfig@{ string@String }

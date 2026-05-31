@@ -143,14 +143,13 @@ codec still serializes Rust `Vec`, `BTreeMap`, and `Option` values into NOTA
 value shapes, but the names used in a `.schema` file to reference those types
 are Schema vocabulary.*
 
-*The authored schema declaration surface is the name-first `@` syntax:
-`Input@[...]` and `Output@[...]` for root enums, `Name@{...}` for structs,
-`Name@[...]` for enums, `@Type` for same-name field or variant derivation, and
-`name@Type` / `name@(Composite Type)` for explicit field or variant payload
-bindings. Namespace braces contain self-named declarations, not duplicated
-`Name Name@{...}` key/value pairs. Rust emission should not care which
-authored surface produced the assembled data: it consumes the macro-free
-`Asschema` roots and type declarations.*
+*Authored enum bodies are vectors of variant-signature objects. A unit variant
+is a bare PascalCase symbol, and a data-carrying variant is a parenthesized
+record `(Variant PayloadType)`. The retired `Variant@ Payload` /
+`Variant@Payload` spelling is not structurally honest inside square brackets
+because a vector delimiter carries one element type. Rust emission should not
+care which authored surface produced the assembled data: it consumes the
+macro-free `Asschema` roots and type declarations.*
 
 *Asschema newtypes are their own data shape. A newtype carries exactly one
 contained `TypeReference`; it is not a one-field struct map with an invented

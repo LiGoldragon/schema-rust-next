@@ -35,13 +35,12 @@ Namespace entries arrive as visibility-tagged declarations: `(Public Name
 Value)` or `(Private Name Value)`. The emitter must project that boundary into
 Rust instead of flattening every type into the same public surface.
 
-The active fixtures use the settled name-first `@` declaration surface:
-`Input@[...]` / `Output@[...]` for root enums, `Name@{...}` for structs,
-`Name@[...]` for enums, `@Type` for derived same-name fields or data variants,
-and parenthesized `name@(Vec Type)` / `name@(Optional Type)` /
-`name@(Map (...))` for explicit composite references. This emitter only sees
-the resulting `Asschema` data and must not grow a second parser for the
-authored form.
+The active fixtures use the current enum-body signature shape: square
+brackets contain one vector element type, so unit variants are bare symbols
+and data-carrying variants are parenthesized records such as
+`(Record Entry)`. The retired `Variant@ Payload` spelling is not a valid
+vector element. This emitter only sees the resulting `Asschema` data and must
+not grow a second parser for the authored form.
 
 ## Constraints
 

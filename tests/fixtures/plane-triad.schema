@@ -1,10 +1,10 @@
-Input@[Record@Entry Observe@Query]
-Output@[RecordAccepted@SemaReceipt RecordsObserved@ObservedRecords Error@ErrorReport]
+Input@[(Record Entry) (Observe Query)]
+Output@[(RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport)]
 {
-  NexusInput@[Signal@Input Sema@SemaOutput]
-  NexusOutput@[Sema@SemaInput Signal@Output]
-  SemaInput@[Record@Entry Observe@Query]
-  SemaOutput@[Recorded@SemaReceipt Observed@ObservedRecords Missed@ErrorReport]
+  NexusInput@[(Signal Input) (Sema SemaOutput)]
+  NexusOutput@[(Sema SemaInput) (Signal Output)]
+  SemaInput@[(Record Entry) (Observe Query)]
+  SemaOutput@[(Recorded SemaReceipt) (Observed ObservedRecords) (Missed ErrorReport)]
   Topic@{ string@String }
   Description@{ string@String }
   ErrorMessage@{ string@String }
