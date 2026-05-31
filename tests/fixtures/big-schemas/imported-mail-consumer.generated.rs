@@ -88,6 +88,60 @@ pub enum Output {
     Rejected(Rejection),
 }
 
+impl From<Entry> for Input {
+    fn from(payload: Entry) -> Self {
+        Self::Record(payload)
+    }
+}
+
+impl From<Query> for Input {
+    fn from(payload: Query) -> Self {
+        Self::Observe(payload)
+    }
+}
+
+impl From<DatabaseMarker> for Input {
+    fn from(payload: DatabaseMarker) -> Self {
+        Self::Mark(payload)
+    }
+}
+
+impl From<CommitSequence> for Input {
+    fn from(payload: CommitSequence) -> Self {
+        Self::Commit(payload)
+    }
+}
+
+impl From<RecordReceipt> for Output {
+    fn from(payload: RecordReceipt) -> Self {
+        Self::Recorded(payload)
+    }
+}
+
+impl From<RecordSet> for Output {
+    fn from(payload: RecordSet) -> Self {
+        Self::Observed(payload)
+    }
+}
+
+impl From<DatabaseMarker> for Output {
+    fn from(payload: DatabaseMarker) -> Self {
+        Self::Marked(payload)
+    }
+}
+
+impl From<CommitSequence> for Output {
+    fn from(payload: CommitSequence) -> Self {
+        Self::Committed(payload)
+    }
+}
+
+impl From<Rejection> for Output {
+    fn from(payload: Rejection) -> Self {
+        Self::Rejected(payload)
+    }
+}
+
 #[cfg(feature = "nota-text")]
 impl Topic {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {

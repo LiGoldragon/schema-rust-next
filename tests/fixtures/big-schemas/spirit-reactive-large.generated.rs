@@ -186,6 +186,66 @@ pub enum Output {
     Indexed(IndexReceipt),
 }
 
+impl From<Entry> for Input {
+    fn from(payload: Entry) -> Self {
+        Self::Record(payload)
+    }
+}
+
+impl From<Correction> for Input {
+    fn from(payload: Correction) -> Self {
+        Self::Correct(payload)
+    }
+}
+
+impl From<Query> for Input {
+    fn from(payload: Query) -> Self {
+        Self::Observe(payload)
+    }
+}
+
+impl From<WatchRequest> for Input {
+    fn from(payload: WatchRequest) -> Self {
+        Self::Watch(payload)
+    }
+}
+
+impl From<SubscriptionToken> for Input {
+    fn from(payload: SubscriptionToken) -> Self {
+        Self::Unwatch(payload)
+    }
+}
+
+impl From<RecordReceipt> for Output {
+    fn from(payload: RecordReceipt) -> Self {
+        Self::Recorded(payload)
+    }
+}
+
+impl From<CorrectionReceipt> for Output {
+    fn from(payload: CorrectionReceipt) -> Self {
+        Self::Corrected(payload)
+    }
+}
+
+impl From<RecordSet> for Output {
+    fn from(payload: RecordSet) -> Self {
+        Self::Observed(payload)
+    }
+}
+
+impl From<Rejection> for Output {
+    fn from(payload: Rejection) -> Self {
+        Self::Rejected(payload)
+    }
+}
+
+impl From<IndexReceipt> for Output {
+    fn from(payload: IndexReceipt) -> Self {
+        Self::Indexed(payload)
+    }
+}
+
 #[cfg(feature = "nota-text")]
 impl Topic {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {

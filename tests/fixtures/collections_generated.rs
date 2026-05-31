@@ -55,6 +55,18 @@ pub enum Output {
     Listed(Vec<NodeName>),
 }
 
+impl From<Cluster> for Input {
+    fn from(payload: Cluster) -> Self {
+        Self::Register(payload)
+    }
+}
+
+impl From<Query> for Input {
+    fn from(payload: Query) -> Self {
+        Self::Observe(payload)
+    }
+}
+
 #[cfg(feature = "nota-text")]
 impl NodeName {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {

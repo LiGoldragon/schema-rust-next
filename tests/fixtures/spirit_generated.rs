@@ -82,6 +82,30 @@ pub enum Output {
     RecordsObserved(RecordSet),
 }
 
+impl From<Entry> for Input {
+    fn from(payload: Entry) -> Self {
+        Self::Record(payload)
+    }
+}
+
+impl From<Query> for Input {
+    fn from(payload: Query) -> Self {
+        Self::Observe(payload)
+    }
+}
+
+impl From<RecordIdentifier> for Output {
+    fn from(payload: RecordIdentifier) -> Self {
+        Self::RecordAccepted(payload)
+    }
+}
+
+impl From<RecordSet> for Output {
+    fn from(payload: RecordSet) -> Self {
+        Self::RecordsObserved(payload)
+    }
+}
+
 #[cfg(feature = "nota-text")]
 impl Topic {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {

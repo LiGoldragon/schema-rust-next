@@ -177,6 +177,7 @@ impl RustModule {
             writer.blank();
         }
 
+        writer.emit_enum_payload_from_impls(&self.declarations, &self.root_enums);
         writer.emit_nota_type_bridges(&self.declarations);
         for root_enum in &self.root_enums {
             writer.emit_nota_root_enum_support(root_enum);
@@ -188,6 +189,7 @@ impl RustModule {
         writer.emit_signal_frame_support(&self.root_enums);
         writer.emit_mail_event_support(&self.root_enums);
         writer.emit_plane_namespaces(&self.declarations, &self.root_enums);
+        writer.emit_plane_projection_support(&self.declarations, &self.root_enums);
         writer.emit_nexus_support(&self.root_enums);
         writer.emit_schema_plane_trait_support(&self.declarations);
         writer.emit_upgrade_support();
@@ -899,6 +901,72 @@ impl RustWriter {
         }
     }
 
+    fn emit_enum_payload_from_impls(
+        &mut self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) {
+        for declaration in declarations {
+            if let RustTypeDeclaration::Enum(value) = declaration.value() {
+                self.emit_enum_payload_from_impls_for(value);
+            }
+        }
+        for root_enum in root_enums {
+            self.emit_enum_payload_from_impls_for(root_enum);
+        }
+    }
+
+    fn emit_enum_payload_from_impls_for(&mut self, declaration: &RustEnum) -> bool {
+        let mut emitted = false;
+        for variant in self.unique_plain_payload_variants(declaration) {
+            let Some(payload) = self.plain_payload_name(variant) else {
+                continue;
+            };
+            self.line(format!(
+                "impl From<{payload}> for {} {{",
+                declaration.name()
+            ));
+            self.line(format!("    fn from(payload: {payload}) -> Self {{"));
+            self.line(format!("        Self::{}(payload)", variant.name()));
+            self.line("    }");
+            self.line("}");
+            self.blank();
+            emitted = true;
+        }
+        emitted
+    }
+
+    fn unique_plain_payload_variants<'declaration>(
+        &self,
+        declaration: &'declaration RustEnum,
+    ) -> Vec<&'declaration RustEnumVariant> {
+        declaration
+            .variants()
+            .iter()
+            .filter(|variant| {
+                let Some(payload) = self.plain_payload_name(variant) else {
+                    return false;
+                };
+                declaration
+                    .variants()
+                    .iter()
+                    .filter(|other| self.plain_payload_name(other) == Some(payload))
+                    .count()
+                    == 1
+            })
+            .collect()
+    }
+
+    fn plain_payload_name<'variant>(
+        &self,
+        variant: &'variant RustEnumVariant,
+    ) -> Option<&'variant str> {
+        match variant.payload() {
+            Some(TypeReference::Plain(name)) => Some(name.as_str()),
+            _ => None,
+        }
+    }
+
     fn emit_nota_type_bridges(&mut self, declarations: &[RustDeclaration]) {
         if !self.nota_surface.emits_nota() {
             return;
@@ -1409,6 +1477,207 @@ impl RustWriter {
         self.blank();
     }
 
+    fn emit_plane_projection_support(
+        &mut self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) {
+        let signal_input = self.root_enum_named(root_enums, "Input");
+        let signal_output = self.root_enum_named(root_enums, "Output");
+        let nexus_input = self.declaration_enum_named(declarations, "NexusInput");
+        let nexus_output = self.declaration_enum_named(declarations, "NexusOutput");
+        let sema_input = self.declaration_enum_named(declarations, "SemaInput");
+        let sema_output = self.declaration_enum_named(declarations, "SemaOutput");
+
+        if signal_input.is_some()
+            && nexus_input
+                .is_some_and(|value| self.enum_has_unique_payload_variant(value, "Signal", "Input"))
+        {
+            self.emit_nexus_mail_projection();
+        }
+
+        if let (
+            Some(signal_input),
+            Some(signal_output),
+            Some(nexus_input),
+            Some(nexus_output),
+            Some(sema_input),
+            Some(sema_output),
+        ) = (
+            signal_input,
+            signal_output,
+            nexus_input,
+            nexus_output,
+            sema_input,
+            sema_output,
+        ) {
+            if self.can_emit_nexus_input_projection(
+                signal_input,
+                signal_output,
+                nexus_input,
+                nexus_output,
+                sema_input,
+                sema_output,
+            ) {
+                self.emit_nexus_input_projection(signal_input, sema_output);
+            }
+            self.emit_nexus_output_projection(nexus_output);
+            if self.enum_has_unique_payload_variant(nexus_input, "Sema", "SemaOutput") {
+                self.emit_sema_output_projection();
+            }
+        }
+    }
+
+    fn emit_nexus_mail_projection(&mut self) {
+        self.line("impl<Payload> NexusMail<Payload>");
+        self.line("where");
+        self.line("    Input: From<Payload>,");
+        self.line("    NexusInput: From<Input>,");
+        self.line("{");
+        self.line("    pub fn into_nexus_input(self) -> nexus::Nexus<nexus::Input> {");
+        self.line("        let origin_route = self.origin_route();");
+        self.line("        NexusInput::from(Input::from(self.into_payload())).with_origin_route(origin_route)");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+    }
+
+    fn emit_nexus_input_projection(&mut self, signal_input: &RustEnum, sema_output: &RustEnum) {
+        self.line("impl nexus::Nexus<nexus::Input> {");
+        self.line("    pub fn into_nexus_output(self) -> nexus::Nexus<nexus::Output> {");
+        self.line("        let origin_route = self.origin_route();");
+        self.line("        match self.into_root() {");
+        self.line("            NexusInput::Signal(input) => match input {");
+        for variant in signal_input.variants() {
+            if variant.payload().is_some() {
+                self.line(format!(
+                    "                Input::{}(payload) => NexusOutput::from(SemaInput::from(payload)),",
+                    variant.name()
+                ));
+            }
+        }
+        self.line("            },");
+        self.line("            NexusInput::Sema(output) => match output {");
+        for variant in sema_output.variants() {
+            if variant.payload().is_some() {
+                self.line(format!(
+                    "                SemaOutput::{}(payload) => NexusOutput::from(Output::from(payload)),",
+                    variant.name()
+                ));
+            }
+        }
+        self.line("            },");
+        self.line("        }");
+        self.line("        .with_origin_route(origin_route)");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+    }
+
+    fn emit_nexus_output_projection(&mut self, nexus_output: &RustEnum) {
+        let has_sema = self.enum_has_variant_payload(nexus_output, "Sema", "SemaInput");
+        let has_signal = self.enum_has_variant_payload(nexus_output, "Signal", "Output");
+        if !has_sema && !has_signal {
+            return;
+        }
+        self.line("impl nexus::Nexus<nexus::Output> {");
+        if has_sema {
+            self.line("    pub fn into_sema_input(self) -> sema::Sema<sema::Input> {");
+            self.line("        let origin_route = self.origin_route();");
+            self.line("        match self.into_root() {");
+            self.line(
+                "            NexusOutput::Sema(input) => input.with_origin_route(origin_route),",
+            );
+            self.line(
+                "            _ => panic!(\"nexus output is a signal reply, not a SEMA input\"),",
+            );
+            self.line("        }");
+            self.line("    }");
+            if has_signal {
+                self.blank();
+            }
+        }
+        if has_signal {
+            self.line("    pub fn into_signal_output(self) -> signal::Signal<signal::Output> {");
+            self.line("        let origin_route = self.origin_route();");
+            self.line("        match self.into_root() {");
+            self.line("            NexusOutput::Signal(output) => output.with_origin_route(origin_route),");
+            self.line(
+                "            _ => panic!(\"nexus output is a SEMA input, not a signal reply\"),",
+            );
+            self.line("        }");
+            self.line("    }");
+        }
+        self.line("}");
+        self.blank();
+    }
+
+    fn emit_sema_output_projection(&mut self) {
+        self.line("impl sema::Sema<sema::Output> {");
+        self.line("    pub fn into_nexus_input(self) -> nexus::Nexus<nexus::Input> {");
+        self.line("        let origin_route = self.origin_route();");
+        self.line("        NexusInput::from(self.into_root()).with_origin_route(origin_route)");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+    }
+
+    fn can_emit_nexus_input_projection(
+        &self,
+        signal_input: &RustEnum,
+        signal_output: &RustEnum,
+        nexus_input: &RustEnum,
+        nexus_output: &RustEnum,
+        sema_input: &RustEnum,
+        sema_output: &RustEnum,
+    ) -> bool {
+        self.enum_has_unique_payload_variant(nexus_input, "Signal", "Input")
+            && self.enum_has_unique_payload_variant(nexus_input, "Sema", "SemaOutput")
+            && self.enum_has_unique_payload_variant(nexus_output, "Sema", "SemaInput")
+            && self.enum_has_unique_payload_variant(nexus_output, "Signal", "Output")
+            && self.all_payloads_project_to(signal_input, sema_input)
+            && self.all_payloads_project_to(sema_output, signal_output)
+    }
+
+    fn all_payloads_project_to(&self, source: &RustEnum, target: &RustEnum) -> bool {
+        source.variants().iter().all(|variant| {
+            self.plain_payload_name(variant)
+                .is_some_and(|payload| self.enum_has_unique_plain_payload(target, payload))
+        })
+    }
+
+    fn enum_has_unique_payload_variant(
+        &self,
+        declaration: &RustEnum,
+        variant_name: &str,
+        payload_name: &str,
+    ) -> bool {
+        self.unique_plain_payload_variants(declaration)
+            .iter()
+            .any(|variant| {
+                variant.name().as_str() == variant_name
+                    && self.plain_payload_name(variant) == Some(payload_name)
+            })
+    }
+
+    fn enum_has_variant_payload(
+        &self,
+        declaration: &RustEnum,
+        variant_name: &str,
+        payload_name: &str,
+    ) -> bool {
+        declaration.variants().iter().any(|variant| {
+            variant.name().as_str() == variant_name
+                && self.plain_payload_name(variant) == Some(payload_name)
+        })
+    }
+
+    fn enum_has_unique_plain_payload(&self, declaration: &RustEnum, payload_name: &str) -> bool {
+        self.unique_plain_payload_variants(declaration)
+            .iter()
+            .any(|variant| self.plain_payload_name(variant) == Some(payload_name))
+    }
+
     fn emit_nexus_support(&mut self, root_enums: &[RustEnum]) {
         for root_enum in root_enums {
             self.emit_nexus_trait(root_enum);
@@ -1507,6 +1776,30 @@ impl RustWriter {
         declarations
             .iter()
             .any(|declaration| declaration.name().as_str() == type_name)
+    }
+
+    fn root_enum_named<'root>(
+        &self,
+        root_enums: &'root [RustEnum],
+        type_name: &str,
+    ) -> Option<&'root RustEnum> {
+        root_enums
+            .iter()
+            .find(|declaration| declaration.name().as_str() == type_name)
+    }
+
+    fn declaration_enum_named<'declaration>(
+        &self,
+        declarations: &'declaration [RustDeclaration],
+        type_name: &str,
+    ) -> Option<&'declaration RustEnum> {
+        declarations
+            .iter()
+            .find(|declaration| declaration.name().as_str() == type_name)
+            .and_then(|declaration| match declaration.value() {
+                RustTypeDeclaration::Enum(value) => Some(value),
+                _ => None,
+            })
     }
 
     /// The Rust type for a reference.

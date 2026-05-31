@@ -83,6 +83,12 @@ fn emits_rust_source_as_a_separate_artifact() {
             .as_str()
             .contains("pub trait UpgradeFrom<Previous>")
     );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("impl From<Entry> for Input")
+    );
     assert_generated_fixture("spirit_generated.rs", generated.code.as_str());
 }
 
@@ -238,6 +244,49 @@ fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
     assert!(generated.code.as_str().contains(
         "fn apply(&mut self, input: sema::Sema<sema::Input>) -> sema::Sema<sema::Output>;"
     ));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("impl<Payload> NexusMail<Payload>")
+    );
+    assert!(generated.code.as_str().contains("Input: From<Payload>"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub fn into_nexus_output(self) -> nexus::Nexus<nexus::Output>")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("Input::Record(payload) => NexusOutput::from(SemaInput::from(payload))")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("SemaOutput::Recorded(payload) => NexusOutput::from(Output::from(payload))")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub fn into_sema_input(self) -> sema::Sema<sema::Input>")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub fn into_signal_output(self) -> signal::Signal<signal::Output>")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("impl sema::Sema<sema::Output>")
+    );
 }
 
 #[test]
