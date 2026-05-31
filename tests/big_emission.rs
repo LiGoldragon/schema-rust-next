@@ -139,20 +139,14 @@ impl<'fixture> BigRustFixture<'fixture> {
             "{} must lower typed output variants",
             self.name
         );
-        assert_eq!(
-            asschema.roots().len(),
-            2,
-            "{} must expose root declarations as assembled data",
-            self.name
-        );
         assert!(
             asschema.root_named("Input").is_some(),
-            "{} must expose Input as a root declaration",
+            "{} must expose Input as a direct root enum",
             self.name
         );
         assert!(
             asschema.root_named("Output").is_some(),
-            "{} must expose Output as a root declaration",
+            "{} must expose Output as a direct root enum",
             self.name
         );
 

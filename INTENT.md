@@ -24,9 +24,10 @@ schema plane for internal effects, external calls, and UI surfaces.*
 imports/exports, roots, and namespace. Rust emission mirrors that shape into
 source-visible modules under `src/schema/`, using single-colon schema paths as
 the source naming convention and Rust modules as the emitted form. The current
-schema files still provide Input and Output as the first two roots, but the
-emitter consumes ordered root declarations from `Asschema` rather than a
-hard-coded pair.*
+schema files still provide Input and Output as the first two roots. In
+assembled schema those roots are direct product fields, not a homogeneous
+vector of wrappers; the emitter consumes `Asschema::input_and_output()` as the
+two direct root enum definitions.*
 
 *Plane payload names are scoped by emitted namespaces. The generated public
 surface should read `signal::Input`, `nexus::Input`, and `sema::Input`

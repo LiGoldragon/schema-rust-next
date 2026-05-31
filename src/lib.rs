@@ -105,9 +105,9 @@ impl RustModule {
             .map(RustDeclaration::from_asschema_declaration)
             .collect::<Vec<_>>();
         let root_enums = asschema
-            .roots()
-            .iter()
-            .map(|root| RustEnum::from_asschema_enum(root.enum_declaration()))
+            .input_and_output()
+            .into_iter()
+            .map(RustEnum::from_asschema_enum)
             .collect::<Vec<_>>();
         Self {
             file_path: RustModulePath::new(asschema.identity().component().clone()).to_file_path(),
@@ -611,8 +611,8 @@ impl<'asschema> CollectionScan<'asschema> {
                 }
             }
         }
-        for root in self.asschema.roots() {
-            Self::collect_enum_map_keys(root.enum_declaration(), &mut names);
+        for root in self.asschema.input_and_output() {
+            Self::collect_enum_map_keys(root, &mut names);
         }
         names
     }
