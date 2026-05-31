@@ -102,6 +102,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libc"
+version = "0.2.186"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
+
+[[package]]
 name = "munge"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -124,7 +130,7 @@ dependencies = [
 [[package]]
 name = "nota-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#6dbe995546acf68d2762b937bd961cf5aa53dc57"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#b041e6422e191700d9f05ba224b2c8e862358aa7"
 dependencies = [
  "nota-next-derive",
  "rkyv",
@@ -133,7 +139,7 @@ dependencies = [
 [[package]]
 name = "nota-next-derive"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#6dbe995546acf68d2762b937bd961cf5aa53dc57"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#b041e6422e191700d9f05ba224b2c8e862358aa7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -200,6 +206,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "redb"
+version = "2.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8eca1e9d98d5a7e9002d0013e18d5a9b000aee942eb134883a82f06ebffb6c01"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "rend"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -247,9 +262,10 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "schema-next"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#3b58cc7507a3300a0af4d6d45aa89d4c4bcd2490"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#57bab6096cd78944d29f16aea28682d2d0bfb2ca"
 dependencies = [
  "nota-next",
+ "redb",
  "rkyv",
 ]
 
