@@ -238,24 +238,45 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
 
     assert!(generated.code.as_str().contains("pub trait SignalEngine"));
     assert!(generated.code.as_str().contains(
-        "fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input>;"
+        "fn trace_signal_triaged(&self, _input: &signal::Signal<signal::Input>, _output: &nexus::Nexus<nexus::Input>) {}"
     ));
     assert!(generated.code.as_str().contains(
-        "fn reply(&self, output: nexus::Nexus<nexus::Output>) -> signal::Signal<signal::Output>;"
+        "fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input>;"
     ));
+    assert!(generated.code.as_str().contains(
+        "fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input> {"
+    ));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("self.trace_signal_replied(&signal_output);")
+    );
     assert!(generated.code.as_str().contains("pub trait NexusEngine"));
     assert!(generated.code.as_str().contains("pub mod nexus"));
     assert!(generated.code.as_str().contains("pub mod sema"));
     assert!(generated.code.as_str().contains(
-        "fn execute(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;"
+        "fn decide(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;"
     ));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("self.trace_nexus_entered(&input);")
+    );
     assert!(generated.code.as_str().contains("pub trait SemaEngine"));
     assert!(generated.code.as_str().contains(
-        "fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;"
+        "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;"
     ));
     assert!(generated.code.as_str().contains(
-        "fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;"
+        "fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;"
     ));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("self.trace_sema_write_applied(&trace_input, &output);")
+    );
     assert!(!generated.code.as_str().contains("NexusMail<Payload>"));
     assert!(
         generated

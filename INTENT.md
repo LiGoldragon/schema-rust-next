@@ -74,6 +74,13 @@ the `SemaEngine` trait with a mutable write method and shared-reference read
 method. Runtime tests must invoke those generated trait surfaces rather than
 primitive or test-local commands.*
 
+*Testing trace hooks belong to those generated engine traits. The emitted
+traits provide default no-op trace hook methods and default wrapper methods
+for `triage`, `reply`, `execute`, `apply`, and `observe`; runtime actors
+implement the inner behavior methods and may override the trace hooks to emit
+structured events. A consumer should not carry parallel local Signal/Nexus/SEMA
+trace traits beside the generated actor/interface contract.*
+
 *Schema version changes drive upgrade surfaces. If a data type has not changed,
 no upgrade code is emitted for it. If it has changed, the generated noun exposes
 an upgrade/accept trait that hand-written runtime code implements, including
