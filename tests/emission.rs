@@ -236,13 +236,16 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
 
     assert!(generated.code.as_str().contains("pub trait SignalEngine"));
     assert!(generated.code.as_str().contains(
-        "fn process(&self, input: signal::Signal<signal::Input>) -> signal::Signal<signal::Output>;"
+        "fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input>;"
+    ));
+    assert!(generated.code.as_str().contains(
+        "fn reply(&self, output: nexus::Nexus<nexus::Output>) -> signal::Signal<signal::Output>;"
     ));
     assert!(generated.code.as_str().contains("pub trait NexusEngine"));
     assert!(generated.code.as_str().contains("pub mod nexus"));
     assert!(generated.code.as_str().contains("pub mod sema"));
     assert!(generated.code.as_str().contains(
-        "fn execute(&self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;"
+        "fn execute(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;"
     ));
     assert!(generated.code.as_str().contains("pub trait SemaEngine"));
     assert!(generated.code.as_str().contains(

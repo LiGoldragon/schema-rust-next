@@ -1756,15 +1756,24 @@ impl RustWriter {
         declarations: &[RustDeclaration],
         root_enums: &[RustEnum],
     ) {
-        if self.has_root_enum(root_enums, "Input") && self.has_root_enum(root_enums, "Output") {
+        if self.has_root_enum(root_enums, "Input")
+            && self.has_root_enum(root_enums, "Output")
+            && self.has_type(declarations, "NexusInput")
+            && self.has_type(declarations, "NexusOutput")
+        {
             self.line("pub trait SignalEngine {");
-            self.line("    fn process(&self, input: signal::Signal<signal::Input>) -> signal::Signal<signal::Output>;");
+            self.line(
+                "    fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input>;",
+            );
+            self.line(
+                "    fn reply(&self, output: nexus::Nexus<nexus::Output>) -> signal::Signal<signal::Output>;",
+            );
             self.line("}");
             self.blank();
         }
         if self.has_type(declarations, "NexusInput") && self.has_type(declarations, "NexusOutput") {
             self.line("pub trait NexusEngine {");
-            self.line("    fn execute(&self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;");
+            self.line("    fn execute(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;");
             self.line("}");
             self.blank();
         }

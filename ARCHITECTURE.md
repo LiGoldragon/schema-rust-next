@@ -104,10 +104,13 @@ must not grow a second parser for the authored form.
   the generated type exposes a trait or method target and the consumer
   implements it on a data-bearing actor or store object.
 - Schemas that declare `Input`/`Output` roots emit a `SignalEngine` trait.
-  Schemas that declare `NexusInput`/`NexusOutput` emit a `NexusEngine` trait,
-  and schemas that declare `SemaInput`/`SemaOutput` emit a `SemaEngine` trait.
-  Tests and runtime code use those generated plane traits so Signal, Nexus,
-  and SEMA take and return routed root messages for their own planes.
+  The Signal trait only owns boundary triage: Signal input becomes Nexus input,
+  and Nexus replies become Signal output. Schemas that declare
+  `NexusInput`/`NexusOutput` emit a mutable `NexusEngine` trait for the heavier
+  execution and decision plane. Schemas that declare `SemaInput`/`SemaOutput`
+  emit a `SemaEngine` trait for durable state work. Tests and runtime code use
+  those generated plane traits so Signal, Nexus, and SEMA take and return
+  routed root messages for their own planes.
 - Mail identifiers, origin routes, and short headers use the generated scalar
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is

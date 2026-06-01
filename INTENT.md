@@ -62,13 +62,14 @@ functions around them.*
 
 *Schema-plane tests use schema-plane traits. When a schema declares
 `Input` and `Output` roots, the emitter provides a `SignalEngine` trait so
-the runtime accepts and returns routed Signal root objects. When a schema
-declares `NexusInput` and `NexusOutput`, the emitter provides a `NexusEngine`
-target for execution-plane object flow. When a schema declares `SemaInput` and
-`SemaOutput`, the emitter provides the `SemaEngine` trait so the store/state
-engine takes a SEMA schema object and returns a SEMA schema object. Runtime
-tests must invoke those generated trait surfaces rather than primitive or
-test-local commands.*
+the signal boundary triages routed Signal input into routed Nexus input and
+turns routed Nexus replies into routed Signal output. When a schema declares
+`NexusInput` and `NexusOutput`, the emitter provides a mutable `NexusEngine`
+target for execution-plane object flow and heavier decision-making. When a
+schema declares `SemaInput` and `SemaOutput`, the emitter provides the
+`SemaEngine` trait so the store/state engine takes a SEMA schema object and
+returns a SEMA schema object. Runtime tests must invoke those generated trait
+surfaces rather than primitive or test-local commands.*
 
 *Schema version changes drive upgrade surfaces. If a data type has not changed,
 no upgrade code is emitted for it. If it has changed, the generated noun exposes

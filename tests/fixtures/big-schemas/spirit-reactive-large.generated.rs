@@ -1069,10 +1069,6 @@ impl Output {
     }
 }
 
-pub trait SignalEngine {
-    fn process(&self, input: signal::Signal<signal::Input>) -> signal::Signal<signal::Output>;
-}
-
 pub trait UpgradeFrom<Previous>: Sized {
     type Error;
 
