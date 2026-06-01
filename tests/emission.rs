@@ -230,10 +230,14 @@ fn inline_private_schema_types_emit_crate_local_rust_boundary() {
 }
 
 #[test]
-fn emits_schema_plane_engine_traits_for_declared_nexus_and_sema_languages() {
+fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages() {
     let asschema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
     let generated = RustEmitter::default().emit_file(&asschema);
 
+    assert!(generated.code.as_str().contains("pub trait SignalEngine"));
+    assert!(generated.code.as_str().contains(
+        "fn process(&self, input: signal::Signal<signal::Input>) -> signal::Signal<signal::Output>;"
+    ));
     assert!(generated.code.as_str().contains("pub trait NexusEngine"));
     assert!(generated.code.as_str().contains("pub mod nexus"));
     assert!(generated.code.as_str().contains("pub mod sema"));

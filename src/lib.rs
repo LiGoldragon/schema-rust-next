@@ -191,7 +191,7 @@ impl RustModule {
         writer.emit_plane_namespaces(&self.declarations, &self.root_enums);
         writer.emit_plane_projection_support(&self.declarations, &self.root_enums);
         writer.emit_nexus_support(&self.root_enums);
-        writer.emit_schema_plane_trait_support(&self.declarations);
+        writer.emit_schema_plane_trait_support(&self.declarations, &self.root_enums);
         writer.emit_upgrade_support();
         RustCode(writer.finish())
     }
@@ -1751,7 +1751,17 @@ impl RustWriter {
         self.line("impl<Current, Previous> AcceptPrevious<Previous> for Current where Current: UpgradeFrom<Previous> {}");
     }
 
-    fn emit_schema_plane_trait_support(&mut self, declarations: &[RustDeclaration]) {
+    fn emit_schema_plane_trait_support(
+        &mut self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) {
+        if self.has_root_enum(root_enums, "Input") && self.has_root_enum(root_enums, "Output") {
+            self.line("pub trait SignalEngine {");
+            self.line("    fn process(&self, input: signal::Signal<signal::Input>) -> signal::Signal<signal::Output>;");
+            self.line("}");
+            self.blank();
+        }
         if self.has_type(declarations, "NexusInput") && self.has_type(declarations, "NexusOutput") {
             self.line("pub trait NexusEngine {");
             self.line("    fn execute(&self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;");
