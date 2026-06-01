@@ -1,5 +1,5 @@
 use schema_rust_next::{NotaSurface, RustEmissionOptions, RustEmitter, RustTypeDeclaration};
-use std::{cell::Cell, path::PathBuf};
+use std::path::PathBuf;
 
 mod support;
 
@@ -53,7 +53,9 @@ fn emits_rust_source_as_a_separate_artifact() {
             .as_str()
             .contains("pub fn encode_signal_frame")
     );
-    assert!(generated.code.as_str().contains("pub trait InputNexus"));
+    assert!(!generated.code.as_str().contains("pub trait InputNexus"));
+    assert!(!generated.code.as_str().contains("pub trait OutputNexus"));
+    assert!(!generated.code.as_str().contains("dispatch_mail_with_nexus"));
     assert!(generated.code.as_str().contains("pub struct MessageSent"));
     assert!(generated.code.as_str().contains("pub struct OriginRoute"));
     assert!(generated.code.as_str().contains("pub mod signal"));
@@ -249,7 +251,10 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
     ));
     assert!(generated.code.as_str().contains("pub trait SemaEngine"));
     assert!(generated.code.as_str().contains(
-        "fn apply(&mut self, input: sema::Sema<sema::Input>) -> sema::Sema<sema::Output>;"
+        "fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;"
+    ));
+    assert!(generated.code.as_str().contains(
+        "fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;"
     ));
     assert!(
         generated
@@ -268,19 +273,33 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("Input::Record(payload) => NexusOutput::from(SemaInput::from(payload))")
+            .contains("Input::Record(payload) => NexusOutput::from(SemaWriteInput::from(payload))")
     );
     assert!(
         generated
             .code
             .as_str()
-            .contains("SemaOutput::Recorded(payload) => NexusOutput::from(Output::from(payload))")
+            .contains("Input::Observe(payload) => NexusOutput::from(SemaReadInput::from(payload))")
+    );
+    assert!(generated.code.as_str().contains(
+        "SemaWriteOutput::Recorded(payload) => NexusOutput::from(Output::from(payload))"
+    ));
+    assert!(
+        generated.code.as_str().contains(
+            "SemaReadOutput::Observed(payload) => NexusOutput::from(Output::from(payload))"
+        )
     );
     assert!(
         generated
             .code
             .as_str()
-            .contains("pub fn into_sema_input(self) -> sema::Sema<sema::Input>")
+            .contains("pub fn into_sema_write_input(self) -> sema::Sema<sema::WriteInput>")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub fn into_sema_read_input(self) -> sema::Sema<sema::ReadInput>")
     );
     assert!(
         generated
@@ -292,7 +311,13 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("impl sema::Sema<sema::Output>")
+            .contains("impl sema::Sema<sema::WriteOutput>")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("impl sema::Sema<sema::ReadOutput>")
     );
 }
 
@@ -393,7 +418,7 @@ fn generated_signal_frame_methods_round_trip_and_triage_route() {
 
 struct MailHook {
     sent_events: Vec<generated::MessageSent>,
-    processed_events: Vec<generated::MessageProcessed<RuntimeReply>>,
+    processed_events: Vec<generated::MessageProcessed<generated::Output>>,
 }
 
 impl MailHook {
@@ -410,18 +435,6 @@ impl generated::MessageSentHook for MailHook {
 
     fn message_sent(&mut self, event: generated::MessageSent) -> Result<(), Self::Error> {
         self.sent_events.push(event);
-        Ok(())
-    }
-}
-
-impl generated::MessageProcessedHook<RuntimeReply> for MailHook {
-    type Error = RuntimeError;
-
-    fn message_processed(
-        &mut self,
-        event: generated::MessageProcessed<RuntimeReply>,
-    ) -> Result<(), Self::Error> {
-        self.processed_events.push(event);
         Ok(())
     }
 }
@@ -470,95 +483,44 @@ fn generated_signal_roots_emit_typed_message_sent_events() {
     );
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum RuntimeReply {
-    Recorded(String),
-    Observed(String),
-}
-
 #[derive(Debug, PartialEq, Eq)]
 enum RuntimeError {
     StateRejected,
 }
 
-struct SpiritNexus {
-    accepted_records: Cell<usize>,
-    last_mail_identifier: Cell<Option<generated::MessageIdentifier>>,
-}
-
-impl SpiritNexus {
-    fn new() -> Self {
-        Self {
-            accepted_records: Cell::new(0),
-            last_mail_identifier: Cell::new(None),
-        }
-    }
-
-    fn accepted_records(&self) -> usize {
-        self.accepted_records.get()
-    }
-}
-
-impl generated::InputNexus for SpiritNexus {
-    type Reply = RuntimeReply;
+impl generated::MessageProcessedHook<generated::Output> for MailHook {
     type Error = RuntimeError;
 
-    fn record(
-        &self,
-        mail: generated::NexusMail<generated::Entry>,
-    ) -> Result<Self::Reply, Self::Error> {
-        self.last_mail_identifier.set(Some(mail.identifier()));
-        self.accepted_records.set(self.accepted_records.get() + 1);
-        let payload = mail.into_payload();
-        Ok(RuntimeReply::Recorded(payload.description.0))
-    }
-
-    fn observe(
-        &self,
-        mail: generated::NexusMail<generated::Query>,
-    ) -> Result<Self::Reply, Self::Error> {
-        self.last_mail_identifier.set(Some(mail.identifier()));
-        let payload = mail.into_payload();
-        Ok(RuntimeReply::Observed(payload.topic.0))
+    fn message_processed(
+        &mut self,
+        event: generated::MessageProcessed<generated::Output>,
+    ) -> Result<(), Self::Error> {
+        self.processed_events.push(event);
+        Ok(())
     }
 }
 
 #[test]
-fn generated_input_dispatches_mail_through_schema_emitted_nexus_trait_methods() {
+fn generated_processed_mail_events_are_typed_without_root_dispatch_traits() {
     assert_eq!(RuntimeError::StateRejected, RuntimeError::StateRejected);
-    let input = FixtureNota::new("nota/record-schema-objects-behavior.nota")
-        .read()
-        .parse::<generated::Input>()
-        .expect("parse generated input");
-    let nexus = SpiritNexus::new();
     let mut hook = MailHook::new();
+    let reply = generated::Output::RecordsObserved(generated::RecordSet(vec![]));
 
-    let processed = input
-        .dispatch_mail_with_nexus(
-            generated::MessageIdentifier(77),
-            generated::OriginRoute(701),
-            &nexus,
-        )
-        .expect("input dispatches through generated nexus trait");
+    let processed = generated::MessageProcessed::new(
+        generated::MessageIdentifier(77),
+        generated::OriginRoute(701),
+        reply,
+    );
     processed
         .push_to(&mut hook)
         .expect("processed mail event pushes");
 
     assert_eq!(
-        processed.reply,
-        RuntimeReply::Recorded("schema objects drive behavior".to_owned())
-    );
-    assert_eq!(nexus.accepted_records(), 1);
-    assert_eq!(
-        nexus.last_mail_identifier.get(),
-        Some(generated::MessageIdentifier(77))
-    );
-    assert_eq!(
         hook.processed_events,
         vec![generated::MessageProcessed {
             identifier: generated::MessageIdentifier(77),
             origin_route: generated::OriginRoute(701),
-            reply: RuntimeReply::Recorded("schema objects drive behavior".to_owned()),
+            reply: generated::Output::RecordsObserved(generated::RecordSet(vec![])),
         }],
     );
 }

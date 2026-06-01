@@ -602,48 +602,6 @@ pub mod signal {
     pub type Signal<Root> = super::Signal<Root>;
 }
 
-pub trait InputNexus {
-    type Reply;
-    type Error;
-
-    fn register(&self, mail: NexusMail<Cluster>) -> Result<Self::Reply, Self::Error>;
-    fn observe(&self, mail: NexusMail<Query>) -> Result<Self::Reply, Self::Error>;
-}
-
-impl Input {
-    pub fn dispatch_mail_with_nexus<NexusActor>(self, identifier: MessageIdentifier, origin_route: OriginRoute, nexus: &NexusActor) -> Result<MessageProcessed<NexusActor::Reply>, NexusActor::Error>
-    where
-        NexusActor: InputNexus,
-    {
-        let reply = match self {
-            Self::Register(payload) => nexus.register(NexusMail::new(identifier, origin_route, payload)),
-            Self::Observe(payload) => nexus.observe(NexusMail::new(identifier, origin_route, payload)),
-        }?;
-        Ok(MessageProcessed::new(identifier, origin_route, reply))
-    }
-}
-
-pub trait OutputNexus {
-    type Reply;
-    type Error;
-
-    fn projected(&self, mail: NexusMail<std::collections::BTreeMap<NodeName, NodeConfig>>) -> Result<Self::Reply, Self::Error>;
-    fn listed(&self, mail: NexusMail<Vec<NodeName>>) -> Result<Self::Reply, Self::Error>;
-}
-
-impl Output {
-    pub fn dispatch_mail_with_nexus<NexusActor>(self, identifier: MessageIdentifier, origin_route: OriginRoute, nexus: &NexusActor) -> Result<MessageProcessed<NexusActor::Reply>, NexusActor::Error>
-    where
-        NexusActor: OutputNexus,
-    {
-        let reply = match self {
-            Self::Projected(payload) => nexus.projected(NexusMail::new(identifier, origin_route, payload)),
-            Self::Listed(payload) => nexus.listed(NexusMail::new(identifier, origin_route, payload)),
-        }?;
-        Ok(MessageProcessed::new(identifier, origin_route, reply))
-    }
-}
-
 pub trait UpgradeFrom<Previous>: Sized {
     type Error;
 

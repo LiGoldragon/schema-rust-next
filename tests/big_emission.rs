@@ -313,7 +313,8 @@ fn generated_big_rust_contains_the_current_schema_stack_surfaces() {
     assert!(spirit.contains("pub fn encode_signal_frame"));
     assert!(spirit.contains("pub struct OriginRoute"));
     assert!(spirit.contains("pub struct NexusMail<Payload>"));
-    assert!(spirit.contains("pub trait InputNexus"));
+    assert!(!spirit.contains("pub trait InputNexus"));
+    assert!(!spirit.contains("dispatch_mail_with_nexus"));
     assert!(spirit.contains("pub topics: Topics,"));
     assert!(spirit.contains("pub records: Vec<Entry>,"));
     assert!(spirit.contains("pub by_topic: std::collections::BTreeMap<Topic, RecordIdentifier>,"));
@@ -340,7 +341,7 @@ fn generated_big_rust_contains_the_current_schema_stack_surfaces() {
 }
 
 #[test]
-fn compiled_large_spirit_generated_rust_parses_frames_and_dispatches_mail() {
+fn compiled_large_spirit_generated_rust_parses_frames_and_emits_mail_events() {
     let input = FixtureNota::new("nota/large-record-schema-rust.nota")
         .read()
         .parse::<spirit_large_generated::Input>()
@@ -348,107 +349,20 @@ fn compiled_large_spirit_generated_rust_parses_frames_and_dispatches_mail() {
     let frame = input.encode_signal_frame().expect("signal frame encodes");
     let (route, decoded) =
         spirit_large_generated::Input::decode_signal_frame(&frame).expect("signal frame decodes");
-    let nexus = SpiritLargeNexus::new();
-
-    let processed = decoded
-        .dispatch_mail_with_nexus(
-            spirit_large_generated::MessageIdentifier(99),
-            spirit_large_generated::OriginRoute(7001),
-            &nexus,
-        )
-        .expect("generated mail dispatches");
+    let event = decoded
+        .with_origin_route(spirit_large_generated::OriginRoute(7001))
+        .message_sent(spirit_large_generated::MessageIdentifier(99));
 
     assert_eq!(route, spirit_large_generated::InputRoute::Record);
     assert_eq!(
-        processed.origin_route,
+        event.identifier,
+        spirit_large_generated::MessageIdentifier(99)
+    );
+    assert_eq!(
+        event.origin_route,
         spirit_large_generated::OriginRoute(7001)
     );
-    assert_eq!(processed.reply, SpiritLargeReply::Recorded(1));
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum SpiritLargeReply {
-    Recorded(usize),
-    Corrected,
-    Observed,
-    Watching,
-    Unwatched,
-    Reindexed,
-    Compacted,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-#[allow(dead_code)]
-enum SpiritLargeError {
-    Rejected,
-}
-
-struct SpiritLargeNexus {
-    records_seen: std::cell::Cell<usize>,
-}
-
-impl SpiritLargeNexus {
-    fn new() -> Self {
-        Self {
-            records_seen: std::cell::Cell::new(0),
-        }
-    }
-}
-
-impl spirit_large_generated::InputNexus for SpiritLargeNexus {
-    type Reply = SpiritLargeReply;
-    type Error = SpiritLargeError;
-
-    fn record(
-        &self,
-        mail: spirit_large_generated::NexusMail<spirit_large_generated::Entry>,
-    ) -> Result<Self::Reply, Self::Error> {
-        let _entry = mail.into_payload();
-        self.records_seen.set(self.records_seen.get() + 1);
-        Ok(SpiritLargeReply::Recorded(self.records_seen.get()))
-    }
-
-    fn correct(
-        &self,
-        _mail: spirit_large_generated::NexusMail<spirit_large_generated::Correction>,
-    ) -> Result<Self::Reply, Self::Error> {
-        Ok(SpiritLargeReply::Corrected)
-    }
-
-    fn observe(
-        &self,
-        _mail: spirit_large_generated::NexusMail<spirit_large_generated::Query>,
-    ) -> Result<Self::Reply, Self::Error> {
-        Ok(SpiritLargeReply::Observed)
-    }
-
-    fn watch(
-        &self,
-        _mail: spirit_large_generated::NexusMail<spirit_large_generated::WatchRequest>,
-    ) -> Result<Self::Reply, Self::Error> {
-        Ok(SpiritLargeReply::Watching)
-    }
-
-    fn unwatch(
-        &self,
-        _mail: spirit_large_generated::NexusMail<spirit_large_generated::SubscriptionToken>,
-    ) -> Result<Self::Reply, Self::Error> {
-        Ok(SpiritLargeReply::Unwatched)
-    }
-
-    fn reindex(
-        &self,
-        _mail: spirit_large_generated::NexusMail<()>,
-    ) -> Result<Self::Reply, Self::Error> {
-        Ok(SpiritLargeReply::Reindexed)
-    }
-
-    fn compact(
-        &self,
-        _mail: spirit_large_generated::NexusMail<()>,
-    ) -> Result<Self::Reply, Self::Error> {
-        Ok(SpiritLargeReply::Compacted)
-    }
+    assert_eq!(event.root, spirit_large_generated::MessageRoot::Input);
 }
 
 fn fixture_path(name: &str, extension: &str) -> PathBuf {

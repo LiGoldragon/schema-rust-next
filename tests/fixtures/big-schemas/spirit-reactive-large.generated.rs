@@ -1007,68 +1007,6 @@ pub mod signal {
     pub type Signal<Root> = super::Signal<Root>;
 }
 
-pub trait InputNexus {
-    type Reply;
-    type Error;
-
-    fn record(&self, mail: NexusMail<Entry>) -> Result<Self::Reply, Self::Error>;
-    fn correct(&self, mail: NexusMail<Correction>) -> Result<Self::Reply, Self::Error>;
-    fn observe(&self, mail: NexusMail<Query>) -> Result<Self::Reply, Self::Error>;
-    fn watch(&self, mail: NexusMail<WatchRequest>) -> Result<Self::Reply, Self::Error>;
-    fn unwatch(&self, mail: NexusMail<SubscriptionToken>) -> Result<Self::Reply, Self::Error>;
-    fn reindex(&self, mail: NexusMail<()>) -> Result<Self::Reply, Self::Error>;
-    fn compact(&self, mail: NexusMail<()>) -> Result<Self::Reply, Self::Error>;
-}
-
-impl Input {
-    pub fn dispatch_mail_with_nexus<NexusActor>(self, identifier: MessageIdentifier, origin_route: OriginRoute, nexus: &NexusActor) -> Result<MessageProcessed<NexusActor::Reply>, NexusActor::Error>
-    where
-        NexusActor: InputNexus,
-    {
-        let reply = match self {
-            Self::Record(payload) => nexus.record(NexusMail::new(identifier, origin_route, payload)),
-            Self::Correct(payload) => nexus.correct(NexusMail::new(identifier, origin_route, payload)),
-            Self::Observe(payload) => nexus.observe(NexusMail::new(identifier, origin_route, payload)),
-            Self::Watch(payload) => nexus.watch(NexusMail::new(identifier, origin_route, payload)),
-            Self::Unwatch(payload) => nexus.unwatch(NexusMail::new(identifier, origin_route, payload)),
-            Self::Reindex => nexus.reindex(NexusMail::new(identifier, origin_route, ())),
-            Self::Compact => nexus.compact(NexusMail::new(identifier, origin_route, ())),
-        }?;
-        Ok(MessageProcessed::new(identifier, origin_route, reply))
-    }
-}
-
-pub trait OutputNexus {
-    type Reply;
-    type Error;
-
-    fn recorded(&self, mail: NexusMail<RecordReceipt>) -> Result<Self::Reply, Self::Error>;
-    fn corrected(&self, mail: NexusMail<CorrectionReceipt>) -> Result<Self::Reply, Self::Error>;
-    fn observed(&self, mail: NexusMail<RecordSet>) -> Result<Self::Reply, Self::Error>;
-    fn watching(&self, mail: NexusMail<SubscriptionReceipt>) -> Result<Self::Reply, Self::Error>;
-    fn unwatched(&self, mail: NexusMail<SubscriptionReceipt>) -> Result<Self::Reply, Self::Error>;
-    fn rejected(&self, mail: NexusMail<Rejection>) -> Result<Self::Reply, Self::Error>;
-    fn indexed(&self, mail: NexusMail<IndexReceipt>) -> Result<Self::Reply, Self::Error>;
-}
-
-impl Output {
-    pub fn dispatch_mail_with_nexus<NexusActor>(self, identifier: MessageIdentifier, origin_route: OriginRoute, nexus: &NexusActor) -> Result<MessageProcessed<NexusActor::Reply>, NexusActor::Error>
-    where
-        NexusActor: OutputNexus,
-    {
-        let reply = match self {
-            Self::Recorded(payload) => nexus.recorded(NexusMail::new(identifier, origin_route, payload)),
-            Self::Corrected(payload) => nexus.corrected(NexusMail::new(identifier, origin_route, payload)),
-            Self::Observed(payload) => nexus.observed(NexusMail::new(identifier, origin_route, payload)),
-            Self::Watching(payload) => nexus.watching(NexusMail::new(identifier, origin_route, payload)),
-            Self::Unwatched(payload) => nexus.unwatched(NexusMail::new(identifier, origin_route, payload)),
-            Self::Rejected(payload) => nexus.rejected(NexusMail::new(identifier, origin_route, payload)),
-            Self::Indexed(payload) => nexus.indexed(NexusMail::new(identifier, origin_route, payload)),
-        }?;
-        Ok(MessageProcessed::new(identifier, origin_route, reply))
-    }
-}
-
 pub trait UpgradeFrom<Previous>: Sized {
     type Error;
 

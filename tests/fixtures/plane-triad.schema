@@ -1,10 +1,12 @@
 [(Record Entry) (Observe Query)]
 [(RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport)]
 {
-  NexusInput [(Signal Input) (Sema SemaOutput)]
-  NexusOutput [(Sema SemaInput) (Signal Output)]
-  SemaInput [(Record Entry) (Observe Query)]
-  SemaOutput [(Recorded SemaReceipt) (Observed ObservedRecords) (Missed ErrorReport)]
+  NexusInput [(Signal Input) (SemaWrite SemaWriteOutput) (SemaRead SemaReadOutput)]
+  NexusOutput [(SemaWrite SemaWriteInput) (SemaRead SemaReadInput) (Signal Output)]
+  SemaWriteInput [(Record Entry)]
+  SemaReadInput [(Observe Query)]
+  SemaWriteOutput [(Recorded SemaReceipt) (Missed ErrorReport)]
+  SemaReadOutput [(Observed ObservedRecords) (Missed ErrorReport)]
   Topic String
   Description String
   ErrorMessage String

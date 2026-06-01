@@ -1575,62 +1575,6 @@ pub mod signal {
     pub type Signal<Root> = super::Signal<Root>;
 }
 
-pub trait InputNexus {
-    type Reply;
-    type Error;
-
-    fn signal_in(&self, mail: NexusMail<SignalRequest>) -> Result<Self::Reply, Self::Error>;
-    fn nexus_in(&self, mail: NexusMail<NexusRequest>) -> Result<Self::Reply, Self::Error>;
-    fn sema_in(&self, mail: NexusMail<SemaRequest>) -> Result<Self::Reply, Self::Error>;
-    fn admin(&self, mail: NexusMail<AdminRequest>) -> Result<Self::Reply, Self::Error>;
-    fn heartbeat(&self, mail: NexusMail<()>) -> Result<Self::Reply, Self::Error>;
-}
-
-impl Input {
-    pub fn dispatch_mail_with_nexus<NexusActor>(self, identifier: MessageIdentifier, origin_route: OriginRoute, nexus: &NexusActor) -> Result<MessageProcessed<NexusActor::Reply>, NexusActor::Error>
-    where
-        NexusActor: InputNexus,
-    {
-        let reply = match self {
-            Self::SignalIn(payload) => nexus.signal_in(NexusMail::new(identifier, origin_route, payload)),
-            Self::NexusIn(payload) => nexus.nexus_in(NexusMail::new(identifier, origin_route, payload)),
-            Self::SemaIn(payload) => nexus.sema_in(NexusMail::new(identifier, origin_route, payload)),
-            Self::Admin(payload) => nexus.admin(NexusMail::new(identifier, origin_route, payload)),
-            Self::Heartbeat => nexus.heartbeat(NexusMail::new(identifier, origin_route, ())),
-        }?;
-        Ok(MessageProcessed::new(identifier, origin_route, reply))
-    }
-}
-
-pub trait OutputNexus {
-    type Reply;
-    type Error;
-
-    fn signal_out(&self, mail: NexusMail<SignalReply>) -> Result<Self::Reply, Self::Error>;
-    fn nexus_out(&self, mail: NexusMail<NexusReply>) -> Result<Self::Reply, Self::Error>;
-    fn sema_out(&self, mail: NexusMail<SemaReply>) -> Result<Self::Reply, Self::Error>;
-    fn admin_out(&self, mail: NexusMail<AdminReply>) -> Result<Self::Reply, Self::Error>;
-    fn event(&self, mail: NexusMail<RuntimeEvent>) -> Result<Self::Reply, Self::Error>;
-    fn rejected(&self, mail: NexusMail<Rejected>) -> Result<Self::Reply, Self::Error>;
-}
-
-impl Output {
-    pub fn dispatch_mail_with_nexus<NexusActor>(self, identifier: MessageIdentifier, origin_route: OriginRoute, nexus: &NexusActor) -> Result<MessageProcessed<NexusActor::Reply>, NexusActor::Error>
-    where
-        NexusActor: OutputNexus,
-    {
-        let reply = match self {
-            Self::SignalOut(payload) => nexus.signal_out(NexusMail::new(identifier, origin_route, payload)),
-            Self::NexusOut(payload) => nexus.nexus_out(NexusMail::new(identifier, origin_route, payload)),
-            Self::SemaOut(payload) => nexus.sema_out(NexusMail::new(identifier, origin_route, payload)),
-            Self::AdminOut(payload) => nexus.admin_out(NexusMail::new(identifier, origin_route, payload)),
-            Self::Event(payload) => nexus.event(NexusMail::new(identifier, origin_route, payload)),
-            Self::Rejected(payload) => nexus.rejected(NexusMail::new(identifier, origin_route, payload)),
-        }?;
-        Ok(MessageProcessed::new(identifier, origin_route, reply))
-    }
-}
-
 pub trait UpgradeFrom<Previous>: Sized {
     type Error;
 

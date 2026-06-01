@@ -674,48 +674,6 @@ pub mod signal {
     pub type Signal<Root> = super::Signal<Root>;
 }
 
-pub trait InputNexus {
-    type Reply;
-    type Error;
-
-    fn record(&self, mail: NexusMail<Entry>) -> Result<Self::Reply, Self::Error>;
-    fn observe(&self, mail: NexusMail<Query>) -> Result<Self::Reply, Self::Error>;
-}
-
-impl Input {
-    pub fn dispatch_mail_with_nexus<NexusActor>(self, identifier: MessageIdentifier, origin_route: OriginRoute, nexus: &NexusActor) -> Result<MessageProcessed<NexusActor::Reply>, NexusActor::Error>
-    where
-        NexusActor: InputNexus,
-    {
-        let reply = match self {
-            Self::Record(payload) => nexus.record(NexusMail::new(identifier, origin_route, payload)),
-            Self::Observe(payload) => nexus.observe(NexusMail::new(identifier, origin_route, payload)),
-        }?;
-        Ok(MessageProcessed::new(identifier, origin_route, reply))
-    }
-}
-
-pub trait OutputNexus {
-    type Reply;
-    type Error;
-
-    fn record_accepted(&self, mail: NexusMail<RecordIdentifier>) -> Result<Self::Reply, Self::Error>;
-    fn records_observed(&self, mail: NexusMail<RecordSet>) -> Result<Self::Reply, Self::Error>;
-}
-
-impl Output {
-    pub fn dispatch_mail_with_nexus<NexusActor>(self, identifier: MessageIdentifier, origin_route: OriginRoute, nexus: &NexusActor) -> Result<MessageProcessed<NexusActor::Reply>, NexusActor::Error>
-    where
-        NexusActor: OutputNexus,
-    {
-        let reply = match self {
-            Self::RecordAccepted(payload) => nexus.record_accepted(NexusMail::new(identifier, origin_route, payload)),
-            Self::RecordsObserved(payload) => nexus.records_observed(NexusMail::new(identifier, origin_route, payload)),
-        }?;
-        Ok(MessageProcessed::new(identifier, origin_route, reply))
-    }
-}
-
 pub trait UpgradeFrom<Previous>: Sized {
     type Error;
 

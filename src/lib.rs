@@ -190,7 +190,6 @@ impl RustModule {
         writer.emit_mail_event_support(&self.root_enums);
         writer.emit_plane_namespaces(&self.declarations, &self.root_enums);
         writer.emit_plane_projection_support(&self.declarations, &self.root_enums);
-        writer.emit_nexus_support(&self.root_enums);
         writer.emit_schema_plane_trait_support(&self.declarations, &self.root_enums);
         writer.emit_upgrade_support();
         RustCode(writer.finish())
@@ -666,6 +665,17 @@ struct RustWriter {
     map_key_types: Vec<String>,
     private_type_names: Vec<String>,
     nota_surface: NotaSurface,
+}
+
+struct SplitSemaProjection<'schema> {
+    signal_input: &'schema RustEnum,
+    signal_output: &'schema RustEnum,
+    nexus_input: &'schema RustEnum,
+    nexus_output: &'schema RustEnum,
+    sema_write_input: &'schema RustEnum,
+    sema_write_output: &'schema RustEnum,
+    sema_read_input: &'schema RustEnum,
+    sema_read_output: &'schema RustEnum,
 }
 
 impl RustWriter {
@@ -1435,13 +1445,31 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-        if self.has_type(declarations, "SemaInput") || self.has_type(declarations, "SemaOutput") {
+        if self.has_type(declarations, "SemaInput")
+            || self.has_type(declarations, "SemaOutput")
+            || self.has_type(declarations, "SemaWriteInput")
+            || self.has_type(declarations, "SemaWriteOutput")
+            || self.has_type(declarations, "SemaReadInput")
+            || self.has_type(declarations, "SemaReadOutput")
+        {
             self.line("pub mod sema {");
             if self.has_type(declarations, "SemaInput") {
                 self.line("    pub type Input = super::SemaInput;");
             }
             if self.has_type(declarations, "SemaOutput") {
                 self.line("    pub type Output = super::SemaOutput;");
+            }
+            if self.has_type(declarations, "SemaWriteInput") {
+                self.line("    pub type WriteInput = super::SemaWriteInput;");
+            }
+            if self.has_type(declarations, "SemaWriteOutput") {
+                self.line("    pub type WriteOutput = super::SemaWriteOutput;");
+            }
+            if self.has_type(declarations, "SemaReadInput") {
+                self.line("    pub type ReadInput = super::SemaReadInput;");
+            }
+            if self.has_type(declarations, "SemaReadOutput") {
+                self.line("    pub type ReadOutput = super::SemaReadOutput;");
             }
             self.line("    pub type Sema<Root> = super::Sema<Root>;");
             self.line("}");
@@ -1458,6 +1486,18 @@ impl RustWriter {
         }
         if self.has_type(declarations, "SemaOutput") {
             self.emit_plane_origin_route_constructor("SemaOutput", "sema::Sema", "sema::Sema");
+        }
+        if self.has_type(declarations, "SemaWriteInput") {
+            self.emit_plane_origin_route_constructor("SemaWriteInput", "sema::Sema", "sema::Sema");
+        }
+        if self.has_type(declarations, "SemaWriteOutput") {
+            self.emit_plane_origin_route_constructor("SemaWriteOutput", "sema::Sema", "sema::Sema");
+        }
+        if self.has_type(declarations, "SemaReadInput") {
+            self.emit_plane_origin_route_constructor("SemaReadInput", "sema::Sema", "sema::Sema");
+        }
+        if self.has_type(declarations, "SemaReadOutput") {
+            self.emit_plane_origin_route_constructor("SemaReadOutput", "sema::Sema", "sema::Sema");
         }
     }
 
@@ -1488,6 +1528,10 @@ impl RustWriter {
         let nexus_output = self.declaration_enum_named(declarations, "NexusOutput");
         let sema_input = self.declaration_enum_named(declarations, "SemaInput");
         let sema_output = self.declaration_enum_named(declarations, "SemaOutput");
+        let sema_write_input = self.declaration_enum_named(declarations, "SemaWriteInput");
+        let sema_write_output = self.declaration_enum_named(declarations, "SemaWriteOutput");
+        let sema_read_input = self.declaration_enum_named(declarations, "SemaReadInput");
+        let sema_read_output = self.declaration_enum_named(declarations, "SemaReadOutput");
 
         if signal_input.is_some()
             && nexus_input
@@ -1497,6 +1541,45 @@ impl RustWriter {
         }
 
         if let (
+            Some(signal_input),
+            Some(signal_output),
+            Some(nexus_input),
+            Some(nexus_output),
+            Some(sema_write_input),
+            Some(sema_write_output),
+            Some(sema_read_input),
+            Some(sema_read_output),
+        ) = (
+            signal_input,
+            signal_output,
+            nexus_input,
+            nexus_output,
+            sema_write_input,
+            sema_write_output,
+            sema_read_input,
+            sema_read_output,
+        ) {
+            let projection = SplitSemaProjection {
+                signal_input,
+                signal_output,
+                nexus_input,
+                nexus_output,
+                sema_write_input,
+                sema_write_output,
+                sema_read_input,
+                sema_read_output,
+            };
+            if self.can_emit_split_nexus_input_projection(&projection) {
+                self.emit_split_nexus_input_projection(&projection);
+            }
+            self.emit_nexus_output_projection(nexus_output);
+            if self.enum_has_unique_payload_variant(nexus_input, "SemaWrite", "SemaWriteOutput") {
+                self.emit_split_sema_output_projection("WriteOutput", "SemaWriteOutput");
+            }
+            if self.enum_has_unique_payload_variant(nexus_input, "SemaRead", "SemaReadOutput") {
+                self.emit_split_sema_output_projection("ReadOutput", "SemaReadOutput");
+            }
+        } else if let (
             Some(signal_input),
             Some(signal_output),
             Some(nexus_input),
@@ -1574,10 +1657,64 @@ impl RustWriter {
         self.blank();
     }
 
+    fn emit_split_nexus_input_projection(&mut self, projection: &SplitSemaProjection<'_>) {
+        self.line("impl nexus::Nexus<nexus::Input> {");
+        self.line("    pub fn into_nexus_output(self) -> nexus::Nexus<nexus::Output> {");
+        self.line("        let origin_route = self.origin_route();");
+        self.line("        match self.into_root() {");
+        self.line("            NexusInput::Signal(input) => match input {");
+        for variant in projection.signal_input.variants() {
+            let Some(payload) = self.plain_payload_name(variant) else {
+                continue;
+            };
+            if self.enum_has_unique_plain_payload(projection.sema_write_input, payload) {
+                self.line(format!(
+                    "                Input::{}(payload) => NexusOutput::from(SemaWriteInput::from(payload)),",
+                    variant.name()
+                ));
+            } else if self.enum_has_unique_plain_payload(projection.sema_read_input, payload) {
+                self.line(format!(
+                    "                Input::{}(payload) => NexusOutput::from(SemaReadInput::from(payload)),",
+                    variant.name()
+                ));
+            }
+        }
+        self.line("            },");
+        self.line("            NexusInput::SemaWrite(output) => match output {");
+        for variant in projection.sema_write_output.variants() {
+            if variant.payload().is_some() {
+                self.line(format!(
+                    "                SemaWriteOutput::{}(payload) => NexusOutput::from(Output::from(payload)),",
+                    variant.name()
+                ));
+            }
+        }
+        self.line("            },");
+        self.line("            NexusInput::SemaRead(output) => match output {");
+        for variant in projection.sema_read_output.variants() {
+            if variant.payload().is_some() {
+                self.line(format!(
+                    "                SemaReadOutput::{}(payload) => NexusOutput::from(Output::from(payload)),",
+                    variant.name()
+                ));
+            }
+        }
+        self.line("            },");
+        self.line("        }");
+        self.line("        .with_origin_route(origin_route)");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+    }
+
     fn emit_nexus_output_projection(&mut self, nexus_output: &RustEnum) {
         let has_sema = self.enum_has_variant_payload(nexus_output, "Sema", "SemaInput");
+        let has_sema_write =
+            self.enum_has_variant_payload(nexus_output, "SemaWrite", "SemaWriteInput");
+        let has_sema_read =
+            self.enum_has_variant_payload(nexus_output, "SemaRead", "SemaReadInput");
         let has_signal = self.enum_has_variant_payload(nexus_output, "Signal", "Output");
-        if !has_sema && !has_signal {
+        if !has_sema && !has_sema_write && !has_sema_read && !has_signal {
             return;
         }
         self.line("impl nexus::Nexus<nexus::Output> {");
@@ -1597,6 +1734,30 @@ impl RustWriter {
                 self.blank();
             }
         }
+        if has_sema_write {
+            self.line("    pub fn into_sema_write_input(self) -> sema::Sema<sema::WriteInput> {");
+            self.line("        let origin_route = self.origin_route();");
+            self.line("        match self.into_root() {");
+            self.line("            NexusOutput::SemaWrite(input) => input.with_origin_route(origin_route),");
+            self.line("            _ => panic!(\"nexus output is not a SEMA write input\"),");
+            self.line("        }");
+            self.line("    }");
+            if has_sema_read || has_signal {
+                self.blank();
+            }
+        }
+        if has_sema_read {
+            self.line("    pub fn into_sema_read_input(self) -> sema::Sema<sema::ReadInput> {");
+            self.line("        let origin_route = self.origin_route();");
+            self.line("        match self.into_root() {");
+            self.line("            NexusOutput::SemaRead(input) => input.with_origin_route(origin_route),");
+            self.line("            _ => panic!(\"nexus output is not a SEMA read input\"),");
+            self.line("        }");
+            self.line("    }");
+            if has_signal {
+                self.blank();
+            }
+        }
         if has_signal {
             self.line("    pub fn into_signal_output(self) -> signal::Signal<signal::Output> {");
             self.line("        let origin_route = self.origin_route();");
@@ -1610,6 +1771,17 @@ impl RustWriter {
         }
         self.line("}");
         self.blank();
+    }
+
+    fn emit_split_sema_output_projection(&mut self, plane_alias: &str, type_name: &str) {
+        self.line(format!("impl sema::Sema<sema::{plane_alias}> {{"));
+        self.line("    pub fn into_nexus_input(self) -> nexus::Nexus<nexus::Input> {");
+        self.line("        let origin_route = self.origin_route();");
+        self.line("        NexusInput::from(self.into_root()).with_origin_route(origin_route)");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        let _ = type_name;
     }
 
     fn emit_sema_output_projection(&mut self) {
@@ -1637,6 +1809,52 @@ impl RustWriter {
             && self.enum_has_unique_payload_variant(nexus_output, "Signal", "Output")
             && self.all_payloads_project_to(signal_input, sema_input)
             && self.all_payloads_project_to(sema_output, signal_output)
+    }
+
+    fn can_emit_split_nexus_input_projection(&self, projection: &SplitSemaProjection<'_>) -> bool {
+        self.enum_has_unique_payload_variant(projection.nexus_input, "Signal", "Input")
+            && self.enum_has_unique_payload_variant(
+                projection.nexus_input,
+                "SemaWrite",
+                "SemaWriteOutput",
+            )
+            && self.enum_has_unique_payload_variant(
+                projection.nexus_input,
+                "SemaRead",
+                "SemaReadOutput",
+            )
+            && self.enum_has_unique_payload_variant(
+                projection.nexus_output,
+                "SemaWrite",
+                "SemaWriteInput",
+            )
+            && self.enum_has_unique_payload_variant(
+                projection.nexus_output,
+                "SemaRead",
+                "SemaReadInput",
+            )
+            && self.enum_has_unique_payload_variant(projection.nexus_output, "Signal", "Output")
+            && self.all_payloads_project_to_one_of(
+                projection.signal_input,
+                projection.sema_write_input,
+                projection.sema_read_input,
+            )
+            && self.all_payloads_project_to(projection.sema_write_output, projection.signal_output)
+            && self.all_payloads_project_to(projection.sema_read_output, projection.signal_output)
+    }
+
+    fn all_payloads_project_to_one_of(
+        &self,
+        source: &RustEnum,
+        first_target: &RustEnum,
+        second_target: &RustEnum,
+    ) -> bool {
+        source.variants().iter().all(|variant| {
+            self.plain_payload_name(variant).is_some_and(|payload| {
+                self.enum_has_unique_plain_payload(first_target, payload)
+                    || self.enum_has_unique_plain_payload(second_target, payload)
+            })
+        })
     }
 
     fn all_payloads_project_to(&self, source: &RustEnum, target: &RustEnum) -> bool {
@@ -1676,63 +1894,6 @@ impl RustWriter {
         self.unique_plain_payload_variants(declaration)
             .iter()
             .any(|variant| self.plain_payload_name(variant) == Some(payload_name))
-    }
-
-    fn emit_nexus_support(&mut self, root_enums: &[RustEnum]) {
-        for root_enum in root_enums {
-            self.emit_nexus_trait(root_enum);
-            self.blank();
-            self.emit_nexus_dispatch_impl(root_enum);
-            self.blank();
-        }
-    }
-
-    fn emit_nexus_trait(&mut self, root_enum: &RustEnum) {
-        let trait_name = format!("{}Nexus", root_enum.name());
-        self.line(format!("pub trait {trait_name} {{"));
-        self.line("    type Reply;");
-        self.line("    type Error;");
-        self.blank();
-        for variant in root_enum.variants() {
-            let method_name = variant.name().field_name();
-            match variant.payload() {
-                Some(payload) => self.line(format!(
-                    "    fn {method_name}(&self, mail: NexusMail<{}>) -> Result<Self::Reply, Self::Error>;",
-                    self.rust_type(payload)
-                )),
-                None => self.line(format!(
-                    "    fn {method_name}(&self, mail: NexusMail<()>) -> Result<Self::Reply, Self::Error>;"
-                )),
-            }
-        }
-        self.line("}");
-    }
-
-    fn emit_nexus_dispatch_impl(&mut self, root_enum: &RustEnum) {
-        let trait_name = format!("{}Nexus", root_enum.name());
-        self.line(format!("impl {} {{", root_enum.name()));
-        self.line("    pub fn dispatch_mail_with_nexus<NexusActor>(self, identifier: MessageIdentifier, origin_route: OriginRoute, nexus: &NexusActor) -> Result<MessageProcessed<NexusActor::Reply>, NexusActor::Error>");
-        self.line("    where");
-        self.line(format!("        NexusActor: {trait_name},"));
-        self.line("    {");
-        self.line("        let reply = match self {");
-        for variant in root_enum.variants() {
-            let method_name = variant.name().field_name();
-            match variant.payload() {
-                Some(_) => self.line(format!(
-                    "            Self::{}(payload) => nexus.{method_name}(NexusMail::new(identifier, origin_route, payload)),",
-                    variant.name()
-                )),
-                None => self.line(format!(
-                    "            Self::{} => nexus.{method_name}(NexusMail::new(identifier, origin_route, ())),",
-                    variant.name()
-                )),
-            }
-        }
-        self.line("        }?;");
-        self.line("        Ok(MessageProcessed::new(identifier, origin_route, reply))");
-        self.line("    }");
-        self.line("}");
     }
 
     fn emit_upgrade_support(&mut self) {
@@ -1777,7 +1938,19 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-        if self.has_type(declarations, "SemaInput") && self.has_type(declarations, "SemaOutput") {
+        if self.has_type(declarations, "SemaWriteInput")
+            && self.has_type(declarations, "SemaWriteOutput")
+            && self.has_type(declarations, "SemaReadInput")
+            && self.has_type(declarations, "SemaReadOutput")
+        {
+            self.line("pub trait SemaEngine {");
+            self.line("    fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;");
+            self.line("    fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;");
+            self.line("}");
+            self.blank();
+        } else if self.has_type(declarations, "SemaInput")
+            && self.has_type(declarations, "SemaOutput")
+        {
             self.line("pub trait SemaEngine {");
             self.line("    fn apply(&mut self, input: sema::Sema<sema::Input>) -> sema::Sema<sema::Output>;");
             self.line("}");
