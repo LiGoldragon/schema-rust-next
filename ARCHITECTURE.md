@@ -58,19 +58,20 @@ must not grow a second parser for the authored form.
   compile that source rather than hiding the interface in `OUT_DIR`.
 - Emission is tested by source fixture comparison and by compiling the fixture
   as Rust code.
-- Root declarations emit Nexus traits. Runtime code implements those
-  traits on data-bearing engine objects, and the generated enum dispatches
-  in-flight `NexusMail<Payload>` to one method per variant. Nexus names the
-  execution-IO plane and mail keeper; it replaces the older executor wording.
+- Root declarations emit Signal, Nexus, and SEMA traits. Runtime code
+  implements those traits on data-bearing engine objects. Signal triage
+  creates generated Nexus envelopes directly, Nexus executes through the
+  generated mutable trait, and SEMA splits writes from reads. No generated
+  convenience mail wrapper or parallel dispatch trait remains beside the
+  working plane traits.
 - Signal, Nexus, and SEMA roots are emitted from the same schema shape:
   imports/exports, input, output, and namespace. Emission may attach different
   support traits per plane, but the generated Rust mirrors the same authored
   schema structure.
 - Plane namespaces are emitted for the three runtime planes. `signal::Input`,
-  `nexus::Input`, and `sema::Input` are the public shape for plane-local
-  payloads; the current flat backing names (`Input`, `NexusInput`,
-  `SemaInput`) are a bootstrap detail until the schema files split fully by
-  plane.
+  `nexus::Input`, `sema::WriteInput`, and `sema::ReadInput` are the public
+  shape for plane-local payloads; the current flat backing names are a
+  bootstrap detail until schema files split fully by plane.
 - Single-colon schema namespaces map to generated Rust module paths. The
   schema path `spirit-next:nexus:Mail` becomes a module/type path under
   `src/schema/` without inventing a second naming system.
@@ -94,10 +95,9 @@ must not grow a second parser for the authored form.
   surface for code that needs to branch across planes.
   `MessageSent` records the message identifier, origin route, root schema type,
   and short header, and pushes through `MessageSentHook` so routers, UI layers,
-  or introspection subscribers can react without polling. `NexusMail<Payload>`
-  represents mail being processed by Nexus and carries the same origin route;
-  `MessageProcessed` carries it again with the processed reply after Nexus
-  receives the SEMA or execution outcome.
+  or introspection subscribers can react without polling. `MessageProcessed`
+  carries the same origin route with the processed reply after Nexus receives
+  the SEMA or execution outcome.
 - Generated objects are the hand-written behavior surfaces. The emitter must
   not compensate for missing runtime nouns by producing free helper functions.
   If dispatch, upgrade, mail acceptance, or SEMA application needs behavior,
@@ -107,10 +107,12 @@ must not grow a second parser for the authored form.
   The Signal trait only owns boundary triage: Signal input becomes Nexus input,
   and Nexus replies become Signal output. Schemas that declare
   `NexusInput`/`NexusOutput` emit a mutable `NexusEngine` trait for the heavier
-  execution and decision plane. Schemas that declare `SemaInput`/`SemaOutput`
-  emit a `SemaEngine` trait for durable state work. Tests and runtime code use
-  those generated plane traits so Signal, Nexus, and SEMA take and return
-  routed root messages for their own planes.
+  execution and decision plane. Schemas that declare `SemaWriteInput` /
+  `SemaWriteOutput` plus `SemaReadInput` / `SemaReadOutput` emit a
+  `SemaEngine` trait with `apply(&mut self, ...)` for mutations and
+  `observe(&self, ...)` for reads. Tests and runtime code use those generated
+  plane traits so Signal, Nexus, and SEMA take and return routed root messages
+  for their own planes.
 - Mail identifiers, origin routes, and short headers use the generated scalar
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is

@@ -30,10 +30,11 @@ vector of wrappers; the emitter consumes `Asschema::input_and_output()` as the
 two direct root enum definitions.*
 
 *Plane payload names are scoped by emitted namespaces. The generated public
-surface should read `signal::Input`, `nexus::Input`, and `sema::Input`
-inside their respective planes rather than forcing redundant names like
-`SemaInput` at every use site. The backing flat names may exist during the
-bootstrap, but trait signatures and examples should use the plane namespace.*
+surface should read `signal::Input`, `nexus::Input`,
+`sema::WriteInput`, and `sema::ReadInput` inside their respective planes
+rather than forcing redundant plane ancestry at every use site. The backing
+flat names may exist during bootstrap, but trait signatures and examples
+should use the plane namespace.*
 
 *Plane identity is matchable data, not a separate kind tag. When runtime code
 needs to branch across Signal, Nexus, and SEMA, the emitted surface is
@@ -48,17 +49,19 @@ the type definition and its rkyv/NOTA implementations; the consumer only uses
 the alias in its local signal/Nexus/SEMA objects and bridges imported decode
 errors into the local generated error type.*
 
-*Nexus is also the mail keeper. When Signal input enters Nexus, it is wrapped
-as `NexusMail<Payload>` with a message identifier; while Nexus owns that value,
-the mail is being processed. Nexus receives SEMA or execution replies and emits
-`MessageProcessed<Reply>` before the runtime translates the reply back to the
-Signal output surface.*
+*Nexus is also the decision and mail-keeper plane. Signal triage produces a
+generated `nexus::Nexus<nexus::Input>` envelope directly; while Nexus executes
+through `NexusEngine::execute`, the origin route is the return address carried
+through SEMA and back into Signal. Nexus receives SEMA or execution replies and
+emits `MessageProcessed<Reply>` before the runtime translates the reply back to
+the Signal output surface. Old generated convenience mail wrappers do not stay
+beside this working trait path.*
 
-*The async mail path is object flow. Generated `MessageSent`,
-`NexusMail<Payload>`, `NexusInput`, `NexusOutput`, `SemaInput`, `SemaOutput`,
-and `MessageProcessed<Reply>` are the objects the runtime acts on. The emitter
-should create trait and method targets for those objects, not procedural helper
-functions around them.*
+*The async mail path is object flow. Generated `MessageSent`, `NexusInput`,
+`NexusOutput`, `SemaWriteInput`, `SemaWriteOutput`, `SemaReadInput`,
+`SemaReadOutput`, and `MessageProcessed<Reply>` are the objects the runtime
+acts on. The emitter should create trait and method targets for those objects,
+not procedural helper functions around them.*
 
 *Schema-plane tests use schema-plane traits. When a schema declares
 `Input` and `Output` roots, the emitter provides a `SignalEngine` trait so
@@ -66,10 +69,10 @@ the signal boundary triages routed Signal input into routed Nexus input and
 turns routed Nexus replies into routed Signal output. When a schema declares
 `NexusInput` and `NexusOutput`, the emitter provides a mutable `NexusEngine`
 target for execution-plane object flow and heavier decision-making. When a
-schema declares `SemaInput` and `SemaOutput`, the emitter provides the
-`SemaEngine` trait so the store/state engine takes a SEMA schema object and
-returns a SEMA schema object. Runtime tests must invoke those generated trait
-surfaces rather than primitive or test-local commands.*
+schema declares split `SemaWrite*` and `SemaRead*` roots, the emitter provides
+the `SemaEngine` trait with a mutable write method and shared-reference read
+method. Runtime tests must invoke those generated trait surfaces rather than
+primitive or test-local commands.*
 
 *Schema version changes drive upgrade surfaces. If a data type has not changed,
 no upgrade code is emitted for it. If it has changed, the generated noun exposes

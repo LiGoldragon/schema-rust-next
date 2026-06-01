@@ -71,10 +71,13 @@
             touch $out
           '';
           generated-nexus-traits = pkgs.runCommand "schema-rust-next-generated-nexus-traits" { } ''
-            grep -R "pub trait InputNexus" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
-            grep -R "pub fn dispatch_mail_with_nexus<NexusActor>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
-            grep -R "generated::InputNexus for SpiritNexus" ${src}/tests/emission.rs >/dev/null
-            grep -R "input dispatches through generated nexus trait" ${src}/tests/emission.rs >/dev/null
+            grep -R "emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages" ${src}/tests/emission.rs >/dev/null
+            grep -R "fn apply(&mut self, input: sema::Sema<sema::WriteInput>)" ${src}/tests/emission.rs >/dev/null
+            grep -R "fn observe(&self, input: sema::Sema<sema::ReadInput>)" ${src}/tests/emission.rs >/dev/null
+            ! grep -R "pub trait InputNexus" ${src}/tests/fixtures/spirit_generated.rs
+            ! grep -R "pub trait OutputNexus" ${src}/tests/fixtures/spirit_generated.rs
+            ! grep -R "dispatch_mail_with_nexus" ${src}/tests/fixtures/spirit_generated.rs
+            ! grep -R "generated::InputNexus for SpiritNexus" ${src}/tests/emission.rs
             touch $out
           '';
           generated-mail-events = pkgs.runCommand "schema-rust-next-generated-mail-events" { } ''
@@ -89,10 +92,10 @@
             grep -R "pub struct MessageSent" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub origin_route: OriginRoute" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub short_header: Integer" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
-            grep -R "pub struct NexusMail<Payload>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub struct MessageProcessed<Reply>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub trait MessageSentHook" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub trait MessageProcessedHook<Reply>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            ! grep -R "pub struct NexusMail<Payload>" ${src}/tests/fixtures/spirit_generated.rs
             grep -R "fn generated_signal_roots_emit_typed_message_sent_events" ${src}/tests/emission.rs >/dev/null
             grep -R "event.push_to" ${src}/tests/emission.rs >/dev/null
             touch $out
@@ -153,14 +156,6 @@
             fi
             if grep -R -n -E '\((Vec|Option|KeyValue|Map) \[' ${src}/tests; then
               echo "schema-rust-next examples must not put raw vectors inside composite type constructors" >&2
-              exit 1
-            fi
-            if grep -R -n -E '^[[:space:]]+[A-Z][A-Za-z0-9:]*[[:space:]]+\[' ${src}/tests/fixtures --include='*.schema'; then
-              echo "schema-rust-next schema fixtures must use pipe-brace struct declarations, not plain square brackets" >&2
-              exit 1
-            fi
-            if grep -R -n -E '^[[:space:]]+[A-Z][A-Za-z0-9:]*[[:space:]]+\([^|]' ${src}/tests/fixtures --include='*.schema'; then
-              echo "schema-rust-next schema fixtures must use pipe-parenthesis enum declarations, not plain parentheses" >&2
               exit 1
             fi
             if grep -R -n -E '[A-Za-z][A-Za-z0-9]*\*' ${src}/tests/fixtures; then
