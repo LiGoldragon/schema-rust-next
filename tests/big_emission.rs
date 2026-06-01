@@ -312,7 +312,7 @@ fn generated_big_rust_contains_the_current_schema_stack_surfaces() {
     assert!(spirit.contains("pub enum Output"));
     assert!(spirit.contains("pub fn encode_signal_frame"));
     assert!(spirit.contains("pub struct OriginRoute"));
-    assert!(spirit.contains("pub struct NexusMail<Payload>"));
+    assert!(!spirit.contains("pub struct NexusMail<Payload>"));
     assert!(!spirit.contains("pub trait InputNexus"));
     assert!(!spirit.contains("dispatch_mail_with_nexus"));
     assert!(spirit.contains("pub topics: Topics,"));

@@ -256,13 +256,7 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
     assert!(generated.code.as_str().contains(
         "fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;"
     ));
-    assert!(
-        generated
-            .code
-            .as_str()
-            .contains("impl<Payload> NexusMail<Payload>")
-    );
-    assert!(generated.code.as_str().contains("Input: From<Payload>"));
+    assert!(!generated.code.as_str().contains("NexusMail<Payload>"));
     assert!(
         generated
             .code

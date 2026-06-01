@@ -1254,13 +1254,6 @@ impl RustWriter {
         self.line("}");
         self.blank();
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
-        self.line("pub struct NexusMail<Payload> {");
-        self.line("    pub identifier: MessageIdentifier,");
-        self.line("    pub origin_route: OriginRoute,");
-        self.line("    pub payload: Payload,");
-        self.line("}");
-        self.blank();
-        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line("pub struct MessageProcessed<Reply> {");
         self.line("    pub identifier: MessageIdentifier,");
         self.line("    pub origin_route: OriginRoute,");
@@ -1289,24 +1282,6 @@ impl RustWriter {
         self.line("        Hook: MessageSentHook,");
         self.line("    {");
         self.line("        hook.message_sent(self.clone())");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line("impl<Payload> NexusMail<Payload> {");
-        self.line("    pub fn new(identifier: MessageIdentifier, origin_route: OriginRoute, payload: Payload) -> Self {");
-        self.line("        Self { identifier, origin_route, payload }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn identifier(&self) -> MessageIdentifier {");
-        self.line("        self.identifier");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn origin_route(&self) -> OriginRoute {");
-        self.line("        self.origin_route");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn into_payload(self) -> Payload {");
-        self.line("        self.payload");
         self.line("    }");
         self.line("}");
         self.blank();
@@ -1533,13 +1508,6 @@ impl RustWriter {
         let sema_read_input = self.declaration_enum_named(declarations, "SemaReadInput");
         let sema_read_output = self.declaration_enum_named(declarations, "SemaReadOutput");
 
-        if signal_input.is_some()
-            && nexus_input
-                .is_some_and(|value| self.enum_has_unique_payload_variant(value, "Signal", "Input"))
-        {
-            self.emit_nexus_mail_projection();
-        }
-
         if let (
             Some(signal_input),
             Some(signal_output),
@@ -1609,20 +1577,6 @@ impl RustWriter {
                 self.emit_sema_output_projection();
             }
         }
-    }
-
-    fn emit_nexus_mail_projection(&mut self) {
-        self.line("impl<Payload> NexusMail<Payload>");
-        self.line("where");
-        self.line("    Input: From<Payload>,");
-        self.line("    NexusInput: From<Input>,");
-        self.line("{");
-        self.line("    pub fn into_nexus_input(self) -> nexus::Nexus<nexus::Input> {");
-        self.line("        let origin_route = self.origin_route();");
-        self.line("        NexusInput::from(Input::from(self.into_payload())).with_origin_route(origin_route)");
-        self.line("    }");
-        self.line("}");
-        self.blank();
     }
 
     fn emit_nexus_input_projection(&mut self, signal_input: &RustEnum, sema_output: &RustEnum) {

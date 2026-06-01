@@ -550,13 +550,6 @@ pub struct MessageSent {
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct NexusMail<Payload> {
-    pub identifier: MessageIdentifier,
-    pub origin_route: OriginRoute,
-    pub payload: Payload,
-}
-
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MessageProcessed<Reply> {
     pub identifier: MessageIdentifier,
     pub origin_route: OriginRoute,
@@ -585,24 +578,6 @@ impl MessageSent {
         Hook: MessageSentHook,
     {
         hook.message_sent(self.clone())
-    }
-}
-
-impl<Payload> NexusMail<Payload> {
-    pub fn new(identifier: MessageIdentifier, origin_route: OriginRoute, payload: Payload) -> Self {
-        Self { identifier, origin_route, payload }
-    }
-
-    pub fn identifier(&self) -> MessageIdentifier {
-        self.identifier
-    }
-
-    pub fn origin_route(&self) -> OriginRoute {
-        self.origin_route
-    }
-
-    pub fn into_payload(self) -> Payload {
-        self.payload
     }
 }
 
