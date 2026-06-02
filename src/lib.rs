@@ -2140,12 +2140,30 @@ impl RustWriter {
         declarations: &[RustDeclaration],
         root_enums: &[RustEnum],
     ) {
-        if self.has_root_enum(root_enums, "Input")
+        let emits_signal_engine = self.has_root_enum(root_enums, "Input")
             && self.has_root_enum(root_enums, "Output")
             && self.has_type(declarations, "NexusWork")
-            && self.has_type(declarations, "NexusAction")
-        {
+            && self.has_type(declarations, "NexusAction");
+        let emits_nexus_engine =
+            self.has_type(declarations, "NexusWork") && self.has_type(declarations, "NexusAction");
+        let emits_sema_engine = self.has_type(declarations, "SemaWriteInput")
+            && self.has_type(declarations, "SemaWriteOutput")
+            && self.has_type(declarations, "SemaReadInput")
+            && self.has_type(declarations, "SemaReadOutput");
+
+        if emits_signal_engine || emits_nexus_engine || emits_sema_engine {
+            self.emit_actor_lifecycle_support();
+        }
+
+        if emits_signal_engine {
             self.line("pub trait SignalEngine {");
+            self.line("    fn on_start(&mut self) -> Result<(), ActorStartFailure> {");
+            self.line("        Ok(())");
+            self.line("    }");
+            self.line("    fn on_stop(&mut self) -> Result<(), ActorStopFailure> {");
+            self.line("        Ok(())");
+            self.line("    }");
+            self.blank();
             self.line("    fn trace_signal_activation(&self, _object_name: SignalObjectName) {}");
             self.line("    fn trace_signal_admitted(&self) {");
             self.line("        self.trace_signal_activation(SignalObjectName::Admitted);");
@@ -2181,8 +2199,15 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-        if self.has_type(declarations, "NexusWork") && self.has_type(declarations, "NexusAction") {
+        if emits_nexus_engine {
             self.line("pub trait NexusEngine {");
+            self.line("    fn on_start(&mut self) -> Result<(), ActorStartFailure> {");
+            self.line("        Ok(())");
+            self.line("    }");
+            self.line("    fn on_stop(&mut self) -> Result<(), ActorStopFailure> {");
+            self.line("        Ok(())");
+            self.line("    }");
+            self.blank();
             self.line("    fn trace_nexus_activation(&self, _object_name: NexusObjectName) {}");
             self.line("    fn trace_nexus_entered(&self) {");
             self.line("        self.trace_nexus_activation(NexusObjectName::Entered);");
@@ -2202,12 +2227,15 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-        if self.has_type(declarations, "SemaWriteInput")
-            && self.has_type(declarations, "SemaWriteOutput")
-            && self.has_type(declarations, "SemaReadInput")
-            && self.has_type(declarations, "SemaReadOutput")
-        {
+        if emits_sema_engine {
             self.line("pub trait SemaEngine {");
+            self.line("    fn on_start(&mut self) -> Result<(), ActorStartFailure> {");
+            self.line("        Ok(())");
+            self.line("    }");
+            self.line("    fn on_stop(&mut self) -> Result<(), ActorStopFailure> {");
+            self.line("        Ok(())");
+            self.line("    }");
+            self.blank();
             self.line("    fn trace_sema_activation(&self, _object_name: SemaObjectName) {}");
             self.line("    fn trace_sema_write_applied(&self) {");
             self.line("        self.trace_sema_activation(SemaObjectName::WriteApplied);");
@@ -2233,6 +2261,47 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
+    }
+
+    fn emit_actor_lifecycle_support(&mut self) {
+        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
+        self.line("pub enum ActorStartFailure {");
+        self.line("    ResourceBusy(String),");
+        self.line("    ConfigurationInvalid(String),");
+        self.line("}");
+        self.blank();
+        self.line("impl std::fmt::Display for ActorStartFailure {");
+        self.line(
+            "    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
+        );
+        self.line("        match self {");
+        self.line("            Self::ResourceBusy(message) => write!(formatter, \"actor resource busy: {message}\"),");
+        self.line("            Self::ConfigurationInvalid(message) => write!(formatter, \"actor configuration invalid: {message}\"),");
+        self.line("        }");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("impl std::error::Error for ActorStartFailure {}");
+        self.blank();
+        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
+        self.line("pub enum ActorStopFailure {");
+        self.line("    ResourceLocked(String),");
+        self.line("    ChildStillRunning(String),");
+        self.line("}");
+        self.blank();
+        self.line("impl std::fmt::Display for ActorStopFailure {");
+        self.line(
+            "    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
+        );
+        self.line("        match self {");
+        self.line("            Self::ResourceLocked(message) => write!(formatter, \"actor resource locked: {message}\"),");
+        self.line("            Self::ChildStillRunning(message) => write!(formatter, \"actor child still running: {message}\"),");
+        self.line("        }");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("impl std::error::Error for ActorStopFailure {}");
+        self.blank();
     }
 
     fn has_root_enum(&self, root_enums: &[RustEnum], type_name: &str) -> bool {

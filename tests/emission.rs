@@ -241,6 +241,44 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
+            .contains("pub enum ActorStartFailure")
+    );
+    assert!(generated.code.as_str().contains("ResourceBusy(String)"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("ConfigurationInvalid(String)")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub enum ActorStopFailure")
+    );
+    assert!(generated.code.as_str().contains("ResourceLocked(String)"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("ChildStillRunning(String)")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("fn on_start(&mut self) -> Result<(), ActorStartFailure>")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("fn on_stop(&mut self) -> Result<(), ActorStopFailure>")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
             .contains("fn trace_signal_activation(&self, _object_name: SignalObjectName) {}")
     );
     assert!(

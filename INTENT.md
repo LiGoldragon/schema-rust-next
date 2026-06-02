@@ -83,6 +83,14 @@ data-bearing actors or stores. Heavy topic-discovery decisions belong to Nexus
 implementations; durable indexes and score tables belong to SEMA; Signal stays
 the communication and reply boundary.*
 
+*The engine traits carry the minimum lifecycle address needed by the runtime
+and persona supervision. `SignalEngine`, `NexusEngine`, and `SemaEngine` emit
+default no-op `on_start` and `on_stop` methods returning typed
+`ActorStartFailure` and `ActorStopFailure` results. Full actor mailbox,
+backpressure, runtime-control, and inner-engine promotion remain future work;
+the lifecycle hooks are the small addressable surface that composes with that
+future without changing the engine method substrate.*
+
 *Testing trace hooks belong to those generated engine traits. The emitted
 traits provide default no-op trace hook methods and default wrapper methods
 for `triage`, `reply`, `execute`, `apply`, and `observe`; runtime actors
