@@ -1541,38 +1541,49 @@ impl RustWriter {
         self.line("        match self.into_root() {");
         self.line("            NexusInput::Signal(input) => match input {");
         for variant in projection.signal_input.variants() {
-            let Some(payload) = self.plain_payload_name(variant) else {
-                continue;
-            };
-            if self.enum_has_unique_plain_payload(projection.sema_write_input, payload) {
+            if let Some(target_variant) =
+                self.target_variant_for_source(variant, projection.sema_write_input)
+            {
                 self.line(format!(
-                    "                Input::{}(payload) => NexusOutput::from(SemaWriteInput::from(payload)),",
-                    variant.name()
+                    "                Input::{}(payload) => NexusOutput::from(SemaWriteInput::{}(payload)),",
+                    variant.name(),
+                    target_variant.name()
                 ));
-            } else if self.enum_has_unique_plain_payload(projection.sema_read_input, payload) {
+                continue;
+            }
+            if let Some(target_variant) =
+                self.target_variant_for_source(variant, projection.sema_read_input)
+            {
                 self.line(format!(
-                    "                Input::{}(payload) => NexusOutput::from(SemaReadInput::from(payload)),",
-                    variant.name()
+                    "                Input::{}(payload) => NexusOutput::from(SemaReadInput::{}(payload)),",
+                    variant.name(),
+                    target_variant.name()
                 ));
             }
         }
         self.line("            },");
         self.line("            NexusInput::SemaWrite(output) => match output {");
         for variant in projection.sema_write_output.variants() {
-            if variant.payload().is_some() {
+            if let Some(target_variant) =
+                self.target_variant_for_source(variant, projection.signal_output)
+            {
                 self.line(format!(
-                    "                SemaWriteOutput::{}(payload) => NexusOutput::from(Output::from(payload)),",
-                    variant.name()
+                    "                SemaWriteOutput::{}(payload) => NexusOutput::from(Output::{}(payload)),",
+                    variant.name(),
+                    target_variant.name()
                 ));
             }
         }
         self.line("            },");
         self.line("            NexusInput::SemaRead(output) => match output {");
         for variant in projection.sema_read_output.variants() {
-            if variant.payload().is_some() {
+            if let Some(target_variant) =
+                self.target_variant_for_source(variant, projection.signal_output)
+            {
                 self.line(format!(
-                    "                SemaReadOutput::{}(payload) => NexusOutput::from(Output::from(payload)),",
-                    variant.name()
+                    "                SemaReadOutput::{}(payload) => NexusOutput::from(Output::{}(payload)),",
+                    variant.name(),
+                    target_variant.name()
                 ));
             }
         }
@@ -1683,18 +1694,41 @@ impl RustWriter {
         second_target: &RustEnum,
     ) -> bool {
         source.variants().iter().all(|variant| {
-            self.plain_payload_name(variant).is_some_and(|payload| {
-                self.enum_has_unique_plain_payload(first_target, payload)
-                    || self.enum_has_unique_plain_payload(second_target, payload)
-            })
+            self.target_variant_for_source(variant, first_target)
+                .is_some()
+                || self
+                    .target_variant_for_source(variant, second_target)
+                    .is_some()
         })
     }
 
     fn all_payloads_project_to(&self, source: &RustEnum, target: &RustEnum) -> bool {
-        source.variants().iter().all(|variant| {
-            self.plain_payload_name(variant)
-                .is_some_and(|payload| self.enum_has_unique_plain_payload(target, payload))
-        })
+        source
+            .variants()
+            .iter()
+            .all(|variant| self.target_variant_for_source(variant, target).is_some())
+    }
+
+    fn target_variant_for_source<'target>(
+        &self,
+        source_variant: &RustEnumVariant,
+        target: &'target RustEnum,
+    ) -> Option<&'target RustEnumVariant> {
+        let payload_name = self.plain_payload_name(source_variant)?;
+        target
+            .variants()
+            .iter()
+            .find(|target_variant| {
+                target_variant.name().as_str() == source_variant.name().as_str()
+                    && self.plain_payload_name(target_variant) == Some(payload_name)
+            })
+            .or_else(|| {
+                self.unique_plain_payload_variants(target)
+                    .into_iter()
+                    .find(|target_variant| {
+                        self.plain_payload_name(target_variant) == Some(payload_name)
+                    })
+            })
     }
 
     fn enum_has_unique_payload_variant(
@@ -1721,12 +1755,6 @@ impl RustWriter {
             variant.name().as_str() == variant_name
                 && self.plain_payload_name(variant) == Some(payload_name)
         })
-    }
-
-    fn enum_has_unique_plain_payload(&self, declaration: &RustEnum, payload_name: &str) -> bool {
-        self.unique_plain_payload_variants(declaration)
-            .iter()
-            .any(|variant| self.plain_payload_name(variant) == Some(payload_name))
     }
 
     fn emit_upgrade_support(&mut self) {

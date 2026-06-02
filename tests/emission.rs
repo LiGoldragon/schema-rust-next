@@ -294,25 +294,21 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
             .contains("pub fn into_nexus_output(self) -> nexus::Nexus<nexus::Output>")
     );
     assert!(
-        generated
-            .code
-            .as_str()
-            .contains("Input::Record(payload) => NexusOutput::from(SemaWriteInput::from(payload))")
-    );
-    assert!(
-        generated
-            .code
-            .as_str()
-            .contains("Input::Observe(payload) => NexusOutput::from(SemaReadInput::from(payload))")
-    );
-    assert!(generated.code.as_str().contains(
-        "SemaWriteOutput::Recorded(payload) => NexusOutput::from(Output::from(payload))"
-    ));
-    assert!(
         generated.code.as_str().contains(
-            "SemaReadOutput::Observed(payload) => NexusOutput::from(Output::from(payload))"
+            "Input::Record(payload) => NexusOutput::from(SemaWriteInput::Record(payload))"
         )
     );
+    assert!(
+        generated.code.as_str().contains(
+            "Input::Observe(payload) => NexusOutput::from(SemaReadInput::Observe(payload))"
+        )
+    );
+    assert!(generated.code.as_str().contains(
+        "SemaWriteOutput::Recorded(payload) => NexusOutput::from(Output::RecordAccepted(payload))"
+    ));
+    assert!(generated.code.as_str().contains(
+        "SemaReadOutput::Observed(payload) => NexusOutput::from(Output::RecordsObserved(payload))"
+    ));
     assert!(
         generated
             .code
