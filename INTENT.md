@@ -74,6 +74,15 @@ the `SemaEngine` trait with a mutable write method and shared-reference read
 method. Runtime tests must invoke those generated trait surfaces rather than
 primitive or test-local commands.*
 
+*The emitter should move toward a generated component-runner surface for the
+triad engine. A daemon `main` should eventually be a tiny call into generated
+or macro-created startup code; the schema-emitted substrate defines the
+programmatic Signal/Nexus/SEMA wiring. Hand-written component code supplies
+non-default algorithms by implementing the generated engine traits on
+data-bearing actors or stores. Heavy topic-discovery decisions belong to Nexus
+implementations; durable indexes and score tables belong to SEMA; Signal stays
+the communication and reply boundary.*
+
 *Testing trace hooks belong to those generated engine traits. The emitted
 traits provide default no-op trace hook methods and default wrapper methods
 for `triage`, `reply`, `execute`, `apply`, and `observe`; runtime actors

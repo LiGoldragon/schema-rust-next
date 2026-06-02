@@ -103,6 +103,13 @@ must not grow a second parser for the authored form.
   If dispatch, upgrade, mail acceptance, or SEMA application needs behavior,
   the generated type exposes a trait or method target and the consumer
   implements it on a data-bearing actor or store object.
+- The next runner target is generated/programmatic component wiring. The
+  emitter should grow a component-runner surface so a daemon binary can reduce
+  to a tiny generated call while domain behavior still lives in non-default
+  implementations of generated Signal, Nexus, and SEMA engine traits. The
+  runner does not move algorithms into `main`; it gives the component a
+  schema-defined place to instantiate Signal, Nexus, SEMA, transport, trace,
+  and binary configuration surfaces.
 - Schemas that declare `Input`/`Output` roots emit a `SignalEngine` trait.
   The Signal trait only owns boundary triage: Signal input becomes Nexus input,
   and Nexus replies become Signal output. Schemas that declare
