@@ -113,6 +113,12 @@ must not grow a second parser for the authored form.
   `observe(&self, ...)` for reads. Tests and runtime code use those generated
   plane traits so Signal, Nexus, and SEMA take and return routed root messages
   for their own planes.
+- Cross-plane projections prefer exact operation names before falling back to a
+  unique payload type. That lets a realistic interface carry both
+  `Lookup(RecordIdentifier)` and `Remove(RecordIdentifier)` without routing the
+  read operation to the write plane, while still allowing semantic output
+  bridges such as `Recorded(SemaReceipt)` to become
+  `RecordAccepted(SemaReceipt)` when the payload type is unique.
 - The engine traits also own testing trace hooks. Implementors provide
   `triage_inner`, `reply_inner`, `decide`, `apply_inner`, and `observe_inner`;
   generated default wrappers keep the public method names
