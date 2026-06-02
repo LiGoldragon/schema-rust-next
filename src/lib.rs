@@ -187,6 +187,8 @@ impl RustModule {
         writer.emit_short_headers(&self.root_enums);
         writer.blank();
         writer.emit_signal_frame_support(&self.root_enums);
+        writer.emit_plane_route_support(&self.declarations);
+        writer.emit_trace_support(&self.declarations, &self.root_enums);
         writer.emit_mail_event_support(&self.root_enums);
         writer.emit_plane_namespaces(&self.declarations, &self.root_enums);
         writer.emit_plane_projection_support(&self.declarations, &self.root_enums);
@@ -678,6 +680,12 @@ struct SplitSemaProjection<'schema> {
     sema_read_output: &'schema RustEnum,
 }
 
+struct TraceInterfaceRoot<'schema> {
+    trace_variant: String,
+    type_name: &'schema Name,
+    enum_declaration: &'schema RustEnum,
+}
+
 impl RustWriter {
     fn new(options: RustEmissionOptions) -> Self {
         Self {
@@ -1107,11 +1115,44 @@ impl RustWriter {
     }
 
     fn emit_route_enum(&mut self, root_enum: &RustEnum) {
-        self.line("#[derive(Clone, Copy, Debug, Eq, PartialEq)]");
+        self.line(self.copy_data_type_derive());
         self.line(format!("pub enum {}Route {{", root_enum.name()));
         for variant in root_enum.variants() {
             self.line(format!("    {},", variant.name()));
         }
+        self.line("}");
+    }
+
+    fn emit_plane_route_support(&mut self, declarations: &[RustDeclaration]) {
+        for declaration in self.plane_route_enums(declarations) {
+            self.emit_route_enum(declaration);
+            self.blank();
+            self.emit_route_impl(declaration);
+            self.blank();
+        }
+    }
+
+    fn emit_route_impl(&mut self, declaration: &RustEnum) {
+        let route_name = format!("{}Route", declaration.name());
+        self.line(format!("impl {} {{", declaration.name()));
+        self.line(format!("    pub fn route(&self) -> {route_name} {{"));
+        self.line("        match self {");
+        for variant in declaration.variants() {
+            match variant.payload() {
+                Some(_) => self.line(format!(
+                    "            Self::{}(_) => {route_name}::{},",
+                    variant.name(),
+                    variant.name()
+                )),
+                None => self.line(format!(
+                    "            Self::{} => {route_name}::{},",
+                    variant.name(),
+                    variant.name()
+                )),
+            }
+        }
+        self.line("        }");
+        self.line("    }");
         self.line("}");
     }
 
@@ -1215,6 +1256,196 @@ impl RustWriter {
         self.line("        Ok((route, value))");
         self.line("    }");
         self.line("}");
+    }
+
+    fn emit_trace_support(&mut self, declarations: &[RustDeclaration], root_enums: &[RustEnum]) {
+        let interface_roots = self.trace_interface_roots(declarations, root_enums);
+        let actor_variants = self.trace_actor_variants(declarations, root_enums);
+        if interface_roots.is_empty() && actor_variants.is_empty() {
+            return;
+        }
+        self.line(self.copy_data_type_derive());
+        self.line("pub enum TraceInterfaceObject {");
+        for root in &interface_roots {
+            self.line(format!(
+                "    {}({}Route),",
+                root.trace_variant, root.type_name
+            ));
+        }
+        self.line("}");
+        self.blank();
+        if !actor_variants.is_empty() {
+            self.line(self.copy_data_type_derive());
+            self.line("pub enum TraceActorObject {");
+            for variant in &actor_variants {
+                self.line(format!("    {},", variant));
+            }
+            self.line("}");
+            self.blank();
+        }
+        self.line(self.copy_data_type_derive());
+        self.line("pub enum TraceObject {");
+        self.line("    Interface(TraceInterfaceObject),");
+        if !actor_variants.is_empty() {
+            self.line("    Actor(TraceActorObject),");
+        }
+        self.line("}");
+        self.blank();
+        self.line(self.copy_data_type_derive());
+        self.line("pub struct TraceEvent {");
+        self.line("    pub object: TraceObject,");
+        self.line("}");
+        self.blank();
+        self.line("impl TraceInterfaceObject {");
+        self.line("    pub fn name(self) -> &'static str {");
+        self.line("        match self {");
+        for root in &interface_roots {
+            self.line(format!(
+                "            Self::{}(route) => match route {{",
+                root.trace_variant
+            ));
+            for variant in root.enum_declaration.variants() {
+                self.line(format!(
+                    "                {}Route::{} => \"{}{}\",",
+                    root.type_name,
+                    variant.name(),
+                    root.trace_variant,
+                    variant.name()
+                ));
+            }
+            self.line("            },");
+        }
+        self.line("        }");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        if !actor_variants.is_empty() {
+            self.line("impl TraceActorObject {");
+            self.line("    pub fn name(self) -> &'static str {");
+            self.line("        match self {");
+            for variant in &actor_variants {
+                self.line(format!("            Self::{variant} => \"{variant}\","));
+            }
+            self.line("        }");
+            self.line("    }");
+            self.line("}");
+            self.blank();
+        }
+        self.line("impl TraceObject {");
+        self.line("    pub fn name(self) -> &'static str {");
+        self.line("        match self {");
+        self.line("            Self::Interface(object) => object.name(),");
+        if !actor_variants.is_empty() {
+            self.line("            Self::Actor(object) => object.name(),");
+        }
+        self.line("        }");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("impl TraceEvent {");
+        self.line("    pub fn new(object: TraceObject) -> Self {");
+        self.line("        Self { object }");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn object(&self) -> TraceObject {");
+        self.line("        self.object");
+        self.line("    }");
+        self.blank();
+        self.line("    pub fn name(&self) -> &'static str {");
+        self.line("        self.object.name()");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+    }
+
+    fn plane_route_enums<'schema>(
+        &self,
+        declarations: &'schema [RustDeclaration],
+    ) -> Vec<&'schema RustEnum> {
+        declarations
+            .iter()
+            .filter_map(|declaration| match declaration.value() {
+                RustTypeDeclaration::Enum(value)
+                    if self.is_plane_route_type(declaration.name().as_str()) =>
+                {
+                    Some(value)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn trace_interface_roots<'schema>(
+        &self,
+        declarations: &'schema [RustDeclaration],
+        root_enums: &'schema [RustEnum],
+    ) -> Vec<TraceInterfaceRoot<'schema>> {
+        let mut roots = Vec::new();
+        if let Some(input) = self.root_enum_named(root_enums, "Input") {
+            roots.push(TraceInterfaceRoot {
+                trace_variant: "SignalInput".to_owned(),
+                type_name: input.name(),
+                enum_declaration: input,
+            });
+        }
+        if let Some(output) = self.root_enum_named(root_enums, "Output") {
+            roots.push(TraceInterfaceRoot {
+                trace_variant: "SignalOutput".to_owned(),
+                type_name: output.name(),
+                enum_declaration: output,
+            });
+        }
+        for declaration in self.plane_route_enums(declarations) {
+            roots.push(TraceInterfaceRoot {
+                trace_variant: declaration.name().as_str().to_owned(),
+                type_name: declaration.name(),
+                enum_declaration: declaration,
+            });
+        }
+        roots
+    }
+
+    fn trace_actor_variants(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> Vec<&'static str> {
+        let mut variants = Vec::new();
+        if self.has_root_enum(root_enums, "Input")
+            && self.has_root_enum(root_enums, "Output")
+            && self.has_type(declarations, "NexusInput")
+            && self.has_type(declarations, "NexusOutput")
+        {
+            variants.extend([
+                "SignalAdmitted",
+                "SignalRejected",
+                "SignalTriaged",
+                "SignalReplied",
+            ]);
+        }
+        if self.has_type(declarations, "NexusInput") && self.has_type(declarations, "NexusOutput") {
+            variants.extend(["NexusEntered", "NexusDecided"]);
+        }
+        if self.has_type(declarations, "SemaWriteInput")
+            && self.has_type(declarations, "SemaWriteOutput")
+            && self.has_type(declarations, "SemaReadInput")
+            && self.has_type(declarations, "SemaReadOutput")
+        {
+            variants.extend(["SemaWriteApplied", "SemaReadObserved"]);
+        }
+        variants
+    }
+
+    fn is_plane_route_type(&self, type_name: &str) -> bool {
+        matches!(
+            type_name,
+            "NexusInput"
+                | "NexusOutput"
+                | "SemaWriteInput"
+                | "SemaWriteOutput"
+                | "SemaReadInput"
+                | "SemaReadOutput"
+        )
     }
 
     fn emit_mail_event_support(&mut self, root_enums: &[RustEnum]) {
@@ -1823,18 +2054,18 @@ impl RustWriter {
             && self.has_type(declarations, "NexusOutput")
         {
             self.line("pub trait SignalEngine {");
-            self.line("    fn trace_signal_activation(&self, _object_name: &'static str) {}");
+            self.line("    fn trace_signal_activation(&self, _object: TraceObject) {}");
             self.line("    fn trace_signal_admitted(&self) {");
-            self.line("        self.trace_signal_activation(\"SignalAdmitted\");");
+            self.line("        self.trace_signal_activation(TraceObject::Actor(TraceActorObject::SignalAdmitted));");
             self.line("    }");
             self.line("    fn trace_signal_rejected(&self) {");
-            self.line("        self.trace_signal_activation(\"SignalRejected\");");
+            self.line("        self.trace_signal_activation(TraceObject::Actor(TraceActorObject::SignalRejected));");
             self.line("    }");
             self.line("    fn trace_signal_triaged(&self) {");
-            self.line("        self.trace_signal_activation(\"SignalTriaged\");");
+            self.line("        self.trace_signal_activation(TraceObject::Actor(TraceActorObject::SignalTriaged));");
             self.line("    }");
             self.line("    fn trace_signal_replied(&self) {");
-            self.line("        self.trace_signal_activation(\"SignalReplied\");");
+            self.line("        self.trace_signal_activation(TraceObject::Actor(TraceActorObject::SignalReplied));");
             self.line("    }");
             self.blank();
             self.line(
@@ -1860,12 +2091,12 @@ impl RustWriter {
         }
         if self.has_type(declarations, "NexusInput") && self.has_type(declarations, "NexusOutput") {
             self.line("pub trait NexusEngine {");
-            self.line("    fn trace_nexus_activation(&self, _object_name: &'static str) {}");
+            self.line("    fn trace_nexus_activation(&self, _object: TraceObject) {}");
             self.line("    fn trace_nexus_entered(&self) {");
-            self.line("        self.trace_nexus_activation(\"NexusEntered\");");
+            self.line("        self.trace_nexus_activation(TraceObject::Actor(TraceActorObject::NexusEntered));");
             self.line("    }");
             self.line("    fn trace_nexus_decided(&self) {");
-            self.line("        self.trace_nexus_activation(\"NexusDecided\");");
+            self.line("        self.trace_nexus_activation(TraceObject::Actor(TraceActorObject::NexusDecided));");
             self.line("    }");
             self.blank();
             self.line("    fn decide(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;");
@@ -1885,12 +2116,12 @@ impl RustWriter {
             && self.has_type(declarations, "SemaReadOutput")
         {
             self.line("pub trait SemaEngine {");
-            self.line("    fn trace_sema_activation(&self, _object_name: &'static str) {}");
+            self.line("    fn trace_sema_activation(&self, _object: TraceObject) {}");
             self.line("    fn trace_sema_write_applied(&self) {");
-            self.line("        self.trace_sema_activation(\"SemaWriteApplied\");");
+            self.line("        self.trace_sema_activation(TraceObject::Actor(TraceActorObject::SemaWriteApplied));");
             self.line("    }");
             self.line("    fn trace_sema_read_observed(&self) {");
-            self.line("        self.trace_sema_activation(\"SemaReadObserved\");");
+            self.line("        self.trace_sema_activation(TraceObject::Actor(TraceActorObject::SemaReadObserved));");
             self.line("    }");
             self.blank();
             self.line("    fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;");

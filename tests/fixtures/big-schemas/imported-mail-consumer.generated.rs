@@ -343,7 +343,8 @@ impl std::fmt::Display for SignalFrameError {
 
 impl std::error::Error for SignalFrameError {}
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputRoute {
     Record,
     Observe,
@@ -351,7 +352,8 @@ pub enum InputRoute {
     Commit,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutputRoute {
     Recorded,
     Observed,
@@ -472,6 +474,67 @@ impl Output {
             return Err(SignalFrameError::HeaderMismatch { expected, found: header });
         }
         Ok((route, value))
+    }
+}
+
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TraceInterfaceObject {
+    SignalInput(InputRoute),
+    SignalOutput(OutputRoute),
+}
+
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TraceObject {
+    Interface(TraceInterfaceObject),
+}
+
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TraceEvent {
+    pub object: TraceObject,
+}
+
+impl TraceInterfaceObject {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::SignalInput(route) => match route {
+                InputRoute::Record => "SignalInputRecord",
+                InputRoute::Observe => "SignalInputObserve",
+                InputRoute::Mark => "SignalInputMark",
+                InputRoute::Commit => "SignalInputCommit",
+            },
+            Self::SignalOutput(route) => match route {
+                OutputRoute::Recorded => "SignalOutputRecorded",
+                OutputRoute::Observed => "SignalOutputObserved",
+                OutputRoute::Marked => "SignalOutputMarked",
+                OutputRoute::Committed => "SignalOutputCommitted",
+                OutputRoute::Rejected => "SignalOutputRejected",
+            },
+        }
+    }
+}
+
+impl TraceObject {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Interface(object) => object.name(),
+        }
+    }
+}
+
+impl TraceEvent {
+    pub fn new(object: TraceObject) -> Self {
+        Self { object }
+    }
+
+    pub fn object(&self) -> TraceObject {
+        self.object
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.object.name()
     }
 }
 

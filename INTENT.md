@@ -78,11 +78,14 @@ primitive or test-local commands.*
 traits provide default no-op trace hook methods and default wrapper methods
 for `triage`, `reply`, `execute`, `apply`, and `observe`; runtime actors
 implement the inner behavior methods and may override one activation hook per
-plane. The generated wrapper supplies the activated object name such as
-`SignalTriaged`, `NexusEntered`, or `SemaWriteApplied`; trace events do not
-carry cloned input/output payload snapshots. A consumer should not carry
-parallel local Signal/Nexus/SEMA trace traits beside the generated
-actor/interface contract.*
+plane. The generated wrapper supplies a typed `TraceObject` such as
+`TraceObject::Actor(TraceActorObject::NexusEntered)` rather than an arbitrary
+string. Interface trace identity is generated from the schema header through
+route enums such as `InputRoute`, `NexusInputRoute`, and
+`SemaReadInputRoute`; trace events do not carry cloned input/output payload
+snapshots. A consumer should not carry parallel local Signal/Nexus/SEMA trace
+traits or stringly trace vocabularies beside the generated actor/interface
+contract.*
 
 *Schema version changes drive upgrade surfaces. If a data type has not changed,
 no upgrade code is emitted for it. If it has changed, the generated noun exposes

@@ -241,13 +241,39 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("fn trace_signal_activation(&self, _object_name: &'static str) {}")
+            .contains("fn trace_signal_activation(&self, _object: TraceObject) {}")
     );
     assert!(
         generated
             .code
             .as_str()
-            .contains("self.trace_signal_activation(\"SignalTriaged\");")
+            .contains("TraceObject::Actor(TraceActorObject::SignalTriaged)")
+    );
+    assert!(generated.code.as_str().contains("pub enum TraceObject"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub enum TraceInterfaceObject")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub enum TraceActorObject")
+    );
+    assert!(generated.code.as_str().contains("SignalInput(InputRoute)"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("NexusInput(NexusInputRoute)")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("SemaReadInput(SemaReadInputRoute)")
     );
     assert!(generated.code.as_str().contains(
         "fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input>;"
@@ -264,6 +290,13 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
     assert!(generated.code.as_str().contains("pub trait NexusEngine"));
     assert!(generated.code.as_str().contains("pub mod nexus"));
     assert!(generated.code.as_str().contains("pub mod sema"));
+    assert!(generated.code.as_str().contains("pub enum NexusInputRoute"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub enum NexusOutputRoute")
+    );
     assert!(generated.code.as_str().contains(
         "fn decide(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;"
     ));
@@ -271,9 +304,21 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("self.trace_nexus_activation(\"NexusEntered\");")
+            .contains("TraceObject::Actor(TraceActorObject::NexusEntered)")
     );
     assert!(generated.code.as_str().contains("pub trait SemaEngine"));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub enum SemaWriteInputRoute")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("pub enum SemaReadInputRoute")
+    );
     assert!(generated.code.as_str().contains(
         "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;"
     ));
@@ -284,7 +329,7 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("self.trace_sema_activation(\"SemaWriteApplied\");")
+            .contains("TraceObject::Actor(TraceActorObject::SemaWriteApplied)")
     );
     assert!(!generated.code.as_str().contains("NexusMail<Payload>"));
     assert!(
@@ -356,6 +401,25 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
             .as_str()
             .contains("impl sema::Sema<sema::ReadOutput>")
     );
+}
+
+#[test]
+fn generated_trace_identity_is_typed_from_interface_headers() {
+    let signal_route = generated::TraceObject::Interface(
+        generated::TraceInterfaceObject::SignalInput(generated::InputRoute::Record),
+    );
+
+    assert_eq!(signal_route.name(), "SignalInputRecord");
+
+    let event = generated::TraceEvent::new(signal_route);
+    assert_eq!(event.object(), signal_route);
+    assert_eq!(event.name(), "SignalInputRecord");
+
+    let archive =
+        rkyv::to_bytes::<rkyv::rancor::Error>(&event).expect("trace event archives as rkyv");
+    let decoded = rkyv::from_bytes::<generated::TraceEvent, rkyv::rancor::Error>(&archive)
+        .expect("trace event decodes from rkyv");
+    assert_eq!(decoded, event);
 }
 
 #[test]
