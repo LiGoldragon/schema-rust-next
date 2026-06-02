@@ -1542,7 +1542,7 @@ impl RustWriter {
         self.line("            NexusInput::Signal(input) => match input {");
         for variant in projection.signal_input.variants() {
             if let Some(target_variant) =
-                self.target_variant_for_source(variant, projection.sema_write_input)
+                self.exact_target_variant_for_source(variant, projection.sema_write_input)
             {
                 self.line(format!(
                     "                Input::{}(payload) => NexusOutput::from(SemaWriteInput::{}(payload)),",
@@ -1552,13 +1552,35 @@ impl RustWriter {
                 continue;
             }
             if let Some(target_variant) =
-                self.target_variant_for_source(variant, projection.sema_read_input)
+                self.exact_target_variant_for_source(variant, projection.sema_read_input)
             {
                 self.line(format!(
                     "                Input::{}(payload) => NexusOutput::from(SemaReadInput::{}(payload)),",
                     variant.name(),
                     target_variant.name()
                 ));
+                continue;
+            }
+            let write_fallback =
+                self.fallback_target_variant_for_source(variant, projection.sema_write_input);
+            let read_fallback =
+                self.fallback_target_variant_for_source(variant, projection.sema_read_input);
+            match (write_fallback, read_fallback) {
+                (Some(target_variant), None) => {
+                    self.line(format!(
+                        "                Input::{}(payload) => NexusOutput::from(SemaWriteInput::{}(payload)),",
+                        variant.name(),
+                        target_variant.name()
+                    ));
+                }
+                (None, Some(target_variant)) => {
+                    self.line(format!(
+                        "                Input::{}(payload) => NexusOutput::from(SemaReadInput::{}(payload)),",
+                        variant.name(),
+                        target_variant.name()
+                    ));
+                }
+                (Some(_), Some(_)) | (None, None) => {}
             }
         }
         self.line("            },");
@@ -1694,11 +1716,18 @@ impl RustWriter {
         second_target: &RustEnum,
     ) -> bool {
         source.variants().iter().all(|variant| {
-            self.target_variant_for_source(variant, first_target)
+            self.exact_target_variant_for_source(variant, first_target)
                 .is_some()
                 || self
-                    .target_variant_for_source(variant, second_target)
+                    .exact_target_variant_for_source(variant, second_target)
                     .is_some()
+                || matches!(
+                    (
+                        self.fallback_target_variant_for_source(variant, first_target),
+                        self.fallback_target_variant_for_source(variant, second_target),
+                    ),
+                    (Some(_), None) | (None, Some(_))
+                )
         })
     }
 
@@ -1714,21 +1743,31 @@ impl RustWriter {
         source_variant: &RustEnumVariant,
         target: &'target RustEnum,
     ) -> Option<&'target RustEnumVariant> {
+        self.exact_target_variant_for_source(source_variant, target)
+            .or_else(|| self.fallback_target_variant_for_source(source_variant, target))
+    }
+
+    fn exact_target_variant_for_source<'target>(
+        &self,
+        source_variant: &RustEnumVariant,
+        target: &'target RustEnum,
+    ) -> Option<&'target RustEnumVariant> {
         let payload_name = self.plain_payload_name(source_variant)?;
-        target
-            .variants()
-            .iter()
-            .find(|target_variant| {
-                target_variant.name().as_str() == source_variant.name().as_str()
-                    && self.plain_payload_name(target_variant) == Some(payload_name)
-            })
-            .or_else(|| {
-                self.unique_plain_payload_variants(target)
-                    .into_iter()
-                    .find(|target_variant| {
-                        self.plain_payload_name(target_variant) == Some(payload_name)
-                    })
-            })
+        target.variants().iter().find(|target_variant| {
+            target_variant.name().as_str() == source_variant.name().as_str()
+                && self.plain_payload_name(target_variant) == Some(payload_name)
+        })
+    }
+
+    fn fallback_target_variant_for_source<'target>(
+        &self,
+        source_variant: &RustEnumVariant,
+        target: &'target RustEnum,
+    ) -> Option<&'target RustEnumVariant> {
+        let payload_name = self.plain_payload_name(source_variant)?;
+        self.unique_plain_payload_variants(target)
+            .into_iter()
+            .find(|target_variant| self.plain_payload_name(target_variant) == Some(payload_name))
     }
 
     fn enum_has_unique_payload_variant(

@@ -1,12 +1,12 @@
-[(Record Entry) (Observe Query)]
-[(RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (Error ErrorReport)]
+[(Record Entry) (Observe Query) (Lookup RecordIdentifier) (Count Query)]
+[(RecordAccepted SemaReceipt) (RecordsObserved ObservedRecords) (RecordFound FoundRecord) (RecordsCounted CountedRecords) (Error ErrorReport)]
 {
   NexusInput [(Signal Input) (SemaWrite SemaWriteOutput) (SemaRead SemaReadOutput)]
   NexusOutput [(SemaWrite SemaWriteInput) (SemaRead SemaReadInput) (Signal Output)]
   SemaWriteInput [(Record Entry)]
-  SemaReadInput [(Observe Query)]
+  SemaReadInput [(Observe Query) (Lookup RecordIdentifier) (Count Query)]
   SemaWriteOutput [(Recorded SemaReceipt) (Missed ErrorReport)]
-  SemaReadOutput [(Observed ObservedRecords) (Missed ErrorReport)]
+  SemaReadOutput [(Observed ObservedRecords) (Found FoundRecord) (Counted CountedRecords) (Missed ErrorReport)]
   Topic String
   Description String
   ErrorMessage String
@@ -16,6 +16,9 @@
   DatabaseMarker { CommitSequence * stateDigest StateDigest }
   SemaReceipt { RecordIdentifier * databaseMarker DatabaseMarker }
   ObservedRecords { RecordSet * databaseMarker DatabaseMarker }
+  FoundRecord { RecordIdentifier * Entry * databaseMarker DatabaseMarker }
+  RecordCount Integer
+  CountedRecords { RecordCount * databaseMarker DatabaseMarker }
   ErrorReport { ErrorMessage * databaseMarker DatabaseMarker }
   Entry { Topic * kind Kind description Description magnitude Magnitude }
   Query { Topic * kind Kind }

@@ -303,11 +303,28 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
             "Input::Observe(payload) => NexusOutput::from(SemaReadInput::Observe(payload))"
         )
     );
+    assert!(
+        generated.code.as_str().contains(
+            "Input::Lookup(payload) => NexusOutput::from(SemaReadInput::Lookup(payload))"
+        )
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("Input::Count(payload) => NexusOutput::from(SemaReadInput::Count(payload))")
+    );
     assert!(generated.code.as_str().contains(
         "SemaWriteOutput::Recorded(payload) => NexusOutput::from(Output::RecordAccepted(payload))"
     ));
     assert!(generated.code.as_str().contains(
         "SemaReadOutput::Observed(payload) => NexusOutput::from(Output::RecordsObserved(payload))"
+    ));
+    assert!(generated.code.as_str().contains(
+        "SemaReadOutput::Found(payload) => NexusOutput::from(Output::RecordFound(payload))"
+    ));
+    assert!(generated.code.as_str().contains(
+        "SemaReadOutput::Counted(payload) => NexusOutput::from(Output::RecordsCounted(payload))"
     ));
     assert!(
         generated
