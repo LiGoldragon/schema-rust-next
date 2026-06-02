@@ -72,8 +72,10 @@
           '';
           generated-nexus-traits = pkgs.runCommand "schema-rust-next-generated-nexus-traits" { } ''
             grep -R "emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages" ${src}/tests/emission.rs >/dev/null
-            grep -R "fn apply(&mut self, input: sema::Sema<sema::WriteInput>)" ${src}/tests/emission.rs >/dev/null
-            grep -R "fn observe(&self, input: sema::Sema<sema::ReadInput>)" ${src}/tests/emission.rs >/dev/null
+            grep -R "fn on_start(&mut self) -> Result<(), ActorStartFailure>" ${src}/tests/emission.rs >/dev/null
+            grep -R "fn on_stop(&mut self) -> Result<(), ActorStopFailure>" ${src}/tests/emission.rs >/dev/null
+            grep -R "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>)" ${src}/tests/emission.rs >/dev/null
+            grep -R "fn observe_inner(&self, input: sema::Sema<sema::ReadInput>)" ${src}/tests/emission.rs >/dev/null
             ! grep -R "pub trait InputNexus" ${src}/tests/fixtures/spirit_generated.rs
             ! grep -R "pub trait OutputNexus" ${src}/tests/fixtures/spirit_generated.rs
             ! grep -R "dispatch_mail_with_nexus" ${src}/tests/fixtures/spirit_generated.rs
