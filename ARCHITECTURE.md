@@ -123,13 +123,15 @@ must not grow a second parser for the authored form.
   `triage_inner`, `reply_inner`, `decide`, `apply_inner`, and `observe_inner`;
   generated default wrappers keep the public method names
   `triage`/`reply`/`execute`/`apply`/`observe` and call default no-op trace
-  hooks around the inner behavior. Those hooks activate typed generated trace
-  objects, not strings: actor-boundary objects live in `TraceActorObject`, and
-  interface/header objects live in `TraceInterfaceObject` using route enums
-  such as `InputRoute`, `NexusInputRoute`, and `SemaReadInputRoute`. A
-  trace-enabled consumer records the generated `TraceEvent` noun. A non-trace
-  consumer gets the no-op defaults without linking a parallel instrumentation
-  API.
+  hooks around the inner behavior. Those hooks activate typed generated
+  object names, not strings: Signal receives `SignalObjectName`, Nexus receives
+  `NexusObjectName`, and SEMA receives `SemaObjectName`. Interface/header names
+  use route enums such as `InputRoute`, `NexusInputRoute`, and
+  `SemaReadInputRoute`; actor-boundary names live beside the plane that owns
+  them (`NexusObjectName::Entered`, `SemaObjectName::WriteApplied`). The
+  generated `ObjectName` enum wraps the per-plane names for `TraceEvent`
+  transport. A non-trace consumer gets the no-op defaults without linking a
+  parallel instrumentation API.
 - Mail identifiers, origin routes, and short headers use the generated scalar
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is

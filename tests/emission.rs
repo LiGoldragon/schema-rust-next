@@ -241,39 +241,31 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("fn trace_signal_activation(&self, _object: TraceObject) {}")
+            .contains("fn trace_signal_activation(&self, _object_name: SignalObjectName) {}")
     );
     assert!(
         generated
             .code
             .as_str()
-            .contains("TraceObject::Actor(TraceActorObject::SignalTriaged)")
+            .contains("self.trace_signal_activation(SignalObjectName::Triaged)")
     );
-    assert!(generated.code.as_str().contains("pub enum TraceObject"));
+    assert!(generated.code.as_str().contains("pub enum ObjectName"));
     assert!(
         generated
             .code
             .as_str()
-            .contains("pub enum TraceInterfaceObject")
+            .contains("pub enum SignalObjectName")
     );
+    assert!(generated.code.as_str().contains("pub enum NexusObjectName"));
+    assert!(generated.code.as_str().contains("pub enum SemaObjectName"));
+    assert!(generated.code.as_str().contains("Input(InputRoute)"));
+    assert!(generated.code.as_str().contains("Triaged,"));
+    assert!(generated.code.as_str().contains("Input(NexusInputRoute)"));
     assert!(
         generated
             .code
             .as_str()
-            .contains("pub enum TraceActorObject")
-    );
-    assert!(generated.code.as_str().contains("SignalInput(InputRoute)"));
-    assert!(
-        generated
-            .code
-            .as_str()
-            .contains("NexusInput(NexusInputRoute)")
-    );
-    assert!(
-        generated
-            .code
-            .as_str()
-            .contains("SemaReadInput(SemaReadInputRoute)")
+            .contains("ReadInput(SemaReadInputRoute)")
     );
     assert!(generated.code.as_str().contains(
         "fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input>;"
@@ -304,7 +296,7 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("TraceObject::Actor(TraceActorObject::NexusEntered)")
+            .contains("self.trace_nexus_activation(NexusObjectName::Entered)")
     );
     assert!(generated.code.as_str().contains("pub trait SemaEngine"));
     assert!(
@@ -329,7 +321,7 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("TraceObject::Actor(TraceActorObject::SemaWriteApplied)")
+            .contains("self.trace_sema_activation(SemaObjectName::WriteApplied)")
     );
     assert!(!generated.code.as_str().contains("NexusMail<Payload>"));
     assert!(
@@ -405,14 +397,14 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
 
 #[test]
 fn generated_trace_identity_is_typed_from_interface_headers() {
-    let signal_route = generated::TraceObject::Interface(
-        generated::TraceInterfaceObject::SignalInput(generated::InputRoute::Record),
-    );
+    let signal_route = generated::ObjectName::Signal(generated::SignalObjectName::Input(
+        generated::InputRoute::Record,
+    ));
 
     assert_eq!(signal_route.name(), "SignalInputRecord");
 
     let event = generated::TraceEvent::new(signal_route);
-    assert_eq!(event.object(), signal_route);
+    assert_eq!(event.object_name(), signal_route);
     assert_eq!(event.name(), "SignalInputRecord");
 
     let archive =

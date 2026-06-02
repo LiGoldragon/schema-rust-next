@@ -237,29 +237,19 @@ impl Output {
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TraceInterfaceObject {
-    SignalInput(InputRoute),
-    SignalOutput(OutputRoute),
+pub enum SignalObjectName {
+    Input(InputRoute),
+    Output(OutputRoute),
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TraceObject {
-    Interface(TraceInterfaceObject),
-}
-
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TraceEvent {
-    pub object: TraceObject,
-}
-
-impl TraceInterfaceObject {
+impl SignalObjectName {
     pub fn name(self) -> &'static str {
         match self {
-            Self::SignalInput(route) => match route {
+            Self::Input(route) => match route {
                 InputRoute::Record => "SignalInputRecord",
                 InputRoute::Observe => "SignalInputObserve",
             },
-            Self::SignalOutput(route) => match route {
+            Self::Output(route) => match route {
                 OutputRoute::RecordAccepted => "SignalOutputRecordAccepted",
                 OutputRoute::RecordsObserved => "SignalOutputRecordsObserved",
             },
@@ -267,25 +257,35 @@ impl TraceInterfaceObject {
     }
 }
 
-impl TraceObject {
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ObjectName {
+    Signal(SignalObjectName),
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TraceEvent {
+    pub object_name: ObjectName,
+}
+
+impl ObjectName {
     pub fn name(self) -> &'static str {
         match self {
-            Self::Interface(object) => object.name(),
+            Self::Signal(object_name) => object_name.name(),
         }
     }
 }
 
 impl TraceEvent {
-    pub fn new(object: TraceObject) -> Self {
-        Self { object }
+    pub fn new(object_name: ObjectName) -> Self {
+        Self { object_name }
     }
 
-    pub fn object(&self) -> TraceObject {
-        self.object
+    pub fn object_name(&self) -> ObjectName {
+        self.object_name
     }
 
     pub fn name(&self) -> &'static str {
-        self.object.name()
+        self.object_name.name()
     }
 }
 
