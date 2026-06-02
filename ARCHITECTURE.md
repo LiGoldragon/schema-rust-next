@@ -117,9 +117,11 @@ must not grow a second parser for the authored form.
   `triage_inner`, `reply_inner`, `decide`, `apply_inner`, and `observe_inner`;
   generated default wrappers keep the public method names
   `triage`/`reply`/`execute`/`apply`/`observe` and call default no-op trace
-  hooks around the inner behavior. A trace-enabled consumer overrides those
-  hooks on its actor/store types; a non-trace consumer gets the no-op defaults
-  without linking a parallel instrumentation API.
+  hooks around the inner behavior. Those hooks activate by object name; the
+  generated interface supplies names such as `SignalTriaged`, `NexusEntered`,
+  and `SemaWriteApplied`, and a trace-enabled consumer records only that name.
+  A non-trace consumer gets the no-op defaults without linking a parallel
+  instrumentation API.
 - Mail identifiers, origin routes, and short headers use the generated scalar
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is

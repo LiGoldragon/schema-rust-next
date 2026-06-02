@@ -237,9 +237,18 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
     let generated = RustEmitter::default().emit_file(&asschema);
 
     assert!(generated.code.as_str().contains("pub trait SignalEngine"));
-    assert!(generated.code.as_str().contains(
-        "fn trace_signal_triaged(&self, _input: &signal::Signal<signal::Input>, _output: &nexus::Nexus<nexus::Input>) {}"
-    ));
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("fn trace_signal_activation(&self, _object_name: &'static str) {}")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
+            .contains("self.trace_signal_activation(\"SignalTriaged\");")
+    );
     assert!(generated.code.as_str().contains(
         "fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input>;"
     ));
@@ -250,7 +259,7 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("self.trace_signal_replied(&signal_output);")
+            .contains("self.trace_signal_replied();")
     );
     assert!(generated.code.as_str().contains("pub trait NexusEngine"));
     assert!(generated.code.as_str().contains("pub mod nexus"));
@@ -262,7 +271,7 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("self.trace_nexus_entered(&input);")
+            .contains("self.trace_nexus_activation(\"NexusEntered\");")
     );
     assert!(generated.code.as_str().contains("pub trait SemaEngine"));
     assert!(generated.code.as_str().contains(
@@ -275,7 +284,7 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("self.trace_sema_write_applied(&trace_input, &output);")
+            .contains("self.trace_sema_activation(\"SemaWriteApplied\");")
     );
     assert!(!generated.code.as_str().contains("NexusMail<Payload>"));
     assert!(

@@ -1756,16 +1756,19 @@ impl RustWriter {
             && self.has_type(declarations, "NexusOutput")
         {
             self.line("pub trait SignalEngine {");
-            self.line(
-                "    fn trace_signal_admitted(&self, _input: &signal::Signal<signal::Input>) {}",
-            );
-            self.line(
-                "    fn trace_signal_rejected(&self, _output: &signal::Signal<signal::Output>) {}",
-            );
-            self.line("    fn trace_signal_triaged(&self, _input: &signal::Signal<signal::Input>, _output: &nexus::Nexus<nexus::Input>) {}");
-            self.line(
-                "    fn trace_signal_replied(&self, _output: &signal::Signal<signal::Output>) {}",
-            );
+            self.line("    fn trace_signal_activation(&self, _object_name: &'static str) {}");
+            self.line("    fn trace_signal_admitted(&self) {");
+            self.line("        self.trace_signal_activation(\"SignalAdmitted\");");
+            self.line("    }");
+            self.line("    fn trace_signal_rejected(&self) {");
+            self.line("        self.trace_signal_activation(\"SignalRejected\");");
+            self.line("    }");
+            self.line("    fn trace_signal_triaged(&self) {");
+            self.line("        self.trace_signal_activation(\"SignalTriaged\");");
+            self.line("    }");
+            self.line("    fn trace_signal_replied(&self) {");
+            self.line("        self.trace_signal_activation(\"SignalReplied\");");
+            self.line("    }");
             self.blank();
             self.line(
                 "    fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input>;",
@@ -1775,15 +1778,14 @@ impl RustWriter {
             );
             self.blank();
             self.line("    fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input> {");
-            self.line("        let trace_input = input.clone();");
             self.line("        let output = self.triage_inner(input);");
-            self.line("        self.trace_signal_triaged(&trace_input, &output);");
+            self.line("        self.trace_signal_triaged();");
             self.line("        output");
             self.line("    }");
             self.blank();
             self.line("    fn reply(&self, output: nexus::Nexus<nexus::Output>) -> signal::Signal<signal::Output> {");
             self.line("        let signal_output = self.reply_inner(output);");
-            self.line("        self.trace_signal_replied(&signal_output);");
+            self.line("        self.trace_signal_replied();");
             self.line("        signal_output");
             self.line("    }");
             self.line("}");
@@ -1791,17 +1793,20 @@ impl RustWriter {
         }
         if self.has_type(declarations, "NexusInput") && self.has_type(declarations, "NexusOutput") {
             self.line("pub trait NexusEngine {");
-            self.line("    fn trace_nexus_entered(&self, _input: &nexus::Nexus<nexus::Input>) {}");
-            self.line(
-                "    fn trace_nexus_decided(&self, _output: &nexus::Nexus<nexus::Output>) {}",
-            );
+            self.line("    fn trace_nexus_activation(&self, _object_name: &'static str) {}");
+            self.line("    fn trace_nexus_entered(&self) {");
+            self.line("        self.trace_nexus_activation(\"NexusEntered\");");
+            self.line("    }");
+            self.line("    fn trace_nexus_decided(&self) {");
+            self.line("        self.trace_nexus_activation(\"NexusDecided\");");
+            self.line("    }");
             self.blank();
             self.line("    fn decide(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;");
             self.blank();
             self.line("    fn execute(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output> {");
-            self.line("        self.trace_nexus_entered(&input);");
+            self.line("        self.trace_nexus_entered();");
             self.line("        let output = self.decide(input);");
-            self.line("        self.trace_nexus_decided(&output);");
+            self.line("        self.trace_nexus_decided();");
             self.line("        output");
             self.line("    }");
             self.line("}");
@@ -1813,23 +1818,26 @@ impl RustWriter {
             && self.has_type(declarations, "SemaReadOutput")
         {
             self.line("pub trait SemaEngine {");
-            self.line("    fn trace_sema_write_applied(&self, _input: &sema::Sema<sema::WriteInput>, _output: &sema::Sema<sema::WriteOutput>) {}");
-            self.line("    fn trace_sema_read_observed(&self, _input: &sema::Sema<sema::ReadInput>, _output: &sema::Sema<sema::ReadOutput>) {}");
+            self.line("    fn trace_sema_activation(&self, _object_name: &'static str) {}");
+            self.line("    fn trace_sema_write_applied(&self) {");
+            self.line("        self.trace_sema_activation(\"SemaWriteApplied\");");
+            self.line("    }");
+            self.line("    fn trace_sema_read_observed(&self) {");
+            self.line("        self.trace_sema_activation(\"SemaReadObserved\");");
+            self.line("    }");
             self.blank();
             self.line("    fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;");
             self.line("    fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;");
             self.blank();
             self.line("    fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput> {");
-            self.line("        let trace_input = input.clone();");
             self.line("        let output = self.apply_inner(input);");
-            self.line("        self.trace_sema_write_applied(&trace_input, &output);");
+            self.line("        self.trace_sema_write_applied();");
             self.line("        output");
             self.line("    }");
             self.blank();
             self.line("    fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput> {");
-            self.line("        let trace_input = input.clone();");
             self.line("        let output = self.observe_inner(input);");
-            self.line("        self.trace_sema_read_observed(&trace_input, &output);");
+            self.line("        self.trace_sema_read_observed();");
             self.line("        output");
             self.line("    }");
             self.line("}");
