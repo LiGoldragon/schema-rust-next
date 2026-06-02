@@ -1490,7 +1490,9 @@ impl RustWriter {
             && self.has_type(declarations, "NexusWork")
             && self.has_type(declarations, "NexusAction")
         {
-            variants.extend(["Admitted", "Rejected", "Triaged", "Replied"]);
+            variants.extend([
+                "Started", "Stopped", "Admitted", "Rejected", "Triaged", "Replied",
+            ]);
         }
         variants
     }
@@ -1498,7 +1500,7 @@ impl RustWriter {
     fn trace_nexus_actor_variants(&self, declarations: &[RustDeclaration]) -> Vec<&'static str> {
         let mut variants = Vec::new();
         if self.has_type(declarations, "NexusWork") && self.has_type(declarations, "NexusAction") {
-            variants.extend(["Entered", "Decided"]);
+            variants.extend(["Started", "Stopped", "Entered", "Decided"]);
         }
         variants
     }
@@ -1510,7 +1512,7 @@ impl RustWriter {
             && self.has_type(declarations, "SemaReadInput")
             && self.has_type(declarations, "SemaReadOutput")
         {
-            variants.extend(["WriteApplied", "ReadObserved"]);
+            variants.extend(["Started", "Stopped", "WriteApplied", "ReadObserved"]);
         }
         variants
     }

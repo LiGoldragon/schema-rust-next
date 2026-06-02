@@ -297,6 +297,8 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
     assert!(generated.code.as_str().contains("pub enum NexusObjectName"));
     assert!(generated.code.as_str().contains("pub enum SemaObjectName"));
     assert!(generated.code.as_str().contains("Input(InputRoute)"));
+    assert!(generated.code.as_str().contains("Started,"));
+    assert!(generated.code.as_str().contains("Stopped,"));
     assert!(generated.code.as_str().contains("Triaged,"));
     assert!(generated.code.as_str().contains("Work(NexusWorkRoute)"));
     assert!(

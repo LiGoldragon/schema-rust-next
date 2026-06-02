@@ -141,7 +141,8 @@ must not grow a second parser for the authored form.
   `NexusObjectName`, and SEMA receives `SemaObjectName`. Interface/header names
   use route enums such as `InputRoute`, `NexusInputRoute`, and
   `SemaReadInputRoute`; actor-boundary names live beside the plane that owns
-  them (`NexusObjectName::Entered`, `SemaObjectName::WriteApplied`). The
+  them (`SignalObjectName::Started`, `NexusObjectName::Entered`,
+  `SemaObjectName::WriteApplied`, `SemaObjectName::Stopped`). The
   generated `ObjectName` enum wraps the per-plane names for `TraceEvent`
   transport. A non-trace consumer gets the no-op defaults without linking a
   parallel instrumentation API.

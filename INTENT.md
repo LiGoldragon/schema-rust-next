@@ -100,7 +100,8 @@ plane. Each hook receives that plane's generated object-name enum:
 `ObjectName` enum wraps those plane names for `TraceEvent` transport. Trace
 identity is generated from the schema header through route enums such as
 `InputRoute`, `NexusInputRoute`, and `SemaReadInputRoute`, plus generated
-actor-boundary names such as `NexusObjectName::Entered`. Trace events do not
+actor-boundary names such as `SignalObjectName::Started`,
+`NexusObjectName::Entered`, and `SemaObjectName::Stopped`. Trace events do not
 carry cloned input/output payload snapshots. A consumer should not carry
 parallel local Signal/Nexus/SEMA trace traits or stringly trace vocabularies
 beside the generated actor/interface contract.*
