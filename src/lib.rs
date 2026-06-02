@@ -6,6 +6,9 @@ use schema_next::{
     TypeReference, Visibility,
 };
 
+pub mod migration;
+pub use migration::{DefaultRenderer, MigrationEmitter, TypeRenderer};
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GeneratedFile {
     pub path: String,
@@ -672,8 +675,8 @@ struct RustWriter {
 struct SplitSemaProjection<'schema> {
     signal_input: &'schema RustEnum,
     signal_output: &'schema RustEnum,
-    nexus_input: &'schema RustEnum,
-    nexus_output: &'schema RustEnum,
+    nexus_work: &'schema RustEnum,
+    nexus_action: &'schema RustEnum,
     sema_write_input: &'schema RustEnum,
     sema_write_output: &'schema RustEnum,
     sema_read_input: &'schema RustEnum,
@@ -1434,18 +1437,18 @@ impl RustWriter {
         declarations: &'schema [RustDeclaration],
     ) -> Vec<TraceInterfaceRoot<'schema>> {
         let mut roots = Vec::new();
-        if let Some(input) = self.declaration_enum_named(declarations, "NexusInput") {
+        if let Some(input) = self.declaration_enum_named(declarations, "NexusWork") {
             roots.push(TraceInterfaceRoot {
-                object_variant: "Input",
-                name_prefix: "NexusInput",
+                object_variant: "Work",
+                name_prefix: "NexusWork",
                 type_name: input.name(),
                 enum_declaration: input,
             });
         }
-        if let Some(output) = self.declaration_enum_named(declarations, "NexusOutput") {
+        if let Some(output) = self.declaration_enum_named(declarations, "NexusAction") {
             roots.push(TraceInterfaceRoot {
-                object_variant: "Output",
-                name_prefix: "NexusOutput",
+                object_variant: "Action",
+                name_prefix: "NexusAction",
                 type_name: output.name(),
                 enum_declaration: output,
             });
@@ -1484,8 +1487,8 @@ impl RustWriter {
         let mut variants = Vec::new();
         if self.has_root_enum(root_enums, "Input")
             && self.has_root_enum(root_enums, "Output")
-            && self.has_type(declarations, "NexusInput")
-            && self.has_type(declarations, "NexusOutput")
+            && self.has_type(declarations, "NexusWork")
+            && self.has_type(declarations, "NexusAction")
         {
             variants.extend(["Admitted", "Rejected", "Triaged", "Replied"]);
         }
@@ -1494,7 +1497,7 @@ impl RustWriter {
 
     fn trace_nexus_actor_variants(&self, declarations: &[RustDeclaration]) -> Vec<&'static str> {
         let mut variants = Vec::new();
-        if self.has_type(declarations, "NexusInput") && self.has_type(declarations, "NexusOutput") {
+        if self.has_type(declarations, "NexusWork") && self.has_type(declarations, "NexusAction") {
             variants.extend(["Entered", "Decided"]);
         }
         variants
@@ -1515,8 +1518,8 @@ impl RustWriter {
     fn is_plane_route_type(&self, type_name: &str) -> bool {
         matches!(
             type_name,
-            "NexusInput"
-                | "NexusOutput"
+            "NexusWork"
+                | "NexusAction"
                 | "SemaWriteInput"
                 | "SemaWriteOutput"
                 | "SemaReadInput"
@@ -1715,13 +1718,13 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-        if self.has_type(declarations, "NexusInput") || self.has_type(declarations, "NexusOutput") {
+        if self.has_type(declarations, "NexusWork") || self.has_type(declarations, "NexusAction") {
             self.line("pub mod nexus {");
-            if self.has_type(declarations, "NexusInput") {
-                self.line("    pub type Input = super::NexusInput;");
+            if self.has_type(declarations, "NexusWork") {
+                self.line("    pub type Work = super::NexusWork;");
             }
-            if self.has_type(declarations, "NexusOutput") {
-                self.line("    pub type Output = super::NexusOutput;");
+            if self.has_type(declarations, "NexusAction") {
+                self.line("    pub type Action = super::NexusAction;");
             }
             self.line("    pub type Nexus<Root> = super::Nexus<Root>;");
             self.line("}");
@@ -1749,11 +1752,11 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-        if self.has_type(declarations, "NexusInput") {
-            self.emit_plane_origin_route_constructor("NexusInput", "nexus::Nexus", "nexus::Nexus");
+        if self.has_type(declarations, "NexusWork") {
+            self.emit_plane_origin_route_constructor("NexusWork", "nexus::Nexus", "nexus::Nexus");
         }
-        if self.has_type(declarations, "NexusOutput") {
-            self.emit_plane_origin_route_constructor("NexusOutput", "nexus::Nexus", "nexus::Nexus");
+        if self.has_type(declarations, "NexusAction") {
+            self.emit_plane_origin_route_constructor("NexusAction", "nexus::Nexus", "nexus::Nexus");
         }
         if self.has_type(declarations, "SemaWriteInput") {
             self.emit_plane_origin_route_constructor("SemaWriteInput", "sema::Sema", "sema::Sema");
@@ -1792,8 +1795,8 @@ impl RustWriter {
     ) {
         let signal_input = self.root_enum_named(root_enums, "Input");
         let signal_output = self.root_enum_named(root_enums, "Output");
-        let nexus_input = self.declaration_enum_named(declarations, "NexusInput");
-        let nexus_output = self.declaration_enum_named(declarations, "NexusOutput");
+        let nexus_work = self.declaration_enum_named(declarations, "NexusWork");
+        let nexus_action = self.declaration_enum_named(declarations, "NexusAction");
         let sema_write_input = self.declaration_enum_named(declarations, "SemaWriteInput");
         let sema_write_output = self.declaration_enum_named(declarations, "SemaWriteOutput");
         let sema_read_input = self.declaration_enum_named(declarations, "SemaReadInput");
@@ -1802,8 +1805,8 @@ impl RustWriter {
         if let (
             Some(signal_input),
             Some(signal_output),
-            Some(nexus_input),
-            Some(nexus_output),
+            Some(nexus_work),
+            Some(nexus_action),
             Some(sema_write_input),
             Some(sema_write_output),
             Some(sema_read_input),
@@ -1811,8 +1814,8 @@ impl RustWriter {
         ) = (
             signal_input,
             signal_output,
-            nexus_input,
-            nexus_output,
+            nexus_work,
+            nexus_action,
             sema_write_input,
             sema_write_output,
             sema_read_input,
@@ -1821,38 +1824,46 @@ impl RustWriter {
             let projection = SplitSemaProjection {
                 signal_input,
                 signal_output,
-                nexus_input,
-                nexus_output,
+                nexus_work,
+                nexus_action,
                 sema_write_input,
                 sema_write_output,
                 sema_read_input,
                 sema_read_output,
             };
-            if self.can_emit_split_nexus_input_projection(&projection) {
-                self.emit_split_nexus_input_projection(&projection);
+            if self.can_emit_split_nexus_work_projection(&projection) {
+                self.emit_split_nexus_work_projection(&projection);
             }
-            self.emit_nexus_output_projection(nexus_output);
-            if self.enum_has_unique_payload_variant(nexus_input, "SemaWrite", "SemaWriteOutput") {
+            self.emit_nexus_action_projection(nexus_action);
+            if self.enum_has_unique_payload_variant(
+                nexus_work,
+                "SemaWriteCompleted",
+                "SemaWriteOutput",
+            ) {
                 self.emit_split_sema_output_projection("WriteOutput", "SemaWriteOutput");
             }
-            if self.enum_has_unique_payload_variant(nexus_input, "SemaRead", "SemaReadOutput") {
+            if self.enum_has_unique_payload_variant(
+                nexus_work,
+                "SemaReadCompleted",
+                "SemaReadOutput",
+            ) {
                 self.emit_split_sema_output_projection("ReadOutput", "SemaReadOutput");
             }
         }
     }
 
-    fn emit_split_nexus_input_projection(&mut self, projection: &SplitSemaProjection<'_>) {
-        self.line("impl nexus::Nexus<nexus::Input> {");
-        self.line("    pub fn into_nexus_output(self) -> nexus::Nexus<nexus::Output> {");
+    fn emit_split_nexus_work_projection(&mut self, projection: &SplitSemaProjection<'_>) {
+        self.line("impl nexus::Nexus<nexus::Work> {");
+        self.line("    pub fn into_nexus_action(self) -> nexus::Nexus<nexus::Action> {");
         self.line("        let origin_route = self.origin_route();");
         self.line("        match self.into_root() {");
-        self.line("            NexusInput::Signal(input) => match input {");
+        self.line("            NexusWork::SignalArrived(input) => match input {");
         for variant in projection.signal_input.variants() {
             if let Some(target_variant) =
                 self.exact_target_variant_for_source(variant, projection.sema_write_input)
             {
                 self.line(format!(
-                    "                Input::{}(payload) => NexusOutput::from(SemaWriteInput::{}(payload)),",
+                    "                Input::{}(payload) => NexusAction::from(SemaWriteInput::{}(payload)),",
                     variant.name(),
                     target_variant.name()
                 ));
@@ -1862,7 +1873,7 @@ impl RustWriter {
                 self.exact_target_variant_for_source(variant, projection.sema_read_input)
             {
                 self.line(format!(
-                    "                Input::{}(payload) => NexusOutput::from(SemaReadInput::{}(payload)),",
+                    "                Input::{}(payload) => NexusAction::from(SemaReadInput::{}(payload)),",
                     variant.name(),
                     target_variant.name()
                 ));
@@ -1875,14 +1886,14 @@ impl RustWriter {
             match (write_fallback, read_fallback) {
                 (Some(target_variant), None) => {
                     self.line(format!(
-                        "                Input::{}(payload) => NexusOutput::from(SemaWriteInput::{}(payload)),",
+                        "                Input::{}(payload) => NexusAction::from(SemaWriteInput::{}(payload)),",
                         variant.name(),
                         target_variant.name()
                     ));
                 }
                 (None, Some(target_variant)) => {
                     self.line(format!(
-                        "                Input::{}(payload) => NexusOutput::from(SemaReadInput::{}(payload)),",
+                        "                Input::{}(payload) => NexusAction::from(SemaReadInput::{}(payload)),",
                         variant.name(),
                         target_variant.name()
                     ));
@@ -1891,32 +1902,35 @@ impl RustWriter {
             }
         }
         self.line("            },");
-        self.line("            NexusInput::SemaWrite(output) => match output {");
+        self.line("            NexusWork::SemaWriteCompleted(output) => match output {");
         for variant in projection.sema_write_output.variants() {
             if let Some(target_variant) =
                 self.target_variant_for_source(variant, projection.signal_output)
             {
                 self.line(format!(
-                    "                SemaWriteOutput::{}(payload) => NexusOutput::from(Output::{}(payload)),",
+                    "                SemaWriteOutput::{}(payload) => NexusAction::from(Output::{}(payload)),",
                     variant.name(),
                     target_variant.name()
                 ));
             }
         }
         self.line("            },");
-        self.line("            NexusInput::SemaRead(output) => match output {");
+        self.line("            NexusWork::SemaReadCompleted(output) => match output {");
         for variant in projection.sema_read_output.variants() {
             if let Some(target_variant) =
                 self.target_variant_for_source(variant, projection.signal_output)
             {
                 self.line(format!(
-                    "                SemaReadOutput::{}(payload) => NexusOutput::from(Output::{}(payload)),",
+                    "                SemaReadOutput::{}(payload) => NexusAction::from(Output::{}(payload)),",
                     variant.name(),
                     target_variant.name()
                 ));
             }
         }
         self.line("            },");
+        self.line(
+            "            _ => panic!(\"nexus work cannot project to a generated nexus action\"),",
+        );
         self.line("        }");
         self.line("        .with_origin_route(origin_route)");
         self.line("    }");
@@ -1924,22 +1938,22 @@ impl RustWriter {
         self.blank();
     }
 
-    fn emit_nexus_output_projection(&mut self, nexus_output: &RustEnum) {
+    fn emit_nexus_action_projection(&mut self, nexus_action: &RustEnum) {
         let has_sema_write =
-            self.enum_has_variant_payload(nexus_output, "SemaWrite", "SemaWriteInput");
+            self.enum_has_variant_payload(nexus_action, "CommandSemaWrite", "SemaWriteInput");
         let has_sema_read =
-            self.enum_has_variant_payload(nexus_output, "SemaRead", "SemaReadInput");
-        let has_signal = self.enum_has_variant_payload(nexus_output, "Signal", "Output");
+            self.enum_has_variant_payload(nexus_action, "CommandSemaRead", "SemaReadInput");
+        let has_signal = self.enum_has_variant_payload(nexus_action, "ReplyToSignal", "Output");
         if !has_sema_write && !has_sema_read && !has_signal {
             return;
         }
-        self.line("impl nexus::Nexus<nexus::Output> {");
+        self.line("impl nexus::Nexus<nexus::Action> {");
         if has_sema_write {
             self.line("    pub fn into_sema_write_input(self) -> sema::Sema<sema::WriteInput> {");
             self.line("        let origin_route = self.origin_route();");
             self.line("        match self.into_root() {");
-            self.line("            NexusOutput::SemaWrite(input) => input.with_origin_route(origin_route),");
-            self.line("            _ => panic!(\"nexus output is not a SEMA write input\"),");
+            self.line("            NexusAction::CommandSemaWrite(input) => input.with_origin_route(origin_route),");
+            self.line("            _ => panic!(\"nexus action is not a SEMA write input\"),");
             self.line("        }");
             self.line("    }");
             if has_sema_read || has_signal {
@@ -1950,8 +1964,8 @@ impl RustWriter {
             self.line("    pub fn into_sema_read_input(self) -> sema::Sema<sema::ReadInput> {");
             self.line("        let origin_route = self.origin_route();");
             self.line("        match self.into_root() {");
-            self.line("            NexusOutput::SemaRead(input) => input.with_origin_route(origin_route),");
-            self.line("            _ => panic!(\"nexus output is not a SEMA read input\"),");
+            self.line("            NexusAction::CommandSemaRead(input) => input.with_origin_route(origin_route),");
+            self.line("            _ => panic!(\"nexus action is not a SEMA read input\"),");
             self.line("        }");
             self.line("    }");
             if has_signal {
@@ -1962,10 +1976,8 @@ impl RustWriter {
             self.line("    pub fn into_signal_output(self) -> signal::Signal<signal::Output> {");
             self.line("        let origin_route = self.origin_route();");
             self.line("        match self.into_root() {");
-            self.line("            NexusOutput::Signal(output) => output.with_origin_route(origin_route),");
-            self.line(
-                "            _ => panic!(\"nexus output is a SEMA input, not a signal reply\"),",
-            );
+            self.line("            NexusAction::ReplyToSignal(output) => output.with_origin_route(origin_route),");
+            self.line("            _ => panic!(\"nexus action is not a signal reply\"),");
             self.line("        }");
             self.line("    }");
         }
@@ -1975,38 +1987,42 @@ impl RustWriter {
 
     fn emit_split_sema_output_projection(&mut self, plane_alias: &str, type_name: &str) {
         self.line(format!("impl sema::Sema<sema::{plane_alias}> {{"));
-        self.line("    pub fn into_nexus_input(self) -> nexus::Nexus<nexus::Input> {");
+        self.line("    pub fn into_nexus_work(self) -> nexus::Nexus<nexus::Work> {");
         self.line("        let origin_route = self.origin_route();");
-        self.line("        NexusInput::from(self.into_root()).with_origin_route(origin_route)");
+        self.line("        NexusWork::from(self.into_root()).with_origin_route(origin_route)");
         self.line("    }");
         self.line("}");
         self.blank();
         let _ = type_name;
     }
 
-    fn can_emit_split_nexus_input_projection(&self, projection: &SplitSemaProjection<'_>) -> bool {
-        self.enum_has_unique_payload_variant(projection.nexus_input, "Signal", "Input")
+    fn can_emit_split_nexus_work_projection(&self, projection: &SplitSemaProjection<'_>) -> bool {
+        self.enum_has_unique_payload_variant(projection.nexus_work, "SignalArrived", "Input")
             && self.enum_has_unique_payload_variant(
-                projection.nexus_input,
-                "SemaWrite",
+                projection.nexus_work,
+                "SemaWriteCompleted",
                 "SemaWriteOutput",
             )
             && self.enum_has_unique_payload_variant(
-                projection.nexus_input,
-                "SemaRead",
+                projection.nexus_work,
+                "SemaReadCompleted",
                 "SemaReadOutput",
             )
             && self.enum_has_unique_payload_variant(
-                projection.nexus_output,
-                "SemaWrite",
+                projection.nexus_action,
+                "CommandSemaWrite",
                 "SemaWriteInput",
             )
             && self.enum_has_unique_payload_variant(
-                projection.nexus_output,
-                "SemaRead",
+                projection.nexus_action,
+                "CommandSemaRead",
                 "SemaReadInput",
             )
-            && self.enum_has_unique_payload_variant(projection.nexus_output, "Signal", "Output")
+            && self.enum_has_unique_payload_variant(
+                projection.nexus_action,
+                "ReplyToSignal",
+                "Output",
+            )
             && self.all_payloads_project_to_one_of(
                 projection.signal_input,
                 projection.sema_write_input,
@@ -2126,8 +2142,8 @@ impl RustWriter {
     ) {
         if self.has_root_enum(root_enums, "Input")
             && self.has_root_enum(root_enums, "Output")
-            && self.has_type(declarations, "NexusInput")
-            && self.has_type(declarations, "NexusOutput")
+            && self.has_type(declarations, "NexusWork")
+            && self.has_type(declarations, "NexusAction")
         {
             self.line("pub trait SignalEngine {");
             self.line("    fn trace_signal_activation(&self, _object_name: SignalObjectName) {}");
@@ -2145,19 +2161,19 @@ impl RustWriter {
             self.line("    }");
             self.blank();
             self.line(
-                "    fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input>;",
+                "    fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work>;",
             );
             self.line(
-                "    fn reply_inner(&self, output: nexus::Nexus<nexus::Output>) -> signal::Signal<signal::Output>;",
+                "    fn reply_inner(&self, output: nexus::Nexus<nexus::Action>) -> signal::Signal<signal::Output>;",
             );
             self.blank();
-            self.line("    fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input> {");
+            self.line("    fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work> {");
             self.line("        let output = self.triage_inner(input);");
             self.line("        self.trace_signal_triaged();");
             self.line("        output");
             self.line("    }");
             self.blank();
-            self.line("    fn reply(&self, output: nexus::Nexus<nexus::Output>) -> signal::Signal<signal::Output> {");
+            self.line("    fn reply(&self, output: nexus::Nexus<nexus::Action>) -> signal::Signal<signal::Output> {");
             self.line("        let signal_output = self.reply_inner(output);");
             self.line("        self.trace_signal_replied();");
             self.line("        signal_output");
@@ -2165,7 +2181,7 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-        if self.has_type(declarations, "NexusInput") && self.has_type(declarations, "NexusOutput") {
+        if self.has_type(declarations, "NexusWork") && self.has_type(declarations, "NexusAction") {
             self.line("pub trait NexusEngine {");
             self.line("    fn trace_nexus_activation(&self, _object_name: NexusObjectName) {}");
             self.line("    fn trace_nexus_entered(&self) {");
@@ -2175,9 +2191,9 @@ impl RustWriter {
             self.line("        self.trace_nexus_activation(NexusObjectName::Decided);");
             self.line("    }");
             self.blank();
-            self.line("    fn decide(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;");
+            self.line("    fn decide(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>;");
             self.blank();
-            self.line("    fn execute(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output> {");
+            self.line("    fn execute(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action> {");
             self.line("        self.trace_nexus_entered();");
             self.line("        let output = self.decide(input);");
             self.line("        self.trace_nexus_decided();");

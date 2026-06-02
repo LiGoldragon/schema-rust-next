@@ -260,7 +260,7 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
     assert!(generated.code.as_str().contains("pub enum SemaObjectName"));
     assert!(generated.code.as_str().contains("Input(InputRoute)"));
     assert!(generated.code.as_str().contains("Triaged,"));
-    assert!(generated.code.as_str().contains("Input(NexusInputRoute)"));
+    assert!(generated.code.as_str().contains("Work(NexusWorkRoute)"));
     assert!(
         generated
             .code
@@ -268,10 +268,10 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
             .contains("ReadInput(SemaReadInputRoute)")
     );
     assert!(generated.code.as_str().contains(
-        "fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input>;"
+        "fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work>;"
     ));
     assert!(generated.code.as_str().contains(
-        "fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Input> {"
+        "fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work> {"
     ));
     assert!(
         generated
@@ -282,15 +282,15 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
     assert!(generated.code.as_str().contains("pub trait NexusEngine"));
     assert!(generated.code.as_str().contains("pub mod nexus"));
     assert!(generated.code.as_str().contains("pub mod sema"));
-    assert!(generated.code.as_str().contains("pub enum NexusInputRoute"));
+    assert!(generated.code.as_str().contains("pub enum NexusWorkRoute"));
     assert!(
         generated
             .code
             .as_str()
-            .contains("pub enum NexusOutputRoute")
+            .contains("pub enum NexusActionRoute")
     );
     assert!(generated.code.as_str().contains(
-        "fn decide(&mut self, input: nexus::Nexus<nexus::Input>) -> nexus::Nexus<nexus::Output>;"
+        "fn decide(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>;"
     ));
     assert!(
         generated
@@ -328,40 +328,40 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("pub fn into_nexus_output(self) -> nexus::Nexus<nexus::Output>")
+            .contains("pub fn into_nexus_action(self) -> nexus::Nexus<nexus::Action>")
     );
     assert!(
         generated.code.as_str().contains(
-            "Input::Record(payload) => NexusOutput::from(SemaWriteInput::Record(payload))"
+            "Input::Record(payload) => NexusAction::from(SemaWriteInput::Record(payload))"
         )
     );
     assert!(
         generated.code.as_str().contains(
-            "Input::Observe(payload) => NexusOutput::from(SemaReadInput::Observe(payload))"
+            "Input::Observe(payload) => NexusAction::from(SemaReadInput::Observe(payload))"
         )
     );
     assert!(
         generated.code.as_str().contains(
-            "Input::Lookup(payload) => NexusOutput::from(SemaReadInput::Lookup(payload))"
+            "Input::Lookup(payload) => NexusAction::from(SemaReadInput::Lookup(payload))"
         )
     );
     assert!(
         generated
             .code
             .as_str()
-            .contains("Input::Count(payload) => NexusOutput::from(SemaReadInput::Count(payload))")
+            .contains("Input::Count(payload) => NexusAction::from(SemaReadInput::Count(payload))")
     );
     assert!(generated.code.as_str().contains(
-        "SemaWriteOutput::Recorded(payload) => NexusOutput::from(Output::RecordAccepted(payload))"
+        "SemaWriteOutput::Recorded(payload) => NexusAction::from(Output::RecordAccepted(payload))"
     ));
     assert!(generated.code.as_str().contains(
-        "SemaReadOutput::Observed(payload) => NexusOutput::from(Output::RecordsObserved(payload))"
+        "SemaReadOutput::Observed(payload) => NexusAction::from(Output::RecordsObserved(payload))"
     ));
     assert!(generated.code.as_str().contains(
-        "SemaReadOutput::Found(payload) => NexusOutput::from(Output::RecordFound(payload))"
+        "SemaReadOutput::Found(payload) => NexusAction::from(Output::RecordFound(payload))"
     ));
     assert!(generated.code.as_str().contains(
-        "SemaReadOutput::Counted(payload) => NexusOutput::from(Output::RecordsCounted(payload))"
+        "SemaReadOutput::Counted(payload) => NexusAction::from(Output::RecordsCounted(payload))"
     ));
     assert!(
         generated

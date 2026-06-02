@@ -13,7 +13,10 @@ name = "schema_rust_next"
 path = "src/lib.rs"
 
 [dependencies]
-schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "main" }
+# Designer 481 pilot — points at the schema-next branch that carries the
+# UpgradeObject + AddVariant types this branch emits migration code for.
+# Reverts to `branch = "main"` once the schema-next branch lands.
+schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "designer-schema-daemon-2026-06-02" }
 
 [features]
 # Activates the `#[cfg(feature = "nota-text")]` blocks inside any
