@@ -4,6 +4,7 @@
   Topic String
   Topics (Vec Topic)
   Description String
+  Summary { Description * }
   RecordIdentifier Integer
   Entry { Topics * kind Kind description Description magnitude Magnitude }
   Query { Topic * kind Kind }

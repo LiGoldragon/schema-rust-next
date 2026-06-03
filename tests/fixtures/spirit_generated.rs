@@ -10,21 +10,17 @@ pub use nota_next::{
     NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
 };
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Topic(pub String);
+pub type Topic = String;
+
+pub type Topics = Vec<Topic>;
+
+pub type Description = String;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Topics(pub Vec<Topic>);
+pub struct Summary(pub Description);
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Description(pub String);
-
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RecordIdentifier(pub Integer);
+pub type RecordIdentifier = Integer;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -42,9 +38,7 @@ pub struct Query {
     pub kind: Kind,
 }
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RecordSet(pub Vec<Entry>);
+pub type RecordSet = Vec<Entry>;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -82,102 +76,22 @@ pub enum Output {
     RecordsObserved(RecordSet),
 }
 
-impl Topic {
-    pub fn new(payload: String) -> Self {
+impl Summary {
+    pub fn new(payload: Description) -> Self {
         Self(payload)
     }
 
-    pub fn payload(&self) -> &String {
+    pub fn payload(&self) -> &Description {
         &self.0
     }
 
-    pub fn into_payload(self) -> String {
+    pub fn into_payload(self) -> Description {
         self.0
     }
 }
 
-impl From<String> for Topic {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Topics {
-    pub fn new(payload: Vec<Topic>) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Vec<Topic> {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Vec<Topic> {
-        self.0
-    }
-}
-
-impl From<Vec<Topic>> for Topics {
-    fn from(payload: Vec<Topic>) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Description {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for Description {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl RecordIdentifier {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for RecordIdentifier {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl RecordSet {
-    pub fn new(payload: Vec<Entry>) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Vec<Entry> {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Vec<Entry> {
-        self.0
-    }
-}
-
-impl From<Vec<Entry>> for RecordSet {
-    fn from(payload: Vec<Entry>) -> Self {
+impl From<Description> for Summary {
+    fn from(payload: Description) -> Self {
         Self::new(payload)
     }
 }
@@ -193,12 +107,12 @@ impl Input {
 }
 
 impl Output {
-    pub fn record_accepted(payload: Integer) -> Self {
-        Self::RecordAccepted(RecordIdentifier::new(payload))
+    pub fn record_accepted(payload: RecordIdentifier) -> Self {
+        Self::RecordAccepted(payload)
     }
 
-    pub fn records_observed(payload: Vec<Entry>) -> Self {
-        Self::RecordsObserved(RecordSet::new(payload))
+    pub fn records_observed(payload: RecordSet) -> Self {
+        Self::RecordsObserved(payload)
     }
 }
 
@@ -227,40 +141,7 @@ impl From<RecordSet> for Output {
 }
 
 #[cfg(feature = "nota-text")]
-impl Topic {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Topics {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Description {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl RecordIdentifier {
+impl Summary {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
@@ -283,17 +164,6 @@ impl Entry {
 
 #[cfg(feature = "nota-text")]
 impl Query {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl RecordSet {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }

@@ -10,21 +10,13 @@ pub use nota_next::{
     NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
 };
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct CommitSequence(pub Integer);
+pub type CommitSequence = Integer;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DatabaseDigest(pub Integer);
+pub type DatabaseDigest = Integer;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ActorIdentifier(pub String);
+pub type ActorIdentifier = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct SocketPath(pub String);
+pub type SocketPath = String;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -104,9 +96,7 @@ pub enum RuntimeEvent {
     MessageFailed(MessageFailed),
 }
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Rejected(pub RejectionReason);
+pub type Rejected = RejectionReason;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -126,13 +116,9 @@ pub struct RecordIntent {
     pub entry: Entry,
 }
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ObserveIntent(pub Query);
+pub type ObserveIntent = Query;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct SubscribeIntent(pub Query);
+pub type SubscribeIntent = Query;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -141,45 +127,25 @@ pub struct RecordAccepted {
     pub commit_sequence: CommitSequence,
 }
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ObservationReturned(pub RecordSet);
+pub type ObservationReturned = RecordSet;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct SubscriptionStarted(pub SubscriptionToken);
+pub type SubscriptionStarted = SubscriptionToken;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct PushSignal(pub SignalRequest);
+pub type PushSignal = SignalRequest;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct PushSemaResult(pub SemaReply);
+pub type PushSemaResult = SemaReply;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct PushedToSema(pub SemaRequest);
+pub type PushedToSema = SemaRequest;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct MailResolved(pub SignalReply);
+pub type MailResolved = SignalReply;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct WriteEntry(pub Entry);
+pub type WriteEntry = Entry;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ReadEntries(pub Query);
+pub type ReadEntries = Query;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct OpenSubscription(pub Query);
+pub type OpenSubscription = Query;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct CloseSubscription(pub SubscriptionToken);
+pub type CloseSubscription = SubscriptionToken;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -210,9 +176,7 @@ pub struct SubscriptionClosed {
     pub commit_sequence: CommitSequence,
 }
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Snapshot(pub SocketPath);
+pub type Snapshot = SocketPath;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -221,21 +185,13 @@ pub struct SnapshotReady {
     pub database_digest: DatabaseDigest,
 }
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct MailSent(pub SignalRequest);
+pub type MailSent = SignalRequest;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct MessageAccepted(pub SignalRequest);
+pub type MessageAccepted = SignalRequest;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct MessageCommitted(pub CommitSequence);
+pub type MessageCommitted = CommitSequence;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct MessageFailed(pub RejectionReason);
+pub type MessageFailed = RejectionReason;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -247,18 +203,11 @@ pub struct Entry {
     pub actor_identifier: ActorIdentifier,
 }
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]
-pub struct Topic(pub String);
+pub type Topic = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Topics(pub Vec<Topic>);
+pub type Topics = Vec<Topic>;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Description(pub String);
+pub type Description = String;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -292,13 +241,9 @@ pub struct Query {
     pub limit: Option<Integer>,
 }
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RecordIdentifier(pub Integer);
+pub type RecordIdentifier = Integer;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct SubscriptionToken(pub Integer);
+pub type SubscriptionToken = Integer;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -328,557 +273,17 @@ pub enum Output {
     Rejected(Rejected),
 }
 
-impl CommitSequence {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for CommitSequence {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl DatabaseDigest {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for DatabaseDigest {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl ActorIdentifier {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for ActorIdentifier {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl SocketPath {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for SocketPath {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Rejected {
-    pub fn new(payload: RejectionReason) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &RejectionReason {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> RejectionReason {
-        self.0
-    }
-}
-
-impl From<RejectionReason> for Rejected {
-    fn from(payload: RejectionReason) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl ObserveIntent {
-    pub fn new(payload: Query) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Query {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Query {
-        self.0
-    }
-}
-
-impl From<Query> for ObserveIntent {
-    fn from(payload: Query) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl SubscribeIntent {
-    pub fn new(payload: Query) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Query {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Query {
-        self.0
-    }
-}
-
-impl From<Query> for SubscribeIntent {
-    fn from(payload: Query) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl ObservationReturned {
-    pub fn new(payload: RecordSet) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &RecordSet {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> RecordSet {
-        self.0
-    }
-}
-
-impl From<RecordSet> for ObservationReturned {
-    fn from(payload: RecordSet) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl SubscriptionStarted {
-    pub fn new(payload: SubscriptionToken) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &SubscriptionToken {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> SubscriptionToken {
-        self.0
-    }
-}
-
-impl From<SubscriptionToken> for SubscriptionStarted {
-    fn from(payload: SubscriptionToken) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl PushSignal {
-    pub fn new(payload: SignalRequest) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &SignalRequest {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> SignalRequest {
-        self.0
-    }
-}
-
-impl From<SignalRequest> for PushSignal {
-    fn from(payload: SignalRequest) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl PushSemaResult {
-    pub fn new(payload: SemaReply) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &SemaReply {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> SemaReply {
-        self.0
-    }
-}
-
-impl From<SemaReply> for PushSemaResult {
-    fn from(payload: SemaReply) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl PushedToSema {
-    pub fn new(payload: SemaRequest) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &SemaRequest {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> SemaRequest {
-        self.0
-    }
-}
-
-impl From<SemaRequest> for PushedToSema {
-    fn from(payload: SemaRequest) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl MailResolved {
-    pub fn new(payload: SignalReply) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &SignalReply {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> SignalReply {
-        self.0
-    }
-}
-
-impl From<SignalReply> for MailResolved {
-    fn from(payload: SignalReply) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl WriteEntry {
-    pub fn new(payload: Entry) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Entry {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Entry {
-        self.0
-    }
-}
-
-impl From<Entry> for WriteEntry {
-    fn from(payload: Entry) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl ReadEntries {
-    pub fn new(payload: Query) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Query {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Query {
-        self.0
-    }
-}
-
-impl From<Query> for ReadEntries {
-    fn from(payload: Query) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl OpenSubscription {
-    pub fn new(payload: Query) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Query {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Query {
-        self.0
-    }
-}
-
-impl From<Query> for OpenSubscription {
-    fn from(payload: Query) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl CloseSubscription {
-    pub fn new(payload: SubscriptionToken) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &SubscriptionToken {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> SubscriptionToken {
-        self.0
-    }
-}
-
-impl From<SubscriptionToken> for CloseSubscription {
-    fn from(payload: SubscriptionToken) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Snapshot {
-    pub fn new(payload: SocketPath) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &SocketPath {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> SocketPath {
-        self.0
-    }
-}
-
-impl From<SocketPath> for Snapshot {
-    fn from(payload: SocketPath) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl MailSent {
-    pub fn new(payload: SignalRequest) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &SignalRequest {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> SignalRequest {
-        self.0
-    }
-}
-
-impl From<SignalRequest> for MailSent {
-    fn from(payload: SignalRequest) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl MessageAccepted {
-    pub fn new(payload: SignalRequest) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &SignalRequest {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> SignalRequest {
-        self.0
-    }
-}
-
-impl From<SignalRequest> for MessageAccepted {
-    fn from(payload: SignalRequest) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl MessageCommitted {
-    pub fn new(payload: CommitSequence) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &CommitSequence {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> CommitSequence {
-        self.0
-    }
-}
-
-impl From<CommitSequence> for MessageCommitted {
-    fn from(payload: CommitSequence) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl MessageFailed {
-    pub fn new(payload: RejectionReason) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &RejectionReason {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> RejectionReason {
-        self.0
-    }
-}
-
-impl From<RejectionReason> for MessageFailed {
-    fn from(payload: RejectionReason) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Topic {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for Topic {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Topics {
-    pub fn new(payload: Vec<Topic>) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Vec<Topic> {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Vec<Topic> {
-        self.0
-    }
-}
-
-impl From<Vec<Topic>> for Topics {
-    fn from(payload: Vec<Topic>) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Description {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for Description {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl RecordIdentifier {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for RecordIdentifier {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl SubscriptionToken {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for SubscriptionToken {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
 impl SignalRequest {
     pub fn record_intent(payload: RecordIntent) -> Self {
         Self::RecordIntent(payload)
     }
 
-    pub fn observe_intent(payload: Query) -> Self {
-        Self::ObserveIntent(ObserveIntent::new(payload))
+    pub fn observe_intent(payload: ObserveIntent) -> Self {
+        Self::ObserveIntent(payload)
     }
 
-    pub fn subscribe_intent(payload: Query) -> Self {
-        Self::SubscribeIntent(SubscribeIntent::new(payload))
+    pub fn subscribe_intent(payload: SubscribeIntent) -> Self {
+        Self::SubscribeIntent(payload)
     }
 }
 
@@ -887,50 +292,50 @@ impl SignalReply {
         Self::RecordAccepted(payload)
     }
 
-    pub fn observation_returned(payload: RecordSet) -> Self {
-        Self::ObservationReturned(ObservationReturned::new(payload))
+    pub fn observation_returned(payload: ObservationReturned) -> Self {
+        Self::ObservationReturned(payload)
     }
 
-    pub fn subscription_started(payload: SubscriptionToken) -> Self {
-        Self::SubscriptionStarted(SubscriptionStarted::new(payload))
+    pub fn subscription_started(payload: SubscriptionStarted) -> Self {
+        Self::SubscriptionStarted(payload)
     }
 }
 
 impl NexusRequest {
-    pub fn push_signal(payload: SignalRequest) -> Self {
-        Self::PushSignal(PushSignal::new(payload))
+    pub fn push_signal(payload: PushSignal) -> Self {
+        Self::PushSignal(payload)
     }
 
-    pub fn push_sema_result(payload: SemaReply) -> Self {
-        Self::PushSemaResult(PushSemaResult::new(payload))
+    pub fn push_sema_result(payload: PushSemaResult) -> Self {
+        Self::PushSemaResult(payload)
     }
 }
 
 impl NexusReply {
-    pub fn pushed_to_sema(payload: SemaRequest) -> Self {
-        Self::PushedToSema(PushedToSema::new(payload))
+    pub fn pushed_to_sema(payload: PushedToSema) -> Self {
+        Self::PushedToSema(payload)
     }
 
-    pub fn mail_resolved(payload: SignalReply) -> Self {
-        Self::MailResolved(MailResolved::new(payload))
+    pub fn mail_resolved(payload: MailResolved) -> Self {
+        Self::MailResolved(payload)
     }
 }
 
 impl SemaRequest {
-    pub fn write_entry(payload: Entry) -> Self {
-        Self::WriteEntry(WriteEntry::new(payload))
+    pub fn write_entry(payload: WriteEntry) -> Self {
+        Self::WriteEntry(payload)
     }
 
-    pub fn read_entries(payload: Query) -> Self {
-        Self::ReadEntries(ReadEntries::new(payload))
+    pub fn read_entries(payload: ReadEntries) -> Self {
+        Self::ReadEntries(payload)
     }
 
-    pub fn open_subscription(payload: Query) -> Self {
-        Self::OpenSubscription(OpenSubscription::new(payload))
+    pub fn open_subscription(payload: OpenSubscription) -> Self {
+        Self::OpenSubscription(payload)
     }
 
-    pub fn close_subscription(payload: SubscriptionToken) -> Self {
-        Self::CloseSubscription(CloseSubscription::new(payload))
+    pub fn close_subscription(payload: CloseSubscription) -> Self {
+        Self::CloseSubscription(payload)
     }
 }
 
@@ -953,8 +358,8 @@ impl SemaReply {
 }
 
 impl AdminRequest {
-    pub fn snapshot(payload: SocketPath) -> Self {
-        Self::Snapshot(Snapshot::new(payload))
+    pub fn snapshot(payload: Snapshot) -> Self {
+        Self::Snapshot(payload)
     }
 }
 
@@ -965,20 +370,20 @@ impl AdminReply {
 }
 
 impl RuntimeEvent {
-    pub fn mail_sent(payload: SignalRequest) -> Self {
-        Self::MailSent(MailSent::new(payload))
+    pub fn mail_sent(payload: MailSent) -> Self {
+        Self::MailSent(payload)
     }
 
-    pub fn message_accepted(payload: SignalRequest) -> Self {
-        Self::MessageAccepted(MessageAccepted::new(payload))
+    pub fn message_accepted(payload: MessageAccepted) -> Self {
+        Self::MessageAccepted(payload)
     }
 
-    pub fn message_committed(payload: CommitSequence) -> Self {
-        Self::MessageCommitted(MessageCommitted::new(payload))
+    pub fn message_committed(payload: MessageCommitted) -> Self {
+        Self::MessageCommitted(payload)
     }
 
-    pub fn message_failed(payload: RejectionReason) -> Self {
-        Self::MessageFailed(MessageFailed::new(payload))
+    pub fn message_failed(payload: MessageFailed) -> Self {
+        Self::MessageFailed(payload)
     }
 }
 
@@ -1021,8 +426,8 @@ impl Output {
         Self::Event(payload)
     }
 
-    pub fn rejected(payload: RejectionReason) -> Self {
-        Self::Rejected(Rejected::new(payload))
+    pub fn rejected(payload: Rejected) -> Self {
+        Self::Rejected(payload)
     }
 }
 
@@ -1231,50 +636,6 @@ impl From<Rejected> for Output {
 }
 
 #[cfg(feature = "nota-text")]
-impl CommitSequence {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl DatabaseDigest {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl ActorIdentifier {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl SocketPath {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
 impl SignalRequest {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -1374,17 +735,6 @@ impl RuntimeEvent {
 }
 
 #[cfg(feature = "nota-text")]
-impl Rejected {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
 impl RejectionReason {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -1407,139 +757,7 @@ impl RecordIntent {
 }
 
 #[cfg(feature = "nota-text")]
-impl ObserveIntent {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl SubscribeIntent {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
 impl RecordAccepted {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl ObservationReturned {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl SubscriptionStarted {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl PushSignal {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl PushSemaResult {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl PushedToSema {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl MailResolved {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl WriteEntry {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl ReadEntries {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl OpenSubscription {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl CloseSubscription {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
@@ -1594,17 +812,6 @@ impl SubscriptionClosed {
 }
 
 #[cfg(feature = "nota-text")]
-impl Snapshot {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
 impl SnapshotReady {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -1616,84 +823,7 @@ impl SnapshotReady {
 }
 
 #[cfg(feature = "nota-text")]
-impl MailSent {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl MessageAccepted {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl MessageCommitted {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl MessageFailed {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
 impl Entry {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Topic {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Topics {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Description {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
@@ -1727,28 +857,6 @@ impl Magnitude {
 
 #[cfg(feature = "nota-text")]
 impl Query {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl RecordIdentifier {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl SubscriptionToken {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }

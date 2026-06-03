@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use schema_next::{
-    Asschema, AsschemaArtifact, Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, Name,
-    NewtypeDeclaration, ResolvedImport, SchemaError, StructDeclaration, TypeDeclaration,
-    TypeReference, Visibility,
+    AliasDeclaration, Asschema, AsschemaArtifact, Declaration, EnumDeclaration, EnumVariant,
+    FieldDeclaration, Name, NewtypeDeclaration, ResolvedImport, SchemaError, StructDeclaration,
+    TypeDeclaration, TypeReference, Visibility,
 };
 
 pub mod migration;
@@ -384,6 +384,7 @@ impl RustDeclaration {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RustTypeDeclaration {
+    Alias(RustAlias),
     Struct(RustStruct),
     Enum(RustEnum),
     Newtype(RustNewtype),
@@ -392,6 +393,9 @@ pub enum RustTypeDeclaration {
 impl RustTypeDeclaration {
     fn from_asschema_type(declaration: &TypeDeclaration) -> Self {
         match declaration {
+            TypeDeclaration::Alias(declaration) => {
+                Self::Alias(RustAlias::from_asschema_alias(declaration))
+            }
             TypeDeclaration::Struct(declaration) => {
                 Self::Struct(RustStruct::from_asschema_struct(declaration))
             }
@@ -402,6 +406,29 @@ impl RustTypeDeclaration {
                 Self::Newtype(RustNewtype::from_asschema_newtype(declaration))
             }
         }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustAlias {
+    name: Name,
+    reference: TypeReference,
+}
+
+impl RustAlias {
+    fn from_asschema_alias(declaration: &AliasDeclaration) -> Self {
+        Self {
+            name: declaration.name.clone(),
+            reference: declaration.reference.clone(),
+        }
+    }
+
+    pub fn name(&self) -> &Name {
+        &self.name
+    }
+
+    pub fn reference(&self) -> &TypeReference {
+        &self.reference
     }
 }
 
@@ -608,6 +635,9 @@ impl<'asschema> CollectionScan<'asschema> {
         let mut names = Vec::new();
         for declaration in self.asschema.namespace() {
             match declaration.value() {
+                TypeDeclaration::Alias(declaration) => {
+                    Self::collect_alias_map_keys(declaration, &mut names);
+                }
                 TypeDeclaration::Struct(declaration) => {
                     Self::collect_declaration_map_keys(declaration, &mut names);
                 }
@@ -623,6 +653,10 @@ impl<'asschema> CollectionScan<'asschema> {
             Self::collect_enum_map_keys(root, &mut names);
         }
         names
+    }
+
+    fn collect_alias_map_keys(declaration: &AliasDeclaration, names: &mut Vec<String>) {
+        Self::collect_map_keys(&declaration.reference, names);
     }
 
     fn collect_enum_map_keys(declaration: &EnumDeclaration, names: &mut Vec<String>) {
@@ -864,6 +898,7 @@ impl RustWriter {
 
     fn emit_type(&mut self, declaration: &RustDeclaration) {
         match declaration.value() {
+            RustTypeDeclaration::Alias(value) => self.emit_alias(declaration.visibility(), value),
             RustTypeDeclaration::Struct(value) => self.emit_struct(declaration.visibility(), value),
             RustTypeDeclaration::Newtype(value) => {
                 self.emit_newtype(declaration.visibility(), value)
@@ -880,6 +915,15 @@ impl RustWriter {
         self.line("pub use nota_next::{");
         self.line("    NotaDecode, NotaDecodeError, NotaEncode, NotaSource,");
         self.line("};");
+    }
+
+    fn emit_alias(&mut self, visibility: Visibility, declaration: &RustAlias) {
+        self.line(format!(
+            "{} type {} = {};",
+            self.rust_visibility(visibility),
+            declaration.name(),
+            self.rust_type(declaration.reference())
+        ));
     }
 
     fn emit_newtype(&mut self, visibility: Visibility, declaration: &RustNewtype) {
@@ -1064,7 +1108,7 @@ impl RustWriter {
             if index > 0 {
                 self.blank();
             }
-            let method_name = variant.name().field_name();
+            let method_name = self.rust_method_name(variant.name());
             let Some(payload) = variant.payload() else {
                 continue;
             };
@@ -1142,6 +1186,9 @@ impl RustWriter {
             return;
         }
         for declaration in declarations {
+            if matches!(declaration.value(), RustTypeDeclaration::Alias(_)) {
+                continue;
+            }
             self.emit_nota_inherent_bridge(declaration.name().as_str());
             self.blank();
         }
@@ -2529,5 +2576,80 @@ impl RustWriter {
             }
         }
         output
+    }
+
+    fn rust_method_name(&self, name: &Name) -> String {
+        let method_name = name.field_name();
+        if RustKeyword::new(&method_name).is_reserved() {
+            format!("r#{method_name}")
+        } else {
+            method_name
+        }
+    }
+}
+
+struct RustKeyword<'name> {
+    name: &'name str,
+}
+
+impl<'name> RustKeyword<'name> {
+    fn new(name: &'name str) -> Self {
+        Self { name }
+    }
+
+    fn is_reserved(&self) -> bool {
+        matches!(
+            self.name,
+            "as" | "break"
+                | "const"
+                | "continue"
+                | "crate"
+                | "else"
+                | "enum"
+                | "extern"
+                | "false"
+                | "fn"
+                | "for"
+                | "if"
+                | "impl"
+                | "in"
+                | "let"
+                | "loop"
+                | "match"
+                | "mod"
+                | "move"
+                | "mut"
+                | "pub"
+                | "ref"
+                | "return"
+                | "self"
+                | "Self"
+                | "static"
+                | "struct"
+                | "super"
+                | "trait"
+                | "true"
+                | "type"
+                | "unsafe"
+                | "use"
+                | "where"
+                | "while"
+                | "async"
+                | "await"
+                | "dyn"
+                | "abstract"
+                | "become"
+                | "box"
+                | "do"
+                | "final"
+                | "macro"
+                | "override"
+                | "priv"
+                | "typeof"
+                | "unsized"
+                | "virtual"
+                | "yield"
+                | "try"
+        )
     }
 }

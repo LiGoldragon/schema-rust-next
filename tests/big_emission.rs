@@ -177,6 +177,7 @@ impl<'fixture> BigRustFixture<'fixture> {
         let found = declarations
             .iter()
             .any(|declaration| match declaration.value() {
+                TypeDeclaration::Alias(declaration) => declaration.name.as_str() == name,
                 TypeDeclaration::Struct(declaration) => declaration.name.as_str() == name,
                 TypeDeclaration::Newtype(declaration) => declaration.name.as_str() == name,
                 TypeDeclaration::Enum(declaration) => declaration.name.as_str() == name,
@@ -322,7 +323,7 @@ fn generated_big_rust_contains_the_current_schema_stack_surfaces() {
     assert!(triad.contains("pub enum SignalRequest"));
     assert!(triad.contains("pub enum NexusRequest"));
     assert!(triad.contains("pub enum SemaRequest"));
-    assert!(triad.contains("pub struct PushSemaResult"));
+    assert!(triad.contains("pub type PushSemaResult = SemaReply;"));
     assert!(triad.contains("pub struct EntryWritten"));
     assert!(triad.contains("pub enum RuntimeEvent"));
 

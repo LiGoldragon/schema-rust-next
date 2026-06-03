@@ -115,7 +115,12 @@ fn emitter_builds_rust_module_data_before_rendering_text() {
     let topic = module
         .declaration_named("Topic")
         .expect("Topic declaration exists");
-    assert!(matches!(topic.value(), RustTypeDeclaration::Newtype(_)));
+    assert!(matches!(topic.value(), RustTypeDeclaration::Alias(_)));
+
+    let summary = module
+        .declaration_named("Summary")
+        .expect("Summary declaration exists");
+    assert!(matches!(summary.value(), RustTypeDeclaration::Newtype(_)));
 
     let entry = module
         .declaration_named("Entry")
@@ -131,23 +136,20 @@ fn emitter_builds_rust_module_data_before_rendering_text() {
 
 #[test]
 fn generated_objects_expose_named_constructors_and_newtype_payload_accessors() {
-    let topic = generated::Topic::new(std::string::String::from("schema"));
-    assert_eq!(topic.payload(), "schema");
-    assert_eq!(topic.clone().into_payload(), "schema");
+    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let code = RustEmitter::default().emit(&asschema);
+    let source = code.as_str();
 
-    let entry = generated::Entry {
-        topics: generated::Topics::new(vec![topic]),
-        kind: generated::Kind::Decision,
-        description: generated::Description::new(std::string::String::from(
-            "constructors name the work",
-        )),
-        magnitude: generated::Magnitude::Maximum,
-    };
-    let input = generated::Input::record(entry);
-    assert!(matches!(input, generated::Input::Record(_)));
-
-    let output = generated::Output::record_accepted(7);
-    assert!(matches!(output, generated::Output::RecordAccepted(_)));
+    assert!(source.contains("pub type Topic = String;"));
+    assert!(source.contains("pub type Topics = Vec<Topic>;"));
+    assert!(source.contains("pub type Description = String;"));
+    assert!(source.contains("pub struct Summary(pub Description);"));
+    assert!(source.contains("impl Summary {"));
+    assert!(source.contains("pub fn new(payload: Description) -> Self"));
+    assert!(source.contains("pub fn payload(&self) -> &Description"));
+    assert!(source.contains("pub fn into_payload(self) -> Description"));
+    assert!(source.contains("pub fn record(payload: Entry) -> Self"));
+    assert!(source.contains("pub fn record_accepted(payload: RecordIdentifier) -> Self"));
 }
 
 #[test]
@@ -494,9 +496,9 @@ fn generated_trace_identity_is_typed_from_interface_headers() {
 #[test]
 fn compiled_fixture_is_usable_rust() {
     let entry = generated::Entry {
-        topics: generated::Topics(vec![generated::Topic(String::from("schema"))]),
+        topics: vec![String::from("schema")],
         kind: generated::Kind::Decision,
-        description: generated::Description(String::from("schema drives rust")),
+        description: String::from("schema drives rust"),
         magnitude: generated::Magnitude::Maximum,
     };
     let input = generated::Input::Record(entry);
@@ -541,9 +543,9 @@ fn generated_input_parses_cli_nota_and_emits_nota() {
 
     match &input {
         generated::Input::Record(entry) => {
-            assert_eq!(entry.topics.0[0].0, "schema");
+            assert_eq!(entry.topics[0], "schema");
             assert_eq!(entry.kind, generated::Kind::Constraint);
-            assert_eq!(entry.description.0, "agent's clarified intent");
+            assert_eq!(entry.description, "agent's clarified intent");
             assert_eq!(entry.magnitude, generated::Magnitude::Maximum);
         }
         generated::Input::Observe(_) => panic!("expected record"),
@@ -674,7 +676,7 @@ impl generated::MessageProcessedHook<generated::Output> for MailHook {
 fn generated_processed_mail_events_are_typed_without_root_dispatch_traits() {
     assert_eq!(RuntimeError::StateRejected, RuntimeError::StateRejected);
     let mut hook = MailHook::new();
-    let reply = generated::Output::RecordsObserved(generated::RecordSet(vec![]));
+    let reply = generated::Output::RecordsObserved(vec![]);
 
     let processed = generated::MessageProcessed::new(
         generated::MessageIdentifier(77),
@@ -690,7 +692,7 @@ fn generated_processed_mail_events_are_typed_without_root_dispatch_traits() {
         vec![generated::MessageProcessed {
             identifier: generated::MessageIdentifier(77),
             origin_route: generated::OriginRoute(701),
-            reply: generated::Output::RecordsObserved(generated::RecordSet(vec![])),
+            reply: generated::Output::RecordsObserved(vec![]),
         }],
     );
 }
@@ -711,9 +713,9 @@ impl generated::UpgradeFrom<PreviousEntry> for generated::Entry {
 
     fn upgrade_from(previous: PreviousEntry) -> Result<Self, Self::Error> {
         Ok(Self {
-            topics: generated::Topics(vec![generated::Topic(previous.topic)]),
+            topics: vec![previous.topic],
             kind: generated::Kind::Clarification,
-            description: generated::Description(previous.description),
+            description: previous.description,
             magnitude: generated::Magnitude::High,
         })
     }
@@ -775,18 +777,10 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     // Collection payloads in a root output variant.
     assert!(code.contains("Projected(std::collections::BTreeMap<NodeName, NodeConfig>),"));
     assert!(code.contains("Listed(Vec<NodeName>),"));
-    // A map key type earns the ordering derives so BTreeMap compiles;
-    // a value-only type keeps the original derive set. Both forms
-    // gain a feature-gated NOTA derive above the unconditional rkyv
-    // derive under the default emission shape.
-    assert!(code.contains(
-        "#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]\npub struct NodeName(pub String);"
-    ));
-    assert!(code.contains(concat!(
-        "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]\n",
-        "#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]\n",
-        "pub struct NodeConfig(pub String);",
-    )));
+    // Bare bindings remain aliases even when they are used inside
+    // collection positions; the aliased scalar supplies the ordering.
+    assert!(code.contains("pub type NodeName = String;"));
+    assert!(code.contains("pub type NodeConfig = String;"));
     assert_generated_fixture("collections_generated.rs", code);
 }
 
@@ -806,23 +800,14 @@ fn generated_collection_struct_round_trips_through_nota() {
     // Author a Cluster carrying all three collection kinds, encode it
     // to NOTA, parse it back, and confirm the value survives.
     let cluster = collections_generated::Cluster {
-        services: vec![
-            collections_generated::Service("dns".to_owned()),
-            collections_generated::Service("mail".to_owned()),
-        ],
+        services: vec!["dns".to_owned(), "mail".to_owned()],
         nodes: {
             let mut nodes = std::collections::BTreeMap::new();
-            nodes.insert(
-                collections_generated::NodeName("alpha".to_owned()),
-                collections_generated::NodeConfig("primary".to_owned()),
-            );
-            nodes.insert(
-                collections_generated::NodeName("beta".to_owned()),
-                collections_generated::NodeConfig("replica".to_owned()),
-            );
+            nodes.insert("alpha".to_owned(), "primary".to_owned());
+            nodes.insert("beta".to_owned(), "replica".to_owned());
             nodes
         },
-        cache: Some(collections_generated::NodeConfig("warm".to_owned())),
+        cache: Some("warm".to_owned()),
         healthy: true,
         config_path: "/tmp/cluster.nota".to_owned(),
     };
@@ -857,10 +842,7 @@ fn generated_collection_struct_round_trips_through_nota() {
 #[test]
 fn generated_collection_payload_root_variant_round_trips_to_nota_and_rkyv() {
     let mut projection = std::collections::BTreeMap::new();
-    projection.insert(
-        collections_generated::NodeName("alpha".to_owned()),
-        collections_generated::NodeConfig("primary".to_owned()),
-    );
+    projection.insert("alpha".to_owned(), "primary".to_owned());
     let output = collections_generated::Output::Projected(projection);
 
     // NOTA round-trip through the root enum codec.

@@ -13,30 +13,17 @@ pub use nota_next::{
     NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
 };
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]
-pub struct Topic(pub String);
+pub type Topic = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Topics(pub Vec<Topic>);
+pub type Topics = Vec<Topic>;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Description(pub String);
+pub type Description = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AgentName(pub String);
+pub type AgentName = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RecordIdentifier(pub Integer);
+pub type RecordIdentifier = Integer;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Rejection(pub Description);
+pub type Rejection = Description;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -88,126 +75,6 @@ pub enum Output {
     Rejected(Rejection),
 }
 
-impl Topic {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for Topic {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Topics {
-    pub fn new(payload: Vec<Topic>) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Vec<Topic> {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Vec<Topic> {
-        self.0
-    }
-}
-
-impl From<Vec<Topic>> for Topics {
-    fn from(payload: Vec<Topic>) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Description {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for Description {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl AgentName {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for AgentName {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl RecordIdentifier {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for RecordIdentifier {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Rejection {
-    pub fn new(payload: Description) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Description {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Description {
-        self.0
-    }
-}
-
-impl From<Description> for Rejection {
-    fn from(payload: Description) -> Self {
-        Self::new(payload)
-    }
-}
-
 impl Input {
     pub fn record(payload: Entry) -> Self {
         Self::Record(payload)
@@ -243,8 +110,8 @@ impl Output {
         Self::Committed(payload)
     }
 
-    pub fn rejected(payload: Description) -> Self {
-        Self::Rejected(Rejection::new(payload))
+    pub fn rejected(payload: Rejection) -> Self {
+        Self::Rejected(payload)
     }
 }
 
@@ -299,72 +166,6 @@ impl From<CommitSequence> for Output {
 impl From<Rejection> for Output {
     fn from(payload: Rejection) -> Self {
         Self::Rejected(payload)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Topic {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Topics {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Description {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl AgentName {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl RecordIdentifier {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Rejection {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
     }
 }
 

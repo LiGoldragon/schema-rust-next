@@ -51,9 +51,11 @@ must not grow a second parser for the authored form.
 - Public asschema declarations emit public Rust types and fields. Private
   asschema declarations emit `pub(crate)` types and fields, preserving inline
   PascalCase schema declarations as module-local implementation nouns.
-- `TypeDeclaration::Newtype` carries a single contained `TypeReference`, not a
-  field map. It emits as a tuple newtype. `TypeDeclaration::Struct` is the
-  named-field map shape.
+- `TypeDeclaration::Alias` and `TypeDeclaration::Newtype` are distinct.
+  Bare source bindings such as `Topic String`, `Topics (Vec Topic)`, or
+  `Rejected SignalRejection` emit as Rust `type` aliases. A brace-body
+  declaration with exactly one field emits as a tuple newtype.
+  `TypeDeclaration::Struct` is the named-field map shape.
 - Generated Rust is source-visible under `src/schema/`; consumers include or
   compile that source rather than hiding the interface in `OUT_DIR`.
 - Emission is tested by source fixture comparison and by compiling the fixture
@@ -104,13 +106,14 @@ must not grow a second parser for the authored form.
   the generated type exposes a trait or method target and the consumer
   implements it on a data-bearing actor or store object.
 - Generated construction is also an object method surface. Tuple newtypes emit
-  `new`, `payload`, `into_payload`, and `From<Payload>`. Enums emit
+  `new`, `payload`, `into_payload`, and `From<Payload>`. Aliases emit no
+  inherent impls because they have no distinct Rust type identity. Enums emit
   variant-named associated constructors (`Input::record(entry)`,
   `SemaWriteOutput::recorded(receipt)`, `Output::rejected(rejection)`) so
   component code does not hand-write nested wrapper constructors. When a
   variant stores a generated newtype wrapper, the constructor accepts the
-  wrapper's inner payload and creates the wrapper internally; the stored root
-  payload remains the exported schema noun.
+  wrapper's inner payload and creates the wrapper internally; when a variant
+  stores an alias, the constructor accepts the alias target directly.
 - The next runner target is generated/programmatic component wiring. The
   emitter should grow a component-runner surface so a daemon binary can reduce
   to a tiny generated call while domain behavior still lives in non-default

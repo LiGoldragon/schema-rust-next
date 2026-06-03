@@ -10,42 +10,23 @@ pub use nota_next::{
     NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
 };
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]
-pub struct Topic(pub String);
+pub type Topic = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Topics(pub Vec<Topic>);
+pub type Topics = Vec<Topic>;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Description(pub String);
+pub type Description = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AgentName(pub String);
+pub type AgentName = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Timestamp(pub Integer);
+pub type Timestamp = Integer;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RecordIdentifier(pub Integer);
+pub type RecordIdentifier = Integer;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct SubscriptionToken(pub Integer);
+pub type SubscriptionToken = Integer;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct CommitSequence(pub Integer);
+pub type CommitSequence = Integer;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DatabaseDigest(pub Integer);
+pub type DatabaseDigest = Integer;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -186,186 +167,6 @@ pub enum Output {
     Indexed(IndexReceipt),
 }
 
-impl Topic {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for Topic {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Topics {
-    pub fn new(payload: Vec<Topic>) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Vec<Topic> {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Vec<Topic> {
-        self.0
-    }
-}
-
-impl From<Vec<Topic>> for Topics {
-    fn from(payload: Vec<Topic>) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Description {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for Description {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl AgentName {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for AgentName {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Timestamp {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for Timestamp {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl RecordIdentifier {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for RecordIdentifier {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl SubscriptionToken {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for SubscriptionToken {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl CommitSequence {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for CommitSequence {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl DatabaseDigest {
-    pub fn new(payload: Integer) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Integer {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Integer {
-        self.0
-    }
-}
-
-impl From<Integer> for DatabaseDigest {
-    fn from(payload: Integer) -> Self {
-        Self::new(payload)
-    }
-}
-
 impl Input {
     pub fn record(payload: Entry) -> Self {
         Self::Record(payload)
@@ -383,8 +184,8 @@ impl Input {
         Self::Watch(payload)
     }
 
-    pub fn unwatch(payload: Integer) -> Self {
-        Self::Unwatch(SubscriptionToken::new(payload))
+    pub fn unwatch(payload: SubscriptionToken) -> Self {
+        Self::Unwatch(payload)
     }
 }
 
@@ -475,105 +276,6 @@ impl From<Rejection> for Output {
 impl From<IndexReceipt> for Output {
     fn from(payload: IndexReceipt) -> Self {
         Self::Indexed(payload)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Topic {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Topics {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Description {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl AgentName {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Timestamp {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl RecordIdentifier {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl SubscriptionToken {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl CommitSequence {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl DatabaseDigest {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
     }
 }
 

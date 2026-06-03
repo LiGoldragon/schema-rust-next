@@ -201,14 +201,17 @@ are Schema vocabulary.*
 *Authored enum-body spelling belongs to schema-next, not this emitter. Rust
 emission consumes the macro-free `Asschema` roots and type declarations, so it
 must not grow a parser for any authored spelling. When source sugar creates
-exported variant-object newtypes, the emitter treats those newtypes as real
-Rust nouns and keeps the root enum payload typed as that noun.*
+exported bare bindings such as `Rejected SignalRejection` or `Record Entry`,
+the assembled schema carries `TypeDeclaration::Alias` and the emitter writes a
+Rust `type` alias. The root enum keeps the exported noun name, but Rust callers
+pass the underlying payload directly.*
 
-*Asschema newtypes are their own data shape. A newtype carries exactly one
-contained `TypeReference`; it is not a one-field struct map with an invented
-field name. The emitter projects that shape directly to an ergonomic Rust tuple
-newtype such as `pub struct Topic(pub String);`, while multi-field structs keep
-named fields.*
+*Asschema aliases and newtypes are separate data shapes. A bare binding lowers
+to `TypeDeclaration::Alias` and emits as `pub type Topic = String;` or
+`pub type Rejected = SignalRejection;`. A source declaration with a brace body
+and exactly one field lowers to `TypeDeclaration::Newtype`; the emitter
+projects that shape directly to an ergonomic Rust tuple newtype. Multi-field
+structs keep named fields.*
 
 *Generated Rust should not force consumers to hand-write wrapper stacks. Tuple
 newtypes emit `new`, `payload`, and `into_payload` methods plus `From<Payload>`;
@@ -216,7 +219,9 @@ enums emit variant-named associated constructors such as `Input::record(entry)`
 and `Output::rejected(signal_rejection)`. If an enum variant stores an exported
 newtype wrapper, the constructor accepts the wrapper's inner payload and builds
 the wrapper internally. The wrapper noun remains real in the type system, but
-ordinary code names the operation once.*
+ordinary code names the operation once. If the variant stores an alias, there
+is no wrapper to construct and the constructor accepts the alias target
+directly.*
 
 *The emitter starts from assembled schema data, not from authored macro syntax.
 That assembled data is live: it can be written as NOTA, read back, written as

@@ -10,26 +10,15 @@ pub use nota_next::{
     NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
 };
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]
-pub struct NodeName(pub String);
+pub type NodeName = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct NodeConfig(pub String);
+pub type NodeConfig = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Service(pub String);
+pub type Service = String;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Query(pub Topic);
+pub type Query = Topic;
 
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Topic(pub String);
+pub type Topic = String;
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -55,113 +44,13 @@ pub enum Output {
     Listed(Vec<NodeName>),
 }
 
-impl NodeName {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for NodeName {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl NodeConfig {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for NodeConfig {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Service {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for Service {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Query {
-    pub fn new(payload: Topic) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &Topic {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> Topic {
-        self.0
-    }
-}
-
-impl From<Topic> for Query {
-    fn from(payload: Topic) -> Self {
-        Self::new(payload)
-    }
-}
-
-impl Topic {
-    pub fn new(payload: String) -> Self {
-        Self(payload)
-    }
-
-    pub fn payload(&self) -> &String {
-        &self.0
-    }
-
-    pub fn into_payload(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for Topic {
-    fn from(payload: String) -> Self {
-        Self::new(payload)
-    }
-}
-
 impl Input {
     pub fn register(payload: Cluster) -> Self {
         Self::Register(payload)
     }
 
-    pub fn observe(payload: Topic) -> Self {
-        Self::Observe(Query::new(payload))
+    pub fn observe(payload: Query) -> Self {
+        Self::Observe(payload)
     }
 }
 
@@ -184,61 +73,6 @@ impl From<Cluster> for Input {
 impl From<Query> for Input {
     fn from(payload: Query) -> Self {
         Self::Observe(payload)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl NodeName {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl NodeConfig {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Service {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Query {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[cfg(feature = "nota-text")]
-impl Topic {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
     }
 }
 
