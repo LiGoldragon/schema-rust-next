@@ -106,6 +106,19 @@ carry cloned input/output payload snapshots. A consumer should not carry
 parallel local Signal/Nexus/SEMA trace traits or stringly trace vocabularies
 beside the generated actor/interface contract.*
 
+*Tracing is a schema-defined typed interface and stays typed until the client
+display boundary. The emitter should eventually generate the component-specific
+`TraceEventFrame` and `Display` adapters for the generated `TraceEvent`, plus
+any aliases needed to use the shared `triad-runtime` trace client. Component
+CLIs should not hand-write trace listener/display logic; they use generic
+client support over emitted `Input`, `Output`, and `TraceEvent` nouns. Trace is
+not enabled on the trace interface itself in the current design.*
+
+*Help and documentation are schema data, not CLI string tables. The target
+shape is a mirror description namespace over the fully qualified schema symbol
+namespace, with generated defaults when no explicit description exists. Help
+actions or client help output project from that typed description data.*
+
 *Schema version changes drive upgrade surfaces. If a data type has not changed,
 no upgrade code is emitted for it. If it has changed, the generated noun exposes
 an upgrade/accept trait that hand-written runtime code implements, including

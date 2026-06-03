@@ -146,6 +146,21 @@ must not grow a second parser for the authored form.
   generated `ObjectName` enum wraps the per-plane names for `TraceEvent`
   transport. A non-trace consumer gets the no-op defaults without linking a
   parallel instrumentation API.
+- Trace remains typed data until the client display boundary. The generated
+  `TraceEvent` is the component-specific event noun; the shared
+  `triad-runtime` trace client/log/socket objects are generic over that noun.
+  The next emitter target is generating the small component adapters that are
+  still mechanical today: `TraceEventFrame` for rkyv trace archives,
+  `Display for TraceEvent` for client-edge rendering, and aliases for
+  `TraceLog<TraceEvent>` / `TraceClient<TraceEvent>` when a trace surface is
+  emitted. The emitter must not generate string-log substrates or a
+  trace-on-trace path by default.
+- Help/documentation emission comes from typed schema description data. The
+  target is a mirror description namespace keyed by fully qualified schema
+  symbols, with generated defaults for symbols that have no explicit
+  description. Generated help actions or client help output render that typed
+  description data at the client edge; they are not hand-written CLI string
+  tables.
 - Mail identifiers, origin routes, and short headers use the generated scalar
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is
