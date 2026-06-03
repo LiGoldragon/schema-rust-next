@@ -108,11 +108,12 @@ beside the generated actor/interface contract.*
 
 *Tracing is a schema-defined typed interface and stays typed until the client
 display boundary. The emitter should eventually generate the component-specific
-`TraceEventFrame` and `Display` adapters for the generated `TraceEvent`, plus
-any aliases needed to use the shared `triad-runtime` trace client. Component
-CLIs should not hand-write trace listener/display logic; they use generic
-client support over emitted `Input`, `Output`, and `TraceEvent` nouns. Trace is
-not enabled on the trace interface itself in the current design.*
+`TraceEventFrame` adapter for binary trace archives and a NOTA display adapter
+for the generated `TraceEvent`, plus any aliases needed to use the shared
+`triad-runtime` trace client. Component CLIs should not hand-write trace
+listener/display logic; they use generic client support over emitted `Input`,
+`Output`, and `TraceEvent` nouns. Trace is not enabled on the trace interface
+itself in the current design.*
 
 *Help and documentation are schema data, not CLI string tables. The target
 shape is a mirror description namespace over the fully qualified schema symbol

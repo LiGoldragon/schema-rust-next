@@ -151,9 +151,10 @@ must not grow a second parser for the authored form.
   `triad-runtime` trace client/log/socket objects are generic over that noun.
   The next emitter target is generating the small component adapters that are
   still mechanical today: `TraceEventFrame` for rkyv trace archives,
-  `Display for TraceEvent` for client-edge rendering, and aliases for
-  `TraceLog<TraceEvent>` / `TraceClient<TraceEvent>` when a trace surface is
-  emitted. The emitter must not generate string-log substrates or a
+  `Display for TraceEvent` that renders the generated NOTA value at the
+  client edge, and aliases for `TraceLog<TraceEvent>` /
+  `TraceClient<TraceEvent>` when a trace surface is emitted. The emitter must
+  not generate string-log substrates or a
   trace-on-trace path by default.
 - Help/documentation emission comes from typed schema description data. The
   target is a mirror description namespace keyed by fully qualified schema
