@@ -292,6 +292,18 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
+            .contains("pub struct TraceEvent(pub ObjectName);")
+    );
+    assert!(
+        !generated
+            .code
+            .as_str()
+            .contains("pub object_name: ObjectName")
+    );
+    assert!(
+        generated
+            .code
+            .as_str()
             .contains("pub enum SignalObjectName")
     );
     assert!(generated.code.as_str().contains("pub enum NexusObjectName"));
@@ -446,6 +458,10 @@ fn generated_trace_identity_is_typed_from_interface_headers() {
     let event = generated::TraceEvent::new(signal_route);
     assert_eq!(event.object_name(), signal_route);
     assert_eq!(event.name(), "SignalInputRecord");
+    assert_eq!(
+        generated::NotaEncode::to_nota(&event),
+        "(Signal (Input Record))"
+    );
 
     let archive =
         rkyv::to_bytes::<rkyv::rancor::Error>(&event).expect("trace event archives as rkyv");

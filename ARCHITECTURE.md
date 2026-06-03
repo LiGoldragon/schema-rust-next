@@ -147,7 +147,10 @@ must not grow a second parser for the authored form.
   transport. A non-trace consumer gets the no-op defaults without linking a
   parallel instrumentation API.
 - Trace remains typed data until the client display boundary. The generated
-  `TraceEvent` is the component-specific event noun; the shared
+  `TraceEvent` is the component-specific event noun. Its current emitted shape
+  is a transparent tuple newtype over `ObjectName`, so `TraceEvent` serializes
+  to the generated object-name NOTA shape instead of a double-wrapped
+  one-field struct. The shared
   `triad-runtime` trace client/log/socket objects are generic over that noun.
   The next emitter target is generating the small component adapters that are
   still mechanical today: `TraceEventFrame` for rkyv trace archives,

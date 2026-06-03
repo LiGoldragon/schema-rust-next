@@ -102,7 +102,10 @@ identity is generated from the schema header through route enums such as
 `InputRoute`, `NexusInputRoute`, and `SemaReadInputRoute`, plus generated
 actor-boundary names such as `SignalObjectName::Started`,
 `NexusObjectName::Entered`, and `SemaObjectName::Stopped`. Trace events do not
-carry cloned input/output payload snapshots. A consumer should not carry
+carry cloned input/output payload snapshots. When a trace event's only payload
+is the activated object name, the emitted `TraceEvent` is a transparent
+newtype over `ObjectName`, so NOTA displays the object-name value directly
+instead of adding a one-field record wrapper. A consumer should not carry
 parallel local Signal/Nexus/SEMA trace traits or stringly trace vocabularies
 beside the generated actor/interface contract.*
 

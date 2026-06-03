@@ -363,9 +363,7 @@ pub enum ObjectName {
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TraceEvent {
-    pub object_name: ObjectName,
-}
+pub struct TraceEvent(pub ObjectName);
 
 impl ObjectName {
     pub fn name(self) -> &'static str {
@@ -377,15 +375,15 @@ impl ObjectName {
 
 impl TraceEvent {
     pub fn new(object_name: ObjectName) -> Self {
-        Self { object_name }
+        Self(object_name)
     }
 
     pub fn object_name(&self) -> ObjectName {
-        self.object_name
+        self.0
     }
 
     pub fn name(&self) -> &'static str {
-        self.object_name.name()
+        self.0.name()
     }
 }
 
