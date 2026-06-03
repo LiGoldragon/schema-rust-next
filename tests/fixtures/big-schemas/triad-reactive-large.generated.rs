@@ -437,81 +437,9 @@ impl From<RecordIntent> for SignalRequest {
     }
 }
 
-impl From<ObserveIntent> for SignalRequest {
-    fn from(payload: ObserveIntent) -> Self {
-        Self::ObserveIntent(payload)
-    }
-}
-
-impl From<SubscribeIntent> for SignalRequest {
-    fn from(payload: SubscribeIntent) -> Self {
-        Self::SubscribeIntent(payload)
-    }
-}
-
 impl From<RecordAccepted> for SignalReply {
     fn from(payload: RecordAccepted) -> Self {
         Self::RecordAccepted(payload)
-    }
-}
-
-impl From<ObservationReturned> for SignalReply {
-    fn from(payload: ObservationReturned) -> Self {
-        Self::ObservationReturned(payload)
-    }
-}
-
-impl From<SubscriptionStarted> for SignalReply {
-    fn from(payload: SubscriptionStarted) -> Self {
-        Self::SubscriptionStarted(payload)
-    }
-}
-
-impl From<PushSignal> for NexusRequest {
-    fn from(payload: PushSignal) -> Self {
-        Self::PushSignal(payload)
-    }
-}
-
-impl From<PushSemaResult> for NexusRequest {
-    fn from(payload: PushSemaResult) -> Self {
-        Self::PushSemaResult(payload)
-    }
-}
-
-impl From<PushedToSema> for NexusReply {
-    fn from(payload: PushedToSema) -> Self {
-        Self::PushedToSema(payload)
-    }
-}
-
-impl From<MailResolved> for NexusReply {
-    fn from(payload: MailResolved) -> Self {
-        Self::MailResolved(payload)
-    }
-}
-
-impl From<WriteEntry> for SemaRequest {
-    fn from(payload: WriteEntry) -> Self {
-        Self::WriteEntry(payload)
-    }
-}
-
-impl From<ReadEntries> for SemaRequest {
-    fn from(payload: ReadEntries) -> Self {
-        Self::ReadEntries(payload)
-    }
-}
-
-impl From<OpenSubscription> for SemaRequest {
-    fn from(payload: OpenSubscription) -> Self {
-        Self::OpenSubscription(payload)
-    }
-}
-
-impl From<CloseSubscription> for SemaRequest {
-    fn from(payload: CloseSubscription) -> Self {
-        Self::CloseSubscription(payload)
     }
 }
 
@@ -539,39 +467,9 @@ impl From<SubscriptionClosed> for SemaReply {
     }
 }
 
-impl From<Snapshot> for AdminRequest {
-    fn from(payload: Snapshot) -> Self {
-        Self::Snapshot(payload)
-    }
-}
-
 impl From<SnapshotReady> for AdminReply {
     fn from(payload: SnapshotReady) -> Self {
         Self::SnapshotReady(payload)
-    }
-}
-
-impl From<MailSent> for RuntimeEvent {
-    fn from(payload: MailSent) -> Self {
-        Self::MailSent(payload)
-    }
-}
-
-impl From<MessageAccepted> for RuntimeEvent {
-    fn from(payload: MessageAccepted) -> Self {
-        Self::MessageAccepted(payload)
-    }
-}
-
-impl From<MessageCommitted> for RuntimeEvent {
-    fn from(payload: MessageCommitted) -> Self {
-        Self::MessageCommitted(payload)
-    }
-}
-
-impl From<MessageFailed> for RuntimeEvent {
-    fn from(payload: MessageFailed) -> Self {
-        Self::MessageFailed(payload)
     }
 }
 
@@ -626,12 +524,6 @@ impl From<AdminReply> for Output {
 impl From<RuntimeEvent> for Output {
     fn from(payload: RuntimeEvent) -> Self {
         Self::Event(payload)
-    }
-}
-
-impl From<Rejected> for Output {
-    fn from(payload: Rejected) -> Self {
-        Self::Rejected(payload)
     }
 }
 

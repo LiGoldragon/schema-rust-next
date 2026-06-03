@@ -1038,19 +1038,37 @@ impl RustWriter {
         declarations: &[RustDeclaration],
         root_enums: &[RustEnum],
     ) {
+        let alias_names = self.alias_names(declarations);
         for declaration in declarations {
             if let RustTypeDeclaration::Enum(value) = declaration.value() {
-                self.emit_enum_payload_from_impls_for(value);
+                self.emit_enum_payload_from_impls_for(value, &alias_names);
             }
         }
         for root_enum in root_enums {
-            self.emit_enum_payload_from_impls_for(root_enum);
+            self.emit_enum_payload_from_impls_for(root_enum, &alias_names);
         }
     }
 
-    fn emit_enum_payload_from_impls_for(&mut self, declaration: &RustEnum) -> bool {
+    fn alias_names<'declaration>(
+        &self,
+        declarations: &'declaration [RustDeclaration],
+    ) -> Vec<&'declaration str> {
+        declarations
+            .iter()
+            .filter_map(|declaration| match declaration.value() {
+                RustTypeDeclaration::Alias(_) => Some(declaration.name().as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn emit_enum_payload_from_impls_for(
+        &mut self,
+        declaration: &RustEnum,
+        alias_names: &[&str],
+    ) -> bool {
         let mut emitted = false;
-        for variant in self.unique_plain_payload_variants(declaration) {
+        for variant in self.unique_non_alias_plain_payload_variants(declaration, alias_names) {
             let Some(payload) = self.plain_payload_name(variant) else {
                 continue;
             };
@@ -1167,6 +1185,20 @@ impl RustWriter {
                     .filter(|other| self.plain_payload_name(other) == Some(payload))
                     .count()
                     == 1
+            })
+            .collect()
+    }
+
+    fn unique_non_alias_plain_payload_variants<'declaration>(
+        &self,
+        declaration: &'declaration RustEnum,
+        alias_names: &[&str],
+    ) -> Vec<&'declaration RustEnumVariant> {
+        self.unique_plain_payload_variants(declaration)
+            .into_iter()
+            .filter(|variant| {
+                self.plain_payload_name(variant)
+                    .is_none_or(|payload| !alias_names.contains(&payload))
             })
             .collect()
     }

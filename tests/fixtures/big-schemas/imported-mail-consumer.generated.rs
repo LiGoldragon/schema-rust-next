@@ -163,12 +163,6 @@ impl From<CommitSequence> for Output {
     }
 }
 
-impl From<Rejection> for Output {
-    fn from(payload: Rejection) -> Self {
-        Self::Rejected(payload)
-    }
-}
-
 #[cfg(feature = "nota-text")]
 impl Entry {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {

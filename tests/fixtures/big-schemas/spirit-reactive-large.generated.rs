@@ -243,12 +243,6 @@ impl From<WatchRequest> for Input {
     }
 }
 
-impl From<SubscriptionToken> for Input {
-    fn from(payload: SubscriptionToken) -> Self {
-        Self::Unwatch(payload)
-    }
-}
-
 impl From<RecordReceipt> for Output {
     fn from(payload: RecordReceipt) -> Self {
         Self::Recorded(payload)

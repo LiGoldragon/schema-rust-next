@@ -89,7 +89,7 @@ fn emits_rust_source_as_a_separate_artifact() {
         generated
             .code
             .as_str()
-            .contains("impl From<Entry> for Input")
+            .contains("pub fn record(payload: Entry) -> Self")
     );
     assert_generated_fixture("spirit_generated.rs", generated.code.as_str());
 }

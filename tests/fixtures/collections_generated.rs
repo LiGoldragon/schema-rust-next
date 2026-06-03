@@ -70,12 +70,6 @@ impl From<Cluster> for Input {
     }
 }
 
-impl From<Query> for Input {
-    fn from(payload: Query) -> Self {
-        Self::Observe(payload)
-    }
-}
-
 #[cfg(feature = "nota-text")]
 impl Cluster {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {

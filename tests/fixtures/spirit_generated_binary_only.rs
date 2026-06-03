@@ -116,18 +116,6 @@ impl From<Query> for Input {
     }
 }
 
-impl From<RecordIdentifier> for Output {
-    fn from(payload: RecordIdentifier) -> Self {
-        Self::RecordAccepted(payload)
-    }
-}
-
-impl From<RecordSet> for Output {
-    fn from(payload: RecordSet) -> Self {
-        Self::RecordsObserved(payload)
-    }
-}
-
 
 
 pub mod short_header {

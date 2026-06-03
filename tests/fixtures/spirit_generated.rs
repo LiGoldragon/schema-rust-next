@@ -128,18 +128,6 @@ impl From<Query> for Input {
     }
 }
 
-impl From<RecordIdentifier> for Output {
-    fn from(payload: RecordIdentifier) -> Self {
-        Self::RecordAccepted(payload)
-    }
-}
-
-impl From<RecordSet> for Output {
-    fn from(payload: RecordSet) -> Self {
-        Self::RecordsObserved(payload)
-    }
-}
-
 #[cfg(feature = "nota-text")]
 impl Summary {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
