@@ -328,6 +328,704 @@ pub enum Output {
     Rejected(Rejected),
 }
 
+impl CommitSequence {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for CommitSequence {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl DatabaseDigest {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for DatabaseDigest {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl ActorIdentifier {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for ActorIdentifier {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl SocketPath {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for SocketPath {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Rejected {
+    pub fn new(payload: RejectionReason) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &RejectionReason {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> RejectionReason {
+        self.0
+    }
+}
+
+impl From<RejectionReason> for Rejected {
+    fn from(payload: RejectionReason) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl ObserveIntent {
+    pub fn new(payload: Query) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Query {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Query {
+        self.0
+    }
+}
+
+impl From<Query> for ObserveIntent {
+    fn from(payload: Query) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl SubscribeIntent {
+    pub fn new(payload: Query) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Query {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Query {
+        self.0
+    }
+}
+
+impl From<Query> for SubscribeIntent {
+    fn from(payload: Query) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl ObservationReturned {
+    pub fn new(payload: RecordSet) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &RecordSet {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> RecordSet {
+        self.0
+    }
+}
+
+impl From<RecordSet> for ObservationReturned {
+    fn from(payload: RecordSet) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl SubscriptionStarted {
+    pub fn new(payload: SubscriptionToken) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &SubscriptionToken {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> SubscriptionToken {
+        self.0
+    }
+}
+
+impl From<SubscriptionToken> for SubscriptionStarted {
+    fn from(payload: SubscriptionToken) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl PushSignal {
+    pub fn new(payload: SignalRequest) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &SignalRequest {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> SignalRequest {
+        self.0
+    }
+}
+
+impl From<SignalRequest> for PushSignal {
+    fn from(payload: SignalRequest) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl PushSemaResult {
+    pub fn new(payload: SemaReply) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &SemaReply {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> SemaReply {
+        self.0
+    }
+}
+
+impl From<SemaReply> for PushSemaResult {
+    fn from(payload: SemaReply) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl PushedToSema {
+    pub fn new(payload: SemaRequest) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &SemaRequest {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> SemaRequest {
+        self.0
+    }
+}
+
+impl From<SemaRequest> for PushedToSema {
+    fn from(payload: SemaRequest) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl MailResolved {
+    pub fn new(payload: SignalReply) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &SignalReply {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> SignalReply {
+        self.0
+    }
+}
+
+impl From<SignalReply> for MailResolved {
+    fn from(payload: SignalReply) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl WriteEntry {
+    pub fn new(payload: Entry) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Entry {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Entry {
+        self.0
+    }
+}
+
+impl From<Entry> for WriteEntry {
+    fn from(payload: Entry) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl ReadEntries {
+    pub fn new(payload: Query) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Query {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Query {
+        self.0
+    }
+}
+
+impl From<Query> for ReadEntries {
+    fn from(payload: Query) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl OpenSubscription {
+    pub fn new(payload: Query) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Query {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Query {
+        self.0
+    }
+}
+
+impl From<Query> for OpenSubscription {
+    fn from(payload: Query) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl CloseSubscription {
+    pub fn new(payload: SubscriptionToken) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &SubscriptionToken {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> SubscriptionToken {
+        self.0
+    }
+}
+
+impl From<SubscriptionToken> for CloseSubscription {
+    fn from(payload: SubscriptionToken) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Snapshot {
+    pub fn new(payload: SocketPath) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &SocketPath {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> SocketPath {
+        self.0
+    }
+}
+
+impl From<SocketPath> for Snapshot {
+    fn from(payload: SocketPath) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl MailSent {
+    pub fn new(payload: SignalRequest) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &SignalRequest {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> SignalRequest {
+        self.0
+    }
+}
+
+impl From<SignalRequest> for MailSent {
+    fn from(payload: SignalRequest) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl MessageAccepted {
+    pub fn new(payload: SignalRequest) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &SignalRequest {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> SignalRequest {
+        self.0
+    }
+}
+
+impl From<SignalRequest> for MessageAccepted {
+    fn from(payload: SignalRequest) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl MessageCommitted {
+    pub fn new(payload: CommitSequence) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &CommitSequence {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> CommitSequence {
+        self.0
+    }
+}
+
+impl From<CommitSequence> for MessageCommitted {
+    fn from(payload: CommitSequence) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl MessageFailed {
+    pub fn new(payload: RejectionReason) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &RejectionReason {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> RejectionReason {
+        self.0
+    }
+}
+
+impl From<RejectionReason> for MessageFailed {
+    fn from(payload: RejectionReason) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Topic {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Topic {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Topics {
+    pub fn new(payload: Vec<Topic>) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Vec<Topic> {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Vec<Topic> {
+        self.0
+    }
+}
+
+impl From<Vec<Topic>> for Topics {
+    fn from(payload: Vec<Topic>) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Description {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Description {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl RecordIdentifier {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for RecordIdentifier {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl SubscriptionToken {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for SubscriptionToken {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl SignalRequest {
+    pub fn record_intent(payload: RecordIntent) -> Self {
+        Self::RecordIntent(payload)
+    }
+
+    pub fn observe_intent(payload: Query) -> Self {
+        Self::ObserveIntent(ObserveIntent::new(payload))
+    }
+
+    pub fn subscribe_intent(payload: Query) -> Self {
+        Self::SubscribeIntent(SubscribeIntent::new(payload))
+    }
+}
+
+impl SignalReply {
+    pub fn record_accepted(payload: RecordAccepted) -> Self {
+        Self::RecordAccepted(payload)
+    }
+
+    pub fn observation_returned(payload: RecordSet) -> Self {
+        Self::ObservationReturned(ObservationReturned::new(payload))
+    }
+
+    pub fn subscription_started(payload: SubscriptionToken) -> Self {
+        Self::SubscriptionStarted(SubscriptionStarted::new(payload))
+    }
+}
+
+impl NexusRequest {
+    pub fn push_signal(payload: SignalRequest) -> Self {
+        Self::PushSignal(PushSignal::new(payload))
+    }
+
+    pub fn push_sema_result(payload: SemaReply) -> Self {
+        Self::PushSemaResult(PushSemaResult::new(payload))
+    }
+}
+
+impl NexusReply {
+    pub fn pushed_to_sema(payload: SemaRequest) -> Self {
+        Self::PushedToSema(PushedToSema::new(payload))
+    }
+
+    pub fn mail_resolved(payload: SignalReply) -> Self {
+        Self::MailResolved(MailResolved::new(payload))
+    }
+}
+
+impl SemaRequest {
+    pub fn write_entry(payload: Entry) -> Self {
+        Self::WriteEntry(WriteEntry::new(payload))
+    }
+
+    pub fn read_entries(payload: Query) -> Self {
+        Self::ReadEntries(ReadEntries::new(payload))
+    }
+
+    pub fn open_subscription(payload: Query) -> Self {
+        Self::OpenSubscription(OpenSubscription::new(payload))
+    }
+
+    pub fn close_subscription(payload: SubscriptionToken) -> Self {
+        Self::CloseSubscription(CloseSubscription::new(payload))
+    }
+}
+
+impl SemaReply {
+    pub fn entry_written(payload: EntryWritten) -> Self {
+        Self::EntryWritten(payload)
+    }
+
+    pub fn entries_read(payload: EntriesRead) -> Self {
+        Self::EntriesRead(payload)
+    }
+
+    pub fn subscription_opened(payload: SubscriptionOpened) -> Self {
+        Self::SubscriptionOpened(payload)
+    }
+
+    pub fn subscription_closed(payload: SubscriptionClosed) -> Self {
+        Self::SubscriptionClosed(payload)
+    }
+}
+
+impl AdminRequest {
+    pub fn snapshot(payload: SocketPath) -> Self {
+        Self::Snapshot(Snapshot::new(payload))
+    }
+}
+
+impl AdminReply {
+    pub fn snapshot_ready(payload: SnapshotReady) -> Self {
+        Self::SnapshotReady(payload)
+    }
+}
+
+impl RuntimeEvent {
+    pub fn mail_sent(payload: SignalRequest) -> Self {
+        Self::MailSent(MailSent::new(payload))
+    }
+
+    pub fn message_accepted(payload: SignalRequest) -> Self {
+        Self::MessageAccepted(MessageAccepted::new(payload))
+    }
+
+    pub fn message_committed(payload: CommitSequence) -> Self {
+        Self::MessageCommitted(MessageCommitted::new(payload))
+    }
+
+    pub fn message_failed(payload: RejectionReason) -> Self {
+        Self::MessageFailed(MessageFailed::new(payload))
+    }
+}
+
+impl Input {
+    pub fn signal_in(payload: SignalRequest) -> Self {
+        Self::SignalIn(payload)
+    }
+
+    pub fn nexus_in(payload: NexusRequest) -> Self {
+        Self::NexusIn(payload)
+    }
+
+    pub fn sema_in(payload: SemaRequest) -> Self {
+        Self::SemaIn(payload)
+    }
+
+    pub fn admin(payload: AdminRequest) -> Self {
+        Self::Admin(payload)
+    }
+}
+
+impl Output {
+    pub fn signal_out(payload: SignalReply) -> Self {
+        Self::SignalOut(payload)
+    }
+
+    pub fn nexus_out(payload: NexusReply) -> Self {
+        Self::NexusOut(payload)
+    }
+
+    pub fn sema_out(payload: SemaReply) -> Self {
+        Self::SemaOut(payload)
+    }
+
+    pub fn admin_out(payload: AdminReply) -> Self {
+        Self::AdminOut(payload)
+    }
+
+    pub fn event(payload: RuntimeEvent) -> Self {
+        Self::Event(payload)
+    }
+
+    pub fn rejected(payload: RejectionReason) -> Self {
+        Self::Rejected(Rejected::new(payload))
+    }
+}
+
 impl From<RecordIntent> for SignalRequest {
     fn from(payload: RecordIntent) -> Self {
         Self::RecordIntent(payload)

@@ -103,6 +103,14 @@ must not grow a second parser for the authored form.
   If dispatch, upgrade, mail acceptance, or SEMA application needs behavior,
   the generated type exposes a trait or method target and the consumer
   implements it on a data-bearing actor or store object.
+- Generated construction is also an object method surface. Tuple newtypes emit
+  `new`, `payload`, `into_payload`, and `From<Payload>`. Enums emit
+  variant-named associated constructors (`Input::record(entry)`,
+  `SemaWriteOutput::recorded(receipt)`, `Output::rejected(rejection)`) so
+  component code does not hand-write nested wrapper constructors. When a
+  variant stores a generated newtype wrapper, the constructor accepts the
+  wrapper's inner payload and creates the wrapper internally; the stored root
+  payload remains the exported schema noun.
 - The next runner target is generated/programmatic component wiring. The
   emitter should grow a component-runner surface so a daemon binary can reduce
   to a tiny generated call while domain behavior still lives in non-default

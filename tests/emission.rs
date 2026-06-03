@@ -130,6 +130,27 @@ fn emitter_builds_rust_module_data_before_rendering_text() {
 }
 
 #[test]
+fn generated_objects_expose_named_constructors_and_newtype_payload_accessors() {
+    let topic = generated::Topic::new(std::string::String::from("schema"));
+    assert_eq!(topic.payload(), "schema");
+    assert_eq!(topic.clone().into_payload(), "schema");
+
+    let entry = generated::Entry {
+        topics: generated::Topics::new(vec![topic]),
+        kind: generated::Kind::Decision,
+        description: generated::Description::new(std::string::String::from(
+            "constructors name the work",
+        )),
+        magnitude: generated::Magnitude::Maximum,
+    };
+    let input = generated::Input::record(entry);
+    assert!(matches!(input, generated::Input::Record(_)));
+
+    let output = generated::Output::record_accepted(7);
+    assert!(matches!(output, generated::Output::RecordAccepted(_)));
+}
+
+#[test]
 fn emission_can_disable_nota_surface_for_binary_only_consumers() {
     // Binary-only shape — daemons and other binary-only consumers
     // ship zero NOTA derives and zero `nota_next::*` references.

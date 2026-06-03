@@ -55,6 +55,126 @@ pub enum Output {
     Listed(Vec<NodeName>),
 }
 
+impl NodeName {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for NodeName {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl NodeConfig {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for NodeConfig {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Service {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Service {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Query {
+    pub fn new(payload: Topic) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Topic {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Topic {
+        self.0
+    }
+}
+
+impl From<Topic> for Query {
+    fn from(payload: Topic) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Topic {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Topic {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Input {
+    pub fn register(payload: Cluster) -> Self {
+        Self::Register(payload)
+    }
+
+    pub fn observe(payload: Topic) -> Self {
+        Self::Observe(Query::new(payload))
+    }
+}
+
+impl Output {
+    pub fn projected(payload: std::collections::BTreeMap<NodeName, NodeConfig>) -> Self {
+        Self::Projected(payload)
+    }
+
+    pub fn listed(payload: Vec<NodeName>) -> Self {
+        Self::Listed(payload)
+    }
+}
+
 impl From<Cluster> for Input {
     fn from(payload: Cluster) -> Self {
         Self::Register(payload)

@@ -82,6 +82,126 @@ pub enum Output {
     RecordsObserved(RecordSet),
 }
 
+impl Topic {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Topic {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Topics {
+    pub fn new(payload: Vec<Topic>) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Vec<Topic> {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Vec<Topic> {
+        self.0
+    }
+}
+
+impl From<Vec<Topic>> for Topics {
+    fn from(payload: Vec<Topic>) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Description {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Description {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl RecordIdentifier {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for RecordIdentifier {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl RecordSet {
+    pub fn new(payload: Vec<Entry>) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Vec<Entry> {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Vec<Entry> {
+        self.0
+    }
+}
+
+impl From<Vec<Entry>> for RecordSet {
+    fn from(payload: Vec<Entry>) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Input {
+    pub fn record(payload: Entry) -> Self {
+        Self::Record(payload)
+    }
+
+    pub fn observe(payload: Query) -> Self {
+        Self::Observe(payload)
+    }
+}
+
+impl Output {
+    pub fn record_accepted(payload: Integer) -> Self {
+        Self::RecordAccepted(RecordIdentifier::new(payload))
+    }
+
+    pub fn records_observed(payload: Vec<Entry>) -> Self {
+        Self::RecordsObserved(RecordSet::new(payload))
+    }
+}
+
 impl From<Entry> for Input {
     fn from(payload: Entry) -> Self {
         Self::Record(payload)

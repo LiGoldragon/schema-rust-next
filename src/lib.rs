@@ -180,6 +180,8 @@ impl RustModule {
             writer.blank();
         }
 
+        writer.emit_newtype_inherent_impls(&self.declarations);
+        writer.emit_enum_variant_constructors(&self.declarations, &self.root_enums);
         writer.emit_enum_payload_from_impls(&self.declarations, &self.root_enums);
         writer.emit_nota_type_bridges(&self.declarations);
         for root_enum in &self.root_enums {
@@ -672,6 +674,28 @@ struct RustWriter {
     nota_surface: NotaSurface,
 }
 
+struct EnumConstructorPayload {
+    argument_type: String,
+    expression: String,
+}
+
+impl EnumConstructorPayload {
+    fn new(argument_type: String, expression: String) -> Self {
+        Self {
+            argument_type,
+            expression,
+        }
+    }
+
+    fn argument_type(&self) -> &str {
+        &self.argument_type
+    }
+
+    fn expression(&self) -> &str {
+        &self.expression
+    }
+}
+
 struct SplitSemaProjection<'schema> {
     signal_input: &'schema RustEnum,
     signal_output: &'schema RustEnum,
@@ -870,6 +894,48 @@ impl RustWriter {
         ));
     }
 
+    fn emit_newtype_inherent_impls(&mut self, declarations: &[RustDeclaration]) {
+        let newtypes: Vec<_> = declarations
+            .iter()
+            .filter_map(|declaration| match declaration.value() {
+                RustTypeDeclaration::Newtype(value) => Some(value),
+                _ => None,
+            })
+            .collect();
+        for newtype in newtypes {
+            self.emit_newtype_inherent_impl(newtype);
+            self.blank();
+        }
+    }
+
+    fn emit_newtype_inherent_impl(&mut self, declaration: &RustNewtype) {
+        let name = declaration.name();
+        let payload_type = self.rust_type(declaration.reference());
+        self.line(format!("impl {name} {{"));
+        self.line(format!(
+            "    pub fn new(payload: {payload_type}) -> Self {{"
+        ));
+        self.line("        Self(payload)");
+        self.line("    }");
+        self.blank();
+        self.line(format!("    pub fn payload(&self) -> &{payload_type} {{"));
+        self.line("        &self.0");
+        self.line("    }");
+        self.blank();
+        self.line(format!(
+            "    pub fn into_payload(self) -> {payload_type} {{"
+        ));
+        self.line("        self.0");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line(format!("impl From<{payload_type}> for {name} {{"));
+        self.line(format!("    fn from(payload: {payload_type}) -> Self {{"));
+        self.line("        Self::new(payload)");
+        self.line("    }");
+        self.line("}");
+    }
+
     fn emit_struct(&mut self, visibility: Visibility, declaration: &RustStruct) {
         let derive = self.data_type_derive(declaration.name());
         self.line(derive);
@@ -956,6 +1022,88 @@ impl RustWriter {
             emitted = true;
         }
         emitted
+    }
+
+    fn emit_enum_variant_constructors(
+        &mut self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) {
+        let newtypes: Vec<_> = declarations
+            .iter()
+            .filter_map(|declaration| match declaration.value() {
+                RustTypeDeclaration::Newtype(value) => Some(value),
+                _ => None,
+            })
+            .collect();
+        for declaration in declarations {
+            if let RustTypeDeclaration::Enum(value) = declaration.value() {
+                self.emit_enum_variant_constructors_for(value, &newtypes);
+            }
+        }
+        for root_enum in root_enums {
+            self.emit_enum_variant_constructors_for(root_enum, &newtypes);
+        }
+    }
+
+    fn emit_enum_variant_constructors_for(
+        &mut self,
+        declaration: &RustEnum,
+        newtypes: &[&RustNewtype],
+    ) {
+        let payload_variants: Vec<_> = declaration
+            .variants()
+            .iter()
+            .filter(|variant| variant.payload().is_some())
+            .collect();
+        if payload_variants.is_empty() {
+            return;
+        }
+        self.line(format!("impl {} {{", declaration.name()));
+        for (index, variant) in payload_variants.iter().enumerate() {
+            if index > 0 {
+                self.blank();
+            }
+            let method_name = variant.name().field_name();
+            let Some(payload) = variant.payload() else {
+                continue;
+            };
+            let constructor = self.enum_variant_constructor_payload(payload, newtypes);
+            self.line(format!(
+                "    pub fn {method_name}(payload: {}) -> Self {{",
+                constructor.argument_type()
+            ));
+            self.line(format!(
+                "        Self::{}({})",
+                variant.name(),
+                constructor.expression()
+            ));
+            self.line("    }");
+        }
+        self.line("}");
+        self.blank();
+    }
+
+    fn enum_variant_constructor_payload(
+        &self,
+        payload: &TypeReference,
+        newtypes: &[&RustNewtype],
+    ) -> EnumConstructorPayload {
+        match payload {
+            TypeReference::Plain(name) => newtypes
+                .iter()
+                .find(|newtype| newtype.name() == name)
+                .map(|newtype| {
+                    EnumConstructorPayload::new(
+                        self.rust_type(newtype.reference()),
+                        format!("{}::new(payload)", newtype.name()),
+                    )
+                })
+                .unwrap_or_else(|| {
+                    EnumConstructorPayload::new(self.rust_type(payload), "payload".to_owned())
+                }),
+            _ => EnumConstructorPayload::new(self.rust_type(payload), "payload".to_owned()),
+        }
     }
 
     fn unique_plain_payload_variants<'declaration>(

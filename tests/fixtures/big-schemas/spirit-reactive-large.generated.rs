@@ -186,6 +186,238 @@ pub enum Output {
     Indexed(IndexReceipt),
 }
 
+impl Topic {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Topic {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Topics {
+    pub fn new(payload: Vec<Topic>) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Vec<Topic> {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Vec<Topic> {
+        self.0
+    }
+}
+
+impl From<Vec<Topic>> for Topics {
+    fn from(payload: Vec<Topic>) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Description {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Description {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl AgentName {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for AgentName {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Timestamp {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for Timestamp {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl RecordIdentifier {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for RecordIdentifier {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl SubscriptionToken {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for SubscriptionToken {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl CommitSequence {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for CommitSequence {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl DatabaseDigest {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for DatabaseDigest {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Input {
+    pub fn record(payload: Entry) -> Self {
+        Self::Record(payload)
+    }
+
+    pub fn correct(payload: Correction) -> Self {
+        Self::Correct(payload)
+    }
+
+    pub fn observe(payload: Query) -> Self {
+        Self::Observe(payload)
+    }
+
+    pub fn watch(payload: WatchRequest) -> Self {
+        Self::Watch(payload)
+    }
+
+    pub fn unwatch(payload: Integer) -> Self {
+        Self::Unwatch(SubscriptionToken::new(payload))
+    }
+}
+
+impl Output {
+    pub fn recorded(payload: RecordReceipt) -> Self {
+        Self::Recorded(payload)
+    }
+
+    pub fn corrected(payload: CorrectionReceipt) -> Self {
+        Self::Corrected(payload)
+    }
+
+    pub fn observed(payload: RecordSet) -> Self {
+        Self::Observed(payload)
+    }
+
+    pub fn watching(payload: SubscriptionReceipt) -> Self {
+        Self::Watching(payload)
+    }
+
+    pub fn unwatched(payload: SubscriptionReceipt) -> Self {
+        Self::Unwatched(payload)
+    }
+
+    pub fn rejected(payload: Rejection) -> Self {
+        Self::Rejected(payload)
+    }
+
+    pub fn indexed(payload: IndexReceipt) -> Self {
+        Self::Indexed(payload)
+    }
+}
+
 impl From<Entry> for Input {
     fn from(payload: Entry) -> Self {
         Self::Record(payload)

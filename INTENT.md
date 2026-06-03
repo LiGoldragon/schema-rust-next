@@ -198,17 +198,25 @@ codec still serializes Rust `Vec`, `BTreeMap`, and `Option` values into NOTA
 value shapes, but the names used in a `.schema` file to reference those types
 are Schema vocabulary.*
 
-*Authored enum bodies are vectors of variant-signature objects. A unit variant
-is a bare PascalCase symbol, and a data-carrying variant is a parenthesized
-record `(Variant PayloadType)`. Rust emission consumes the macro-free
-`Asschema` roots and type declarations, so it must not grow a parser for any
-older authored spelling.*
+*Authored enum-body spelling belongs to schema-next, not this emitter. Rust
+emission consumes the macro-free `Asschema` roots and type declarations, so it
+must not grow a parser for any authored spelling. When source sugar creates
+exported variant-object newtypes, the emitter treats those newtypes as real
+Rust nouns and keeps the root enum payload typed as that noun.*
 
 *Asschema newtypes are their own data shape. A newtype carries exactly one
 contained `TypeReference`; it is not a one-field struct map with an invented
 field name. The emitter projects that shape directly to an ergonomic Rust tuple
 newtype such as `pub struct Topic(pub String);`, while multi-field structs keep
 named fields.*
+
+*Generated Rust should not force consumers to hand-write wrapper stacks. Tuple
+newtypes emit `new`, `payload`, and `into_payload` methods plus `From<Payload>`;
+enums emit variant-named associated constructors such as `Input::record(entry)`
+and `Output::rejected(signal_rejection)`. If an enum variant stores an exported
+newtype wrapper, the constructor accepts the wrapper's inner payload and builds
+the wrapper internally. The wrapper noun remains real in the type system, but
+ordinary code names the operation once.*
 
 *The emitter starts from assembled schema data, not from authored macro syntax.
 That assembled data is live: it can be written as NOTA, read back, written as

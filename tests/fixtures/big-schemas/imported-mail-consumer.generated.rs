@@ -88,6 +88,166 @@ pub enum Output {
     Rejected(Rejection),
 }
 
+impl Topic {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Topic {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Topics {
+    pub fn new(payload: Vec<Topic>) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Vec<Topic> {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Vec<Topic> {
+        self.0
+    }
+}
+
+impl From<Vec<Topic>> for Topics {
+    fn from(payload: Vec<Topic>) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Description {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Description {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl AgentName {
+    pub fn new(payload: String) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for AgentName {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl RecordIdentifier {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+
+impl From<Integer> for RecordIdentifier {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Rejection {
+    pub fn new(payload: Description) -> Self {
+        Self(payload)
+    }
+
+    pub fn payload(&self) -> &Description {
+        &self.0
+    }
+
+    pub fn into_payload(self) -> Description {
+        self.0
+    }
+}
+
+impl From<Description> for Rejection {
+    fn from(payload: Description) -> Self {
+        Self::new(payload)
+    }
+}
+
+impl Input {
+    pub fn record(payload: Entry) -> Self {
+        Self::Record(payload)
+    }
+
+    pub fn observe(payload: Query) -> Self {
+        Self::Observe(payload)
+    }
+
+    pub fn mark(payload: DatabaseMarker) -> Self {
+        Self::Mark(payload)
+    }
+
+    pub fn commit(payload: CommitSequence) -> Self {
+        Self::Commit(payload)
+    }
+}
+
+impl Output {
+    pub fn recorded(payload: RecordReceipt) -> Self {
+        Self::Recorded(payload)
+    }
+
+    pub fn observed(payload: RecordSet) -> Self {
+        Self::Observed(payload)
+    }
+
+    pub fn marked(payload: DatabaseMarker) -> Self {
+        Self::Marked(payload)
+    }
+
+    pub fn committed(payload: CommitSequence) -> Self {
+        Self::Committed(payload)
+    }
+
+    pub fn rejected(payload: Description) -> Self {
+        Self::Rejected(Rejection::new(payload))
+    }
+}
+
 impl From<Entry> for Input {
     fn from(payload: Entry) -> Self {
         Self::Record(payload)
