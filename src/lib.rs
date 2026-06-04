@@ -848,6 +848,49 @@ struct SplitSemaProjection<'schema> {
     sema_read_output: &'schema RustEnum,
 }
 
+struct NexusRunnerShape {
+    reply_type: String,
+    sema_write_input_type: Option<String>,
+    sema_write_output_type: Option<String>,
+    sema_read_input_type: Option<String>,
+    sema_read_output_type: Option<String>,
+    effect_command_type: Option<String>,
+    effect_result_type: Option<String>,
+    has_continue: bool,
+}
+
+impl NexusRunnerShape {
+    fn sema_write_input_type(&self) -> &str {
+        self.sema_write_input_type
+            .as_deref()
+            .unwrap_or("std::convert::Infallible")
+    }
+
+    fn sema_read_input_type(&self) -> &str {
+        self.sema_read_input_type
+            .as_deref()
+            .unwrap_or("std::convert::Infallible")
+    }
+
+    fn effect_command_type(&self) -> &str {
+        self.effect_command_type
+            .as_deref()
+            .unwrap_or("std::convert::Infallible")
+    }
+
+    fn emits_sema_write(&self) -> bool {
+        self.sema_write_input_type.is_some()
+    }
+
+    fn emits_sema_read(&self) -> bool {
+        self.sema_read_input_type.is_some()
+    }
+
+    fn emits_effect(&self) -> bool {
+        self.effect_command_type.is_some()
+    }
+}
+
 struct TraceInterfaceRoot<'schema> {
     object_variant: &'static str,
     name_prefix: &'static str,
@@ -2268,6 +2311,117 @@ impl RustWriter {
         }
     }
 
+    fn emit_nexus_runner_next_step_projection(&mut self, shape: &NexusRunnerShape) {
+        self.line(format!(
+            "pub type NexusRunnerNextStep = triad_runtime::NextStep<{}, {}, {}, {}, NexusWork>;",
+            shape.reply_type,
+            shape.sema_write_input_type(),
+            shape.sema_read_input_type(),
+            shape.effect_command_type()
+        ));
+        self.blank();
+        self.line("impl NexusAction {");
+        self.line("    pub fn into_runner_next_step(self) -> NexusRunnerNextStep {");
+        self.line("        match self {");
+        if shape.emits_sema_write() {
+            self.line("            Self::CommandSemaWrite(input) => triad_runtime::NextStep::SemaWrite(input),");
+        }
+        if shape.emits_sema_read() {
+            self.line("            Self::CommandSemaRead(input) => triad_runtime::NextStep::SemaRead(input),");
+        }
+        self.line(
+            "            Self::ReplyToSignal(output) => triad_runtime::NextStep::Reply(output),",
+        );
+        if shape.emits_effect() {
+            self.line("            Self::CommandEffect(effect) => triad_runtime::NextStep::RunEffect(effect),");
+        }
+        if shape.has_continue {
+            self.line(
+                "            Self::Continue(work) => triad_runtime::NextStep::Continue(work),",
+            );
+        }
+        self.line("        }");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+    }
+
+    fn emit_nexus_runner_adapter(&mut self, shape: &NexusRunnerShape) {
+        self.line("struct NexusRunnerAdapter<'engine, Engine> {");
+        self.line("    engine: &'engine mut Engine,");
+        self.line("    origin_route: OriginRoute,");
+        self.line("}");
+        self.blank();
+        self.line("impl<'engine, Engine> NexusRunnerAdapter<'engine, Engine> {");
+        self.line("    fn new(engine: &'engine mut Engine, origin_route: OriginRoute) -> Self {");
+        self.line("        Self { engine, origin_route }");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("impl<'engine, Engine> triad_runtime::RunnerEngines for NexusRunnerAdapter<'engine, Engine>");
+        self.line("where");
+        self.line("    Engine: NexusEngine,");
+        self.line("{");
+        self.line(format!("    type Reply = {};", shape.reply_type));
+        self.line(format!(
+            "    type SemaWrite = {};",
+            shape.sema_write_input_type()
+        ));
+        self.line(format!(
+            "    type SemaRead = {};",
+            shape.sema_read_input_type()
+        ));
+        self.line(format!(
+            "    type Effect = {};",
+            shape.effect_command_type()
+        ));
+        self.line("    type Work = NexusWork;");
+        self.blank();
+        self.line("    fn decide_next_step(&mut self, work: Self::Work) -> triad_runtime::runner::RunnerNextStep<Self> {");
+        self.line("        let action = NexusEngine::decide(self.engine, work.with_origin_route(self.origin_route)).into_root();");
+        self.line("        action.into_runner_next_step()");
+        self.line("    }");
+        self.blank();
+        self.line("    fn apply_sema_write(&mut self, write: Self::SemaWrite) -> Self::Work {");
+        if let Some(output_type) = shape.sema_write_output_type.as_deref() {
+            self.line(format!(
+                "        let output: {output_type} = NexusEngine::apply_sema_write(self.engine, write);"
+            ));
+            self.line("        NexusWork::sema_write_completed(output)");
+        } else {
+            self.line("        match write {}");
+        }
+        self.line("    }");
+        self.blank();
+        self.line("    fn observe_sema_read(&self, read: Self::SemaRead) -> Self::Work {");
+        if let Some(output_type) = shape.sema_read_output_type.as_deref() {
+            self.line(format!(
+                "        let output: {output_type} = NexusEngine::observe_sema_read(self.engine, read);"
+            ));
+            self.line("        NexusWork::sema_read_completed(output)");
+        } else {
+            self.line("        match read {}");
+        }
+        self.line("    }");
+        self.blank();
+        self.line("    fn run_effect(&mut self, effect: Self::Effect) -> Self::Work {");
+        if let Some(output_type) = shape.effect_result_type.as_deref() {
+            self.line(format!(
+                "        let output: {output_type} = NexusEngine::run_effect(self.engine, effect);"
+            ));
+            self.line("        NexusWork::effect_completed(output)");
+        } else {
+            self.line("        match effect {}");
+        }
+        self.line("    }");
+        self.blank();
+        self.line("    fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> Self::Reply {");
+        self.line("        NexusEngine::budget_exhausted_reply(self.engine, exhausted)");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+    }
+
     fn emit_split_nexus_work_projection(&mut self, projection: &SplitSemaProjection<'_>) {
         self.line("impl nexus::Nexus<nexus::Work> {");
         self.line("    pub fn into_nexus_action(self) -> nexus::Nexus<nexus::Action> {");
@@ -2535,6 +2689,97 @@ impl RustWriter {
         })
     }
 
+    fn enum_has_variant_named(&self, declaration: &RustEnum, variant_name: &str) -> bool {
+        declaration
+            .variants()
+            .iter()
+            .any(|variant| variant.name().as_str() == variant_name)
+    }
+
+    fn variant_plain_payload_name(
+        &self,
+        declaration: &RustEnum,
+        variant_name: &str,
+    ) -> Option<String> {
+        declaration
+            .variants()
+            .iter()
+            .find(|variant| variant.name().as_str() == variant_name)
+            .and_then(|variant| self.plain_payload_name(variant))
+            .map(ToOwned::to_owned)
+    }
+
+    fn nexus_runner_shape(&self, declarations: &[RustDeclaration]) -> Option<NexusRunnerShape> {
+        let nexus_work = self.declaration_enum_named(declarations, "NexusWork")?;
+        let nexus_action = self.declaration_enum_named(declarations, "NexusAction")?;
+        let reply_type = self.variant_plain_payload_name(nexus_action, "ReplyToSignal")?;
+
+        let sema_write_input_type =
+            self.variant_plain_payload_name(nexus_action, "CommandSemaWrite");
+        let sema_write_output_type =
+            self.variant_plain_payload_name(nexus_work, "SemaWriteCompleted");
+        let sema_read_input_type = self.variant_plain_payload_name(nexus_action, "CommandSemaRead");
+        let sema_read_output_type =
+            self.variant_plain_payload_name(nexus_work, "SemaReadCompleted");
+        let effect_command_type = self.variant_plain_payload_name(nexus_action, "CommandEffect");
+        let effect_result_type = self.variant_plain_payload_name(nexus_work, "EffectCompleted");
+        let has_continue_variant = self.enum_has_variant_named(nexus_action, "Continue");
+        let has_continue = self
+            .variant_plain_payload_name(nexus_action, "Continue")
+            .as_deref()
+            == Some("NexusWork");
+
+        if self.enum_has_variant_named(nexus_action, "CommandSemaWrite")
+            != sema_write_input_type.is_some()
+            || self.enum_has_variant_named(nexus_work, "SemaWriteCompleted")
+                != sema_write_output_type.is_some()
+            || self.enum_has_variant_named(nexus_action, "CommandSemaRead")
+                != sema_read_input_type.is_some()
+            || self.enum_has_variant_named(nexus_work, "SemaReadCompleted")
+                != sema_read_output_type.is_some()
+            || self.enum_has_variant_named(nexus_action, "CommandEffect")
+                != effect_command_type.is_some()
+            || self.enum_has_variant_named(nexus_work, "EffectCompleted")
+                != effect_result_type.is_some()
+            || has_continue_variant != has_continue
+        {
+            return None;
+        }
+
+        if sema_write_input_type.is_some() != sema_write_output_type.is_some()
+            || sema_read_input_type.is_some() != sema_read_output_type.is_some()
+            || effect_command_type.is_some() != effect_result_type.is_some()
+        {
+            return None;
+        }
+
+        let recognized_action_variants = nexus_action.variants().iter().all(|variant| {
+            matches!(
+                variant.name().as_str(),
+                "ReplyToSignal"
+                    | "CommandSemaWrite"
+                    | "CommandSemaRead"
+                    | "CommandEffect"
+                    | "Continue"
+            )
+        });
+
+        if !recognized_action_variants {
+            return None;
+        }
+
+        Some(NexusRunnerShape {
+            reply_type,
+            sema_write_input_type,
+            sema_write_output_type,
+            sema_read_input_type,
+            sema_read_output_type,
+            effect_command_type,
+            effect_result_type,
+            has_continue,
+        })
+    }
+
     fn emit_upgrade_support(&mut self) {
         self.line("pub trait UpgradeFrom<Previous>: Sized {");
         self.line("    type Error;");
@@ -2591,9 +2836,18 @@ impl RustWriter {
         let emits_sema_apply = self.emits_sema_apply_support(declarations);
         let emits_sema_observe = self.emits_sema_observe_support(declarations);
         let emits_sema_engine = emits_sema_apply || emits_sema_observe;
+        let nexus_runner_shape = if emits_nexus_engine {
+            self.nexus_runner_shape(declarations)
+        } else {
+            None
+        };
 
         if emits_signal_engine || emits_nexus_engine || emits_sema_engine {
             self.emit_actor_lifecycle_support();
+        }
+
+        if let Some(shape) = nexus_runner_shape.as_ref() {
+            self.emit_nexus_runner_next_step_projection(shape);
         }
 
         if emits_signal_engine {
@@ -2657,16 +2911,72 @@ impl RustWriter {
             self.line("        self.trace_nexus_activation(NexusObjectName::Decided);");
             self.line("    }");
             self.blank();
+            if let Some(shape) = nexus_runner_shape.as_ref() {
+                self.line("    fn continuation_limit(&self) -> triad_runtime::ContinuationLimit {");
+                self.line("        triad_runtime::ContinuationLimit::default()");
+                self.line("    }");
+                self.blank();
+                if let (Some(input_type), Some(output_type)) = (
+                    shape.sema_write_input_type.as_deref(),
+                    shape.sema_write_output_type.as_deref(),
+                ) {
+                    self.line(format!(
+                        "    fn apply_sema_write(&mut self, input: {input_type}) -> {output_type};"
+                    ));
+                }
+                if let (Some(input_type), Some(output_type)) = (
+                    shape.sema_read_input_type.as_deref(),
+                    shape.sema_read_output_type.as_deref(),
+                ) {
+                    self.line(format!(
+                        "    fn observe_sema_read(&self, input: {input_type}) -> {output_type};"
+                    ));
+                }
+                if let (Some(input_type), Some(output_type)) = (
+                    shape.effect_command_type.as_deref(),
+                    shape.effect_result_type.as_deref(),
+                ) {
+                    self.line(format!(
+                        "    fn run_effect(&mut self, input: {input_type}) -> {output_type};"
+                    ));
+                }
+                self.line(format!(
+                    "    fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> {};",
+                    shape.reply_type
+                ));
+                self.blank();
+            }
             self.line("    fn decide(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>;");
             self.blank();
-            self.line("    fn execute(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action> {");
+            self.line("    fn execute(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>");
+            if nexus_runner_shape.is_some() {
+                self.line("    where");
+                self.line("        Self: Sized,");
+            }
+            self.line("    {");
             self.line("        self.trace_nexus_entered();");
-            self.line("        let output = self.decide(input);");
+            if nexus_runner_shape.is_some() {
+                self.line("        let origin_route = input.origin_route();");
+                self.line("        let first_work = input.into_root();");
+                self.line(
+                    "        let runner = triad_runtime::Runner::new(self.continuation_limit());",
+                );
+                self.line(
+                    "        let mut runner_adapter = NexusRunnerAdapter::new(self, origin_route);",
+                );
+                self.line("        let reply = runner.drive(&mut runner_adapter, first_work);");
+                self.line("        let output = NexusAction::reply_to_signal(reply).with_origin_route(origin_route);");
+            } else {
+                self.line("        let output = self.decide(input);");
+            }
             self.line("        self.trace_nexus_decided();");
             self.line("        output");
             self.line("    }");
             self.line("}");
             self.blank();
+            if let Some(shape) = nexus_runner_shape.as_ref() {
+                self.emit_nexus_runner_adapter(shape);
+            }
         }
         if emits_sema_engine {
             self.line("pub trait SemaEngine {");

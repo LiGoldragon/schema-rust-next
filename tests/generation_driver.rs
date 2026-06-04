@@ -57,6 +57,20 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
         "nexus runtime target should emit NexusEngine:\n{nexus}"
     );
     assert!(
+        nexus.contains("pub type NexusRunnerNextStep = triad_runtime::NextStep<ContractOutput, SemaWriteInput, SemaReadInput, std::convert::Infallible, NexusWork>;"),
+        "nexus runtime target should emit runner glue over imported contract output:\n{nexus}"
+    );
+    assert!(
+        nexus.contains(
+            "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ContractOutput;"
+        ),
+        "nexus runtime target should ask the component for a typed exhaustion reply:\n{nexus}"
+    );
+    assert!(
+        !nexus.contains("fn run_effect(&mut self, input"),
+        "nexus runtime target should not require an effect hook without CommandEffect:\n{nexus}"
+    );
+    assert!(
         !nexus.contains("pub trait SemaEngine"),
         "nexus runtime target must not emit SemaEngine:\n{nexus}"
     );

@@ -165,6 +165,16 @@ must not grow a second parser for the authored form.
   runner does not move algorithms into `main`; it gives the component a
   schema-defined place to instantiate Signal, Nexus, SEMA, transport, trace,
   and binary configuration surfaces.
+- Nexus runner glue is generated when the Nexus action/work vocabulary has an
+  exhaustive runner shape: `ReplyToSignal` plus any of `CommandSemaWrite`,
+  `CommandSemaRead`, `CommandEffect`, and `Continue`, with the matching
+  completion work variants present for storage and effects. The generated code
+  emits a total `NexusAction` to `triad_runtime::NextStep` projection, a
+  data-bearing `NexusRunnerAdapter`, typed hooks on `NexusEngine` for storage,
+  effects, and budget exhaustion, and a runner-backed `execute` wrapper that
+  keeps the trace hooks at one entered/decided pair per external request.
+  Unknown action variants reject runner emission rather than falling through a
+  wildcard. The shared loop itself stays in `triad-runtime`.
 - Generated engine traits carry minimal lifecycle hooks. `NexusEngine` and
   `SemaEngine` each emit default no-op `on_start` and `on_stop` methods
   returning typed `ActorStartFailure` and `ActorStopFailure` results. The

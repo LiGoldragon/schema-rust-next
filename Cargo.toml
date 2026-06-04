@@ -1,6 +1,6 @@
 [package]
 name         = "schema-rust-next"
-version      = "0.1.3"
+version      = "0.1.4"
 edition      = "2024"
 rust-version = "1.85"
 license      = "MIT OR Apache-2.0"
@@ -30,6 +30,7 @@ nota-text = []
 [dev-dependencies]
 nota-next = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }
 rkyv = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }
+triad-runtime = { git = "https://github.com/LiGoldragon/triad-runtime.git", branch = "main" }
 
 [lints.rust]
 unsafe_code = "forbid"

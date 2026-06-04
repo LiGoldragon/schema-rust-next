@@ -104,6 +104,16 @@ data-bearing actors or stores. Heavy topic-discovery decisions belong to Nexus
 implementations; durable indexes and score tables belong to SEMA; Signal stays
 the communication and reply boundary.*
 
+*The recursive Nexus runner is shared runtime behavior, but the adapter is
+generated. When a schema's `NexusAction` and `NexusWork` expose the canonical
+runner vocabulary, generated Rust must project the action enum exhaustively
+into `triad_runtime::NextStep`, emit the data-bearing adapter that implements
+`triad_runtime::RunnerEngines`, and make `NexusEngine::execute` call the shared
+runner while preserving one Nexus entered/decided trace pair per external
+request. Component authors still implement the decision step, storage hooks,
+effect hook, and typed budget-exhausted reply on real engine objects. Unknown
+action variants are not defaulted or wildcarded.*
+
 *The engine traits carry the minimum lifecycle address needed by the runtime
 and persona supervision. `NexusEngine` and `SemaEngine` emit default no-op
 `on_start` and `on_stop` methods returning typed `ActorStartFailure` and

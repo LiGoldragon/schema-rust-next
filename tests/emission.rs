@@ -33,6 +33,11 @@ mod collections_generated {
     include!("fixtures/collections_generated.rs");
 }
 
+#[allow(dead_code)]
+mod runner_generated {
+    include!("fixtures/runner_generated.rs");
+}
+
 #[test]
 fn emits_rust_source_as_a_separate_artifact() {
     let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
@@ -473,6 +478,53 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
             .as_str()
             .contains("impl sema::Sema<sema::ReadOutput>")
     );
+}
+
+#[test]
+fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
+    let asschema = FixtureSchema::new("runner-triad.schema").lower("spirit:lib");
+    let generated = RustEmitter::new(
+        RustEmissionOptions::binary_only().with_target(RustEmissionTarget::ComponentRuntime),
+    )
+    .emit_file(&asschema);
+    let code = generated.code.as_str();
+
+    assert!(code.contains("pub type NexusRunnerNextStep = triad_runtime::NextStep<Output, SemaWriteInput, SemaReadInput, NexusEffectCommand, NexusWork>;"));
+    assert!(code.contains("pub fn into_runner_next_step(self) -> NexusRunnerNextStep"));
+    assert!(
+        code.contains("Self::CommandSemaWrite(input) => triad_runtime::NextStep::SemaWrite(input)")
+    );
+    assert!(
+        code.contains("Self::CommandSemaRead(input) => triad_runtime::NextStep::SemaRead(input)")
+    );
+    assert!(code.contains("Self::ReplyToSignal(output) => triad_runtime::NextStep::Reply(output)"));
+    assert!(
+        code.contains("Self::CommandEffect(effect) => triad_runtime::NextStep::RunEffect(effect)")
+    );
+    assert!(code.contains("Self::Continue(work) => triad_runtime::NextStep::Continue(work)"));
+    assert!(code.contains("struct NexusRunnerAdapter<'engine, Engine>"));
+    assert!(code.contains(
+        "impl<'engine, Engine> triad_runtime::RunnerEngines for NexusRunnerAdapter<'engine, Engine>"
+    ));
+    assert!(code.contains("fn continuation_limit(&self) -> triad_runtime::ContinuationLimit"));
+    assert!(
+        code.contains("fn apply_sema_write(&mut self, input: SemaWriteInput) -> SemaWriteOutput;")
+    );
+    assert!(code.contains("fn observe_sema_read(&self, input: SemaReadInput) -> SemaReadOutput;"));
+    assert!(
+        code.contains("fn run_effect(&mut self, input: NexusEffectCommand) -> NexusEffectResult;")
+    );
+    assert!(code.contains(
+        "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> Output;"
+    ));
+    assert!(code.contains("let runner = triad_runtime::Runner::new(self.continuation_limit());"));
+    assert!(code.contains("let reply = runner.drive(&mut runner_adapter, first_work);"));
+    assert!(code.contains(
+        "let output = NexusAction::reply_to_signal(reply).with_origin_route(origin_route);"
+    ));
+    assert!(!code.contains("NexusAction::CommandEffect(effect) => panic!"));
+
+    assert_generated_fixture("runner_generated.rs", code);
 }
 
 #[test]
