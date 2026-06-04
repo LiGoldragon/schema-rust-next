@@ -218,9 +218,10 @@ impl RustModule {
 /// closure. The default target is [`RustEmissionTarget::ComponentRuntime`]
 /// so existing all-in-one runtime consumers keep their generated engine traits.
 /// New signal and meta-signal contract repos should opt into
-/// [`RustEmissionTarget::WireContract`]. New daemon plane schemas should opt
-/// into [`RustEmissionTarget::NexusRuntime`] or
-/// [`RustEmissionTarget::SemaRuntime`] for per-plane runtime emission.
+/// [`RustEmissionTarget::WireContract`]. Daemon-local signal runtime schemas
+/// should opt into [`RustEmissionTarget::SignalRuntime`]. New daemon decision
+/// and storage plane schemas should opt into [`RustEmissionTarget::NexusRuntime`]
+/// or [`RustEmissionTarget::SemaRuntime`] for per-plane runtime emission.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustEmissionOptions {
     pub nota_surface: NotaSurface,
@@ -295,6 +296,8 @@ pub enum RustEmissionTarget {
     WireContract,
     /// Bootstrap all-in-one runtime emission for unsplit schemas.
     ComponentRuntime,
+    /// Daemon-side Signal plane runtime support over signal roots.
+    SignalRuntime,
     /// Daemon-side Nexus plane runtime support only.
     NexusRuntime,
     /// Daemon-side SEMA plane runtime support only.
@@ -310,6 +313,7 @@ impl RustEmissionTarget {
         match self {
             Self::WireContract => RuntimePlaneSet::none(),
             Self::ComponentRuntime => RuntimePlaneSet::all(),
+            Self::SignalRuntime => RuntimePlaneSet::signal_only(),
             Self::NexusRuntime => RuntimePlaneSet::nexus_only(),
             Self::SemaRuntime => RuntimePlaneSet::sema_only(),
         }
@@ -337,6 +341,14 @@ impl RuntimePlaneSet {
             signal: true,
             nexus: true,
             sema: true,
+        }
+    }
+
+    fn signal_only() -> Self {
+        Self {
+            signal: true,
+            nexus: false,
+            sema: false,
         }
     }
 
@@ -1885,11 +1897,13 @@ impl RustWriter {
         root_enums: &[RustEnum],
     ) -> Vec<&'static str> {
         let mut variants = Vec::new();
-        if self.runtime_planes().emits_signal()
-            && self.has_root_enum(root_enums, "Input")
-            && self.has_root_enum(root_enums, "Output")
-            && self.has_type(declarations, "NexusWork")
-            && self.has_type(declarations, "NexusAction")
+        let has_signal_roots =
+            self.has_root_enum(root_enums, "Input") && self.has_root_enum(root_enums, "Output");
+        let has_concrete_nexus =
+            self.has_type(declarations, "NexusWork") && self.has_type(declarations, "NexusAction");
+        if has_signal_roots
+            && (matches!(self.target, RustEmissionTarget::SignalRuntime)
+                || (self.runtime_planes().emits_signal() && has_concrete_nexus))
         {
             variants.extend([
                 "Started", "Stopped", "Admitted", "Rejected", "Triaged", "Replied",
@@ -2823,9 +2837,19 @@ impl RustWriter {
         declarations: &[RustDeclaration],
         root_enums: &[RustEnum],
     ) -> bool {
+        if !self.has_root_enum(root_enums, "Input") || !self.has_root_enum(root_enums, "Output") {
+            return false;
+        }
+        if matches!(self.target, RustEmissionTarget::SignalRuntime) {
+            return true;
+        }
         self.runtime_planes().emits_signal()
-            && self.has_root_enum(root_enums, "Input")
-            && self.has_root_enum(root_enums, "Output")
+            && self.has_type(declarations, "NexusWork")
+            && self.has_type(declarations, "NexusAction")
+    }
+
+    fn emits_concrete_signal_engine_support(&self, declarations: &[RustDeclaration]) -> bool {
+        self.runtime_planes().emits_nexus()
             && self.has_type(declarations, "NexusWork")
             && self.has_type(declarations, "NexusAction")
     }
@@ -2854,6 +2878,8 @@ impl RustWriter {
         root_enums: &[RustEnum],
     ) {
         let emits_signal_engine = self.emits_signal_engine_support(declarations, root_enums);
+        let emits_concrete_signal_engine =
+            emits_signal_engine && self.emits_concrete_signal_engine_support(declarations);
         let emits_nexus_engine = self.emits_nexus_engine_support(declarations);
         let emits_sema_apply = self.emits_sema_apply_support(declarations);
         let emits_sema_observe = self.emits_sema_observe_support(declarations);
@@ -2874,6 +2900,11 @@ impl RustWriter {
 
         if emits_signal_engine {
             self.line("pub trait SignalEngine {");
+            if !emits_concrete_signal_engine {
+                self.line("    type NexusInput;");
+                self.line("    type NexusOutput;");
+                self.blank();
+            }
             self.line("    fn on_start(&mut self) -> Result<(), ActorStartFailure> {");
             self.line("        Ok(())");
             self.line("    }");
@@ -2895,20 +2926,41 @@ impl RustWriter {
             self.line("        self.trace_signal_activation(SignalObjectName::Replied);");
             self.line("    }");
             self.blank();
-            self.line(
-                "    fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work>;",
-            );
-            self.line(
-                "    fn reply_inner(&self, output: nexus::Nexus<nexus::Action>) -> signal::Signal<signal::Output>;",
-            );
+            if emits_concrete_signal_engine {
+                self.line(
+                    "    fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work>;",
+                );
+                self.line(
+                    "    fn reply_inner(&self, output: nexus::Nexus<nexus::Action>) -> signal::Signal<signal::Output>;",
+                );
+            } else {
+                self.line(
+                    "    fn triage_inner(&self, input: signal::Signal<signal::Input>) -> Self::NexusInput;",
+                );
+                self.line(
+                    "    fn reply_inner(&self, output: Self::NexusOutput) -> signal::Signal<signal::Output>;",
+                );
+            }
             self.blank();
-            self.line("    fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work> {");
+            if emits_concrete_signal_engine {
+                self.line("    fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work> {");
+            } else {
+                self.line(
+                    "    fn triage(&self, input: signal::Signal<signal::Input>) -> Self::NexusInput {",
+                );
+            }
             self.line("        let output = self.triage_inner(input);");
             self.line("        self.trace_signal_triaged();");
             self.line("        output");
             self.line("    }");
             self.blank();
-            self.line("    fn reply(&self, output: nexus::Nexus<nexus::Action>) -> signal::Signal<signal::Output> {");
+            if emits_concrete_signal_engine {
+                self.line("    fn reply(&self, output: nexus::Nexus<nexus::Action>) -> signal::Signal<signal::Output> {");
+            } else {
+                self.line(
+                    "    fn reply(&self, output: Self::NexusOutput) -> signal::Signal<signal::Output> {",
+                );
+            }
             self.line("        let signal_output = self.reply_inner(output);");
             self.line("        self.trace_signal_replied();");
             self.line("        signal_output");

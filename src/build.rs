@@ -137,6 +137,18 @@ impl ModuleEmission {
         )
     }
 
+    pub fn signal_runtime() -> Self {
+        Self::signal_runtime_module("signal")
+    }
+
+    pub fn signal_runtime_module(module: impl Into<String>) -> Self {
+        Self::new(
+            module,
+            RustEmissionOptions::feature_gated_nota("nota-text")
+                .with_target(RustEmissionTarget::SignalRuntime),
+        )
+    }
+
     pub fn sema_runtime() -> Self {
         Self::new(
             "sema",

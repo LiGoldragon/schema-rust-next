@@ -120,3 +120,18 @@ fn component_runtime_compatibility_keeps_lib_component_runtime_explicit() {
     );
     assert_eq!(plan.modules(), &[ModuleEmission::lib_component_runtime()]);
 }
+
+#[test]
+fn signal_runtime_module_selects_the_signal_runtime_target() {
+    let plan = GenerationPlan::new(
+        FixtureSchemaDirectory::new("driver-contract").crate_root(),
+        "driver-contract",
+        "0.1.0",
+    )
+    .with_module(ModuleEmission::signal_runtime_module("signal"));
+
+    assert_eq!(
+        plan.modules(),
+        &[ModuleEmission::signal_runtime_module("signal")]
+    );
+}

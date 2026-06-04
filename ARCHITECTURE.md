@@ -70,6 +70,11 @@ must not grow a second parser for the authored form.
 - `RustEmissionTarget::WireContract` emits the external signal or meta-signal
   wire surface: schema nouns, derives, NOTA/rkyv codecs, short headers, and
   signal-frame encode/decode.
+- `RustEmissionTarget::SignalRuntime` emits daemon-local Signal runtime
+  support over signal roots: the Signal envelope, origin route, mail lifecycle
+  nouns, Signal trace object names, and `SignalEngine`. The engine bridge uses
+  associated Nexus input/output types so the Signal schema does not import
+  daemon-internal Nexus vocabulary.
 - `RustEmissionTarget::NexusRuntime` emits daemon-side Nexus support only:
   Nexus envelope, Nexus route/trace vocabulary, and `NexusEngine`.
 - `RustEmissionTarget::SemaRuntime` emits daemon-side SEMA support only: SEMA
@@ -90,8 +95,10 @@ must not grow a second parser for the authored form.
   `schema/lib.schema` through `RustEmissionTarget::WireContract`. A daemon
   crate uses `GenerationPlan::daemon_runtime`, which emits `schema/nexus.schema`
   through `RustEmissionTarget::NexusRuntime` and `schema/sema.schema` through
-  `RustEmissionTarget::SemaRuntime`. An unsplit bootstrap schema such as
-  Spirit's current `schema/lib.schema` uses
+  `RustEmissionTarget::SemaRuntime`; daemon crates that carry a local Signal
+  runtime module add `ModuleEmission::signal_runtime_module("signal")`
+  explicitly. An unsplit bootstrap schema such as Spirit's current
+  `schema/lib.schema` uses
   `GenerationPlan::component_runtime_compatibility`, keeping
   `RustEmissionTarget::ComponentRuntime` explicit until the schema is split.
 - Cross-crate imports in daemon runtime schemas come from Cargo-exposed

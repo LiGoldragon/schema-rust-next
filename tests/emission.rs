@@ -561,6 +561,47 @@ fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
 }
 
 #[test]
+fn signal_runtime_target_emits_signal_runtime_without_nexus_or_sema_support() {
+    let asschema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
+    let generated = RustEmitter::new(
+        RustEmissionOptions::feature_gated_nota("nota-text")
+            .with_target(RustEmissionTarget::SignalRuntime),
+    )
+    .emit_file(&asschema);
+    let code = generated.code.as_str();
+
+    assert!(code.contains("pub enum Input"));
+    assert!(code.contains("pub enum Output"));
+    assert!(code.contains("pub struct OriginRoute"));
+    assert!(code.contains("pub struct MessageIdentifier"));
+    assert!(code.contains("pub struct Signal<Root>"));
+    assert!(code.contains("pub struct MessageSent"));
+    assert!(code.contains("pub struct MessageProcessed<Reply>"));
+    assert!(code.contains("pub mod signal"));
+    assert!(code.contains("pub enum SignalObjectName"));
+    assert!(code.contains("pub trait SignalEngine"));
+    assert!(code.contains("    type NexusInput;"));
+    assert!(code.contains("    type NexusOutput;"));
+    assert!(code.contains(
+        "fn triage_inner(&self, input: signal::Signal<signal::Input>) -> Self::NexusInput;"
+    ));
+    assert!(code.contains(
+        "fn reply_inner(&self, output: Self::NexusOutput) -> signal::Signal<signal::Output>;"
+    ));
+    assert!(code.contains("pub fn encode_signal_frame"));
+    assert!(code.contains("pub fn decode_signal_frame"));
+
+    assert!(!code.contains("pub trait NexusEngine"));
+    assert!(!code.contains("pub trait SemaEngine"));
+    assert!(!code.contains("pub struct Nexus<Root>"));
+    assert!(!code.contains("pub struct Sema<Root>"));
+    assert!(!code.contains("pub enum NexusObjectName"));
+    assert!(!code.contains("pub enum SemaObjectName"));
+    assert!(!code.contains("pub enum Plane"));
+    assert!(!code.contains("pub type NexusRunnerNextStep"));
+}
+
+#[test]
 fn nexus_runtime_target_emits_only_nexus_runtime_support_even_when_other_plane_names_exist() {
     let asschema = FixtureSchema::new("plane-triad.schema").lower("daemon:nexus");
     let generated = RustEmitter::new(
