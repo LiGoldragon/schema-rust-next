@@ -509,6 +509,72 @@ fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
 }
 
 #[test]
+fn nexus_runtime_target_emits_only_nexus_runtime_support_even_when_other_plane_names_exist() {
+    let asschema = FixtureSchema::new("plane-triad.schema").lower("daemon:nexus");
+    let generated = RustEmitter::new(
+        RustEmissionOptions::binary_only().with_target(RustEmissionTarget::NexusRuntime),
+    )
+    .emit_file(&asschema);
+    let code = generated.code.as_str();
+
+    assert!(code.contains("pub enum NexusWork"));
+    assert!(code.contains("pub enum NexusAction"));
+    assert!(code.contains("pub struct OriginRoute"));
+    assert!(code.contains("pub struct Nexus<Root>"));
+    assert!(code.contains("pub mod nexus"));
+    assert!(code.contains("pub enum NexusWorkRoute"));
+    assert!(code.contains("pub enum NexusObjectName"));
+    assert!(code.contains("pub trait NexusEngine"));
+
+    assert!(!code.contains("pub trait SignalEngine"));
+    assert!(!code.contains("pub trait SemaEngine"));
+    assert!(!code.contains("pub struct Signal<Root>"));
+    assert!(!code.contains("pub struct Sema<Root>"));
+    assert!(!code.contains("pub enum SignalObjectName"));
+    assert!(!code.contains("pub enum SemaObjectName"));
+    assert!(!code.contains("pub enum SemaWriteInputRoute"));
+    assert!(!code.contains("pub enum SemaReadInputRoute"));
+    assert!(!code.contains("pub struct MessageSent"));
+    assert!(!code.contains("pub enum Plane"));
+    assert!(!code.contains("pub fn into_nexus_action"));
+    assert!(!code.contains("pub fn into_sema_write_input"));
+}
+
+#[test]
+fn sema_runtime_target_emits_only_sema_runtime_support_even_when_other_plane_names_exist() {
+    let asschema = FixtureSchema::new("plane-triad.schema").lower("daemon:sema");
+    let generated = RustEmitter::new(
+        RustEmissionOptions::binary_only().with_target(RustEmissionTarget::SemaRuntime),
+    )
+    .emit_file(&asschema);
+    let code = generated.code.as_str();
+
+    assert!(code.contains("pub enum SemaWriteInput"));
+    assert!(code.contains("pub enum SemaReadInput"));
+    assert!(code.contains("pub struct OriginRoute"));
+    assert!(code.contains("pub struct Sema<Root>"));
+    assert!(code.contains("pub mod sema"));
+    assert!(code.contains("pub enum SemaWriteInputRoute"));
+    assert!(code.contains("pub enum SemaReadInputRoute"));
+    assert!(code.contains("pub enum SemaObjectName"));
+    assert!(code.contains("pub trait SemaEngine"));
+    assert!(code.contains("fn apply_inner("));
+    assert!(code.contains("fn observe_inner("));
+
+    assert!(!code.contains("pub trait SignalEngine"));
+    assert!(!code.contains("pub trait NexusEngine"));
+    assert!(!code.contains("pub struct Signal<Root>"));
+    assert!(!code.contains("pub struct Nexus<Root>"));
+    assert!(!code.contains("pub enum SignalObjectName"));
+    assert!(!code.contains("pub enum NexusObjectName"));
+    assert!(!code.contains("pub enum NexusWorkRoute"));
+    assert!(!code.contains("pub struct MessageSent"));
+    assert!(!code.contains("pub enum Plane"));
+    assert!(!code.contains("pub fn into_nexus_action"));
+    assert!(!code.contains("pub fn into_signal_output"));
+}
+
+#[test]
 fn runtime_target_emits_read_only_sema_engine_when_read_roots_exist() {
     let asschema = FixtureSchema::new("sema-read-only.schema").lower("daemon:sema");
     let generated = RustEmitter::default().emit_file(&asschema);

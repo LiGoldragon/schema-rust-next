@@ -63,26 +63,28 @@ beside this working trait path.*
 acts on. The emitter should create trait and method targets for those objects,
 not procedural helper functions around them.*
 
-*Schema-plane tests use schema-plane traits. When a schema declares
-`Input` and `Output` roots, the emitter provides a `SignalEngine` trait so
-the signal boundary triages routed Signal input into routed Nexus input and
-turns routed Nexus replies into routed Signal output. When a schema declares
-`NexusInput` and `NexusOutput`, the emitter provides a mutable `NexusEngine`
-target for execution-plane object flow and heavier decision-making. When a
-schema declares a `SemaWriteInput` / `SemaWriteOutput` pair, the emitter
-provides the mutable `SemaEngine::apply` path; when it declares a
-`SemaReadInput` / `SemaReadOutput` pair, the emitter provides the
+*Schema-plane tests use schema-plane traits. Bootstrap all-in-one runtime
+emission may still provide the historical `SignalEngine` trait while that
+schema shape is being split. The canonical per-plane runtime shape is narrower:
+a Nexus runtime target emits a mutable `NexusEngine` target for execution-plane
+object flow and heavier decision-making, and a SEMA runtime target emits
+`SemaEngine`. When a schema declares a `SemaWriteInput` / `SemaWriteOutput`
+pair, the emitter provides the mutable `SemaEngine::apply` path; when it
+declares a `SemaReadInput` / `SemaReadOutput` pair, the emitter provides the
 shared-reference `SemaEngine::observe` path. Runtime tests must invoke those
 generated trait surfaces rather than primitive or test-local commands.*
 
 *Contract and runtime emission are distinct targets. Signal and meta-signal
-contract schemas are external wire surfaces; in `RustEmissionTarget::WireContract`
-this emitter emits schema nouns, derives, NOTA/rkyv codecs, short headers, and
-signal-frame encode/decode only. Runtime and daemon schemas live as schema
-files inside the daemon crate, such as `cloud/schema/nexus.schema`, and use the
-runtime target to emit Signal/Nexus/SEMA plane support, trace hooks, mail
-lifecycle objects, cross-plane projections, and engine traits. Runtime schemas
-import contract roots where the daemon needs the external wire vocabulary.*
+contract schemas are external wire surfaces; in
+`RustEmissionTarget::WireContract` this emitter emits schema nouns, derives,
+NOTA/rkyv codecs, short headers, and signal-frame encode/decode only. Runtime
+and daemon schemas live as schema files inside the daemon crate, such as
+`cloud/schema/nexus.schema` and `cloud/schema/sema.schema`.
+`RustEmissionTarget::NexusRuntime` emits Nexus runtime support only, and
+`RustEmissionTarget::SemaRuntime` emits SEMA runtime support only. Runtime
+schemas import contract roots where the daemon needs the external wire
+vocabulary. `RustEmissionTarget::ComponentRuntime` remains only as the
+compatibility/bootstrap target for unsplit all-in-one schemas.*
 
 *The emitter should move toward a generated component-runner surface for the
 triad engine. A daemon `main` should eventually be a tiny call into generated
@@ -94,30 +96,32 @@ implementations; durable indexes and score tables belong to SEMA; Signal stays
 the communication and reply boundary.*
 
 *The engine traits carry the minimum lifecycle address needed by the runtime
-and persona supervision. `SignalEngine`, `NexusEngine`, and `SemaEngine` emit
-default no-op `on_start` and `on_stop` methods returning typed
-`ActorStartFailure` and `ActorStopFailure` results. Full actor mailbox,
-backpressure, runtime-control, and inner-engine promotion remain future work;
-the lifecycle hooks are the small addressable surface that composes with that
-future without changing the engine method substrate.*
+and persona supervision. `NexusEngine` and `SemaEngine` emit default no-op
+`on_start` and `on_stop` methods returning typed `ActorStartFailure` and
+`ActorStopFailure` results. The bootstrap all-in-one `ComponentRuntime` target
+still emits the historical `SignalEngine` trait while unsplit schemas exist.
+Full actor mailbox, backpressure, runtime-control, and inner-engine promotion
+remain future work; the lifecycle hooks are the small addressable surface that
+composes with that future without changing the engine method substrate.*
 
-*Testing trace hooks belong to those generated engine traits. The emitted
-traits provide default no-op trace hook methods and default wrapper methods
-for `triage`, `reply`, `execute`, `apply`, and `observe`; runtime actors
-implement the inner behavior methods and may override one activation hook per
-plane. Each hook receives that plane's generated object-name enum:
-`SignalObjectName`, `NexusObjectName`, or `SemaObjectName`. The shared
-`ObjectName` enum wraps those plane names for `TraceEvent` transport. Trace
-identity is generated from the schema header through route enums such as
-`InputRoute`, `NexusInputRoute`, and `SemaReadInputRoute`, plus generated
-actor-boundary names such as `SignalObjectName::Started`,
-`NexusObjectName::Entered`, and `SemaObjectName::Stopped`. Trace events do not
-carry cloned input/output payload snapshots. When a trace event's only payload
-is the activated object name, the emitted `TraceEvent` is a transparent
-newtype over `ObjectName`, so NOTA displays the object-name value directly
-instead of adding a one-field record wrapper. A consumer should not carry
-parallel local Signal/Nexus/SEMA trace traits or stringly trace vocabularies
-beside the generated actor/interface contract.*
+*Testing trace hooks belong to those generated engine traits. Per-plane runtime
+targets provide default no-op trace hook methods and default wrapper methods
+for `execute`, `apply`, and `observe`; the bootstrap all-in-one target also
+provides `triage` and `reply`. Runtime actors implement the inner behavior
+methods and may override one activation hook per emitted plane. Each hook
+receives that plane's generated object-name enum: `NexusObjectName` or
+`SemaObjectName`; bootstrap all-in-one emission also carries
+`SignalObjectName`. The shared `ObjectName` enum wraps the emitted plane names
+for `TraceEvent` transport. Trace identity is generated from the schema header
+through route enums such as `NexusInputRoute` and `SemaReadInputRoute`, plus
+generated actor-boundary names such as `NexusObjectName::Entered` and
+`SemaObjectName::Stopped`. Trace events do not carry cloned input/output
+payload snapshots. When a trace event's only payload is the activated object
+name, the emitted `TraceEvent` is a transparent newtype over `ObjectName`, so
+NOTA displays the object-name value directly instead of adding a one-field
+record wrapper. A consumer should not carry parallel local Nexus/SEMA trace
+traits or stringly trace vocabularies beside the generated actor/interface
+contract.*
 
 *Tracing is a schema-defined typed interface and stays typed until the client
 display boundary. The emitter should eventually generate the component-specific
@@ -193,9 +197,9 @@ the NOTA derives, `use nota_next::*` items, inherent bridges, and root
 `nota-text`; a binary-only daemon crate builds generated contract dependencies
 with `default-features = false` and carries no `nota_next` in its dependency
 closure. `NotaSurface::Disabled` omits the NOTA surface entirely. `target`
-selects whether the generated file is a `WireContract` or `ComponentRuntime`;
-the default target is `ComponentRuntime` for compatibility while runtime plane
-schema files are still landing.*
+selects whether the generated file is a `WireContract`, `NexusRuntime`, or
+`SemaRuntime`; the default target remains `ComponentRuntime` for compatibility
+while existing unsplit runtime schemas are being retired.*
 
 *NOTA owns raw delimiter structure and serialization shapes. Schema owns all
 type-name keywords: scalar names such as `String`, `Integer`, and `Boolean`,

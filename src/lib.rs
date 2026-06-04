@@ -215,8 +215,11 @@ impl RustModule {
 /// future binary-only clients) build the contract crate with the
 /// default features off and carry no `nota-next` in their dependency
 /// closure. The default target is [`RustEmissionTarget::ComponentRuntime`]
-/// so existing runtime consumers keep their generated engine traits until
-/// they opt into [`RustEmissionTarget::WireContract`].
+/// so existing all-in-one runtime consumers keep their generated engine traits.
+/// New signal and meta-signal contract repos should opt into
+/// [`RustEmissionTarget::WireContract`]. New daemon plane schemas should opt
+/// into [`RustEmissionTarget::NexusRuntime`] or
+/// [`RustEmissionTarget::SemaRuntime`] for per-plane runtime emission.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustEmissionOptions {
     pub nota_surface: NotaSurface,
@@ -287,13 +290,89 @@ impl RustEmissionOptions {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RustEmissionTarget {
+    /// External signal or meta-signal wire vocabulary plus codecs only.
     WireContract,
+    /// Bootstrap all-in-one runtime emission for unsplit schemas.
     ComponentRuntime,
+    /// Daemon-side Nexus plane runtime support only.
+    NexusRuntime,
+    /// Daemon-side SEMA plane runtime support only.
+    SemaRuntime,
 }
 
 impl RustEmissionTarget {
     fn emits_runtime_support(self) -> bool {
-        matches!(self, Self::ComponentRuntime)
+        self.runtime_planes().emits_any()
+    }
+
+    fn runtime_planes(self) -> RuntimePlaneSet {
+        match self {
+            Self::WireContract => RuntimePlaneSet::none(),
+            Self::ComponentRuntime => RuntimePlaneSet::all(),
+            Self::NexusRuntime => RuntimePlaneSet::nexus_only(),
+            Self::SemaRuntime => RuntimePlaneSet::sema_only(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RuntimePlaneSet {
+    signal: bool,
+    nexus: bool,
+    sema: bool,
+}
+
+impl RuntimePlaneSet {
+    fn none() -> Self {
+        Self {
+            signal: false,
+            nexus: false,
+            sema: false,
+        }
+    }
+
+    fn all() -> Self {
+        Self {
+            signal: true,
+            nexus: true,
+            sema: true,
+        }
+    }
+
+    fn nexus_only() -> Self {
+        Self {
+            signal: false,
+            nexus: true,
+            sema: false,
+        }
+    }
+
+    fn sema_only() -> Self {
+        Self {
+            signal: false,
+            nexus: false,
+            sema: true,
+        }
+    }
+
+    fn emits_signal(self) -> bool {
+        self.signal
+    }
+
+    fn emits_nexus(self) -> bool {
+        self.nexus
+    }
+
+    fn emits_sema(self) -> bool {
+        self.sema
+    }
+
+    fn emits_any(self) -> bool {
+        self.signal || self.nexus || self.sema
+    }
+
+    fn emits_all(self) -> bool {
+        self.signal && self.nexus && self.sema
     }
 }
 
@@ -792,6 +871,14 @@ impl RustWriter {
 
     fn emits_runtime_support(&self) -> bool {
         self.target.emits_runtime_support()
+    }
+
+    fn runtime_planes(&self) -> RuntimePlaneSet {
+        self.target.runtime_planes()
+    }
+
+    fn emits_all_runtime_planes(&self) -> bool {
+        self.runtime_planes().emits_all()
     }
 
     /// Record the set of type names used as a `BTreeMap` key anywhere
@@ -1522,9 +1609,21 @@ impl RustWriter {
     }
 
     fn emit_trace_support(&mut self, declarations: &[RustDeclaration], root_enums: &[RustEnum]) {
-        let signal_roots = self.trace_signal_roots(root_enums);
-        let nexus_roots = self.trace_nexus_roots(declarations);
-        let sema_roots = self.trace_sema_roots(declarations);
+        let signal_roots = if self.runtime_planes().emits_signal() {
+            self.trace_signal_roots(root_enums)
+        } else {
+            Vec::new()
+        };
+        let nexus_roots = if self.runtime_planes().emits_nexus() {
+            self.trace_nexus_roots(declarations)
+        } else {
+            Vec::new()
+        };
+        let sema_roots = if self.runtime_planes().emits_sema() {
+            self.trace_sema_roots(declarations)
+        } else {
+            Vec::new()
+        };
         let signal_actor_variants = self.trace_signal_actor_variants(declarations, root_enums);
         let nexus_actor_variants = self.trace_nexus_actor_variants(declarations);
         let sema_actor_variants = self.trace_sema_actor_variants(declarations);
@@ -1656,7 +1755,7 @@ impl RustWriter {
             .iter()
             .filter_map(|declaration| match declaration.value() {
                 RustTypeDeclaration::Enum(value)
-                    if self.is_plane_route_type(declaration.name().as_str()) =>
+                    if self.emits_plane_route_type(declaration.name().as_str()) =>
                 {
                     Some(value)
                 }
@@ -1742,7 +1841,8 @@ impl RustWriter {
         root_enums: &[RustEnum],
     ) -> Vec<&'static str> {
         let mut variants = Vec::new();
-        if self.has_root_enum(root_enums, "Input")
+        if self.runtime_planes().emits_signal()
+            && self.has_root_enum(root_enums, "Input")
             && self.has_root_enum(root_enums, "Output")
             && self.has_type(declarations, "NexusWork")
             && self.has_type(declarations, "NexusAction")
@@ -1756,7 +1856,10 @@ impl RustWriter {
 
     fn trace_nexus_actor_variants(&self, declarations: &[RustDeclaration]) -> Vec<&'static str> {
         let mut variants = Vec::new();
-        if self.has_type(declarations, "NexusWork") && self.has_type(declarations, "NexusAction") {
+        if self.runtime_planes().emits_nexus()
+            && self.has_type(declarations, "NexusWork")
+            && self.has_type(declarations, "NexusAction")
+        {
             variants.extend(["Started", "Stopped", "Entered", "Decided"]);
         }
         variants
@@ -1764,6 +1867,9 @@ impl RustWriter {
 
     fn trace_sema_actor_variants(&self, declarations: &[RustDeclaration]) -> Vec<&'static str> {
         let mut variants = Vec::new();
+        if !self.runtime_planes().emits_sema() {
+            return variants;
+        }
         let has_write = self.has_type(declarations, "SemaWriteInput")
             && self.has_type(declarations, "SemaWriteOutput");
         let has_read = self.has_type(declarations, "SemaReadInput")
@@ -1792,34 +1898,69 @@ impl RustWriter {
         )
     }
 
+    fn emits_plane_route_type(&self, type_name: &str) -> bool {
+        self.is_plane_route_type(type_name)
+            && ((self.runtime_planes().emits_nexus()
+                && matches!(type_name, "NexusWork" | "NexusAction"))
+                || (self.runtime_planes().emits_sema()
+                    && matches!(
+                        type_name,
+                        "SemaWriteInput" | "SemaWriteOutput" | "SemaReadInput" | "SemaReadOutput"
+                    )))
+    }
+
     fn emit_mail_event_support(&mut self, root_enums: &[RustEnum]) {
-        self.line(self.copy_data_type_derive());
-        self.line("pub struct MessageIdentifier(pub Integer);");
-        if self.nota_surface.emits_nota() {
-            self.emit_nota_copy_inherent_bridge("MessageIdentifier");
+        if self.runtime_planes().emits_signal() {
+            self.line(self.copy_data_type_derive());
+            self.line("pub struct MessageIdentifier(pub Integer);");
+            if self.nota_surface.emits_nota() {
+                self.emit_nota_copy_inherent_bridge("MessageIdentifier");
+            }
+            self.blank();
         }
-        self.blank();
         self.line(self.copy_data_type_derive());
         self.line("pub struct OriginRoute(pub Integer);");
         if self.nota_surface.emits_nota() {
             self.emit_nota_copy_inherent_bridge("OriginRoute");
         }
         self.blank();
+        if self.emits_all_runtime_planes() {
+            self.emit_signal_message_root_support(root_enums);
+            self.blank();
+            self.emit_schema_plane_support();
+            self.blank();
+        }
+        if self.runtime_planes().emits_signal() {
+            self.emit_plane_envelope("Signal");
+            self.blank();
+        }
+        if self.runtime_planes().emits_nexus() {
+            self.emit_plane_envelope("Nexus");
+            self.blank();
+        }
+        if self.runtime_planes().emits_sema() {
+            self.emit_plane_envelope("Sema");
+            self.blank();
+        }
+        if self.runtime_planes().emits_signal() {
+            if !self.emits_all_runtime_planes() {
+                self.emit_signal_message_root_support(root_enums);
+                self.blank();
+            }
+            self.emit_signal_mail_lifecycle_support(root_enums);
+        }
+    }
+
+    fn emit_signal_message_root_support(&mut self, root_enums: &[RustEnum]) {
         self.line(self.copy_data_type_derive());
         self.line("pub enum MessageRoot {");
         for root_enum in root_enums {
             self.line(format!("    {},", root_enum.name()));
         }
         self.line("}");
-        self.blank();
-        self.emit_schema_plane_support();
-        self.blank();
-        self.emit_plane_envelope("Signal");
-        self.blank();
-        self.emit_plane_envelope("Nexus");
-        self.blank();
-        self.emit_plane_envelope("Sema");
-        self.blank();
+    }
+
+    fn emit_signal_mail_lifecycle_support(&mut self, root_enums: &[RustEnum]) {
         self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
         self.line("pub struct MessageSent {");
         self.line("    pub identifier: MessageIdentifier,");
@@ -1971,7 +2112,9 @@ impl RustWriter {
     }
 
     fn emit_plane_namespaces(&mut self, declarations: &[RustDeclaration], root_enums: &[RustEnum]) {
-        if self.has_root_enum(root_enums, "Input") || self.has_root_enum(root_enums, "Output") {
+        if self.runtime_planes().emits_signal()
+            && (self.has_root_enum(root_enums, "Input") || self.has_root_enum(root_enums, "Output"))
+        {
             self.line("pub mod signal {");
             if self.has_root_enum(root_enums, "Input") {
                 self.line("    pub type Input = super::Input;");
@@ -1983,7 +2126,10 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-        if self.has_type(declarations, "NexusWork") || self.has_type(declarations, "NexusAction") {
+        if self.runtime_planes().emits_nexus()
+            && (self.has_type(declarations, "NexusWork")
+                || self.has_type(declarations, "NexusAction"))
+        {
             self.line("pub mod nexus {");
             if self.has_type(declarations, "NexusWork") {
                 self.line("    pub type Work = super::NexusWork;");
@@ -1995,10 +2141,11 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-        if self.has_type(declarations, "SemaWriteInput")
-            || self.has_type(declarations, "SemaWriteOutput")
-            || self.has_type(declarations, "SemaReadInput")
-            || self.has_type(declarations, "SemaReadOutput")
+        if self.runtime_planes().emits_sema()
+            && (self.has_type(declarations, "SemaWriteInput")
+                || self.has_type(declarations, "SemaWriteOutput")
+                || self.has_type(declarations, "SemaReadInput")
+                || self.has_type(declarations, "SemaReadOutput"))
         {
             self.line("pub mod sema {");
             if self.has_type(declarations, "SemaWriteInput") {
@@ -2017,22 +2164,22 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
-        if self.has_type(declarations, "NexusWork") {
+        if self.runtime_planes().emits_nexus() && self.has_type(declarations, "NexusWork") {
             self.emit_plane_origin_route_constructor("NexusWork", "nexus::Nexus", "nexus::Nexus");
         }
-        if self.has_type(declarations, "NexusAction") {
+        if self.runtime_planes().emits_nexus() && self.has_type(declarations, "NexusAction") {
             self.emit_plane_origin_route_constructor("NexusAction", "nexus::Nexus", "nexus::Nexus");
         }
-        if self.has_type(declarations, "SemaWriteInput") {
+        if self.runtime_planes().emits_sema() && self.has_type(declarations, "SemaWriteInput") {
             self.emit_plane_origin_route_constructor("SemaWriteInput", "sema::Sema", "sema::Sema");
         }
-        if self.has_type(declarations, "SemaWriteOutput") {
+        if self.runtime_planes().emits_sema() && self.has_type(declarations, "SemaWriteOutput") {
             self.emit_plane_origin_route_constructor("SemaWriteOutput", "sema::Sema", "sema::Sema");
         }
-        if self.has_type(declarations, "SemaReadInput") {
+        if self.runtime_planes().emits_sema() && self.has_type(declarations, "SemaReadInput") {
             self.emit_plane_origin_route_constructor("SemaReadInput", "sema::Sema", "sema::Sema");
         }
-        if self.has_type(declarations, "SemaReadOutput") {
+        if self.runtime_planes().emits_sema() && self.has_type(declarations, "SemaReadOutput") {
             self.emit_plane_origin_route_constructor("SemaReadOutput", "sema::Sema", "sema::Sema");
         }
     }
@@ -2058,6 +2205,9 @@ impl RustWriter {
         declarations: &[RustDeclaration],
         root_enums: &[RustEnum],
     ) {
+        if !self.emits_all_runtime_planes() {
+            return;
+        }
         let signal_input = self.root_enum_named(root_enums, "Input");
         let signal_output = self.root_enum_named(root_enums, "Output");
         let nexus_work = self.declaration_enum_named(declarations, "NexusWork");
@@ -2400,21 +2550,45 @@ impl RustWriter {
         self.line("impl<Current, Previous> AcceptPrevious<Previous> for Current where Current: UpgradeFrom<Previous> {}");
     }
 
+    fn emits_signal_engine_support(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> bool {
+        self.runtime_planes().emits_signal()
+            && self.has_root_enum(root_enums, "Input")
+            && self.has_root_enum(root_enums, "Output")
+            && self.has_type(declarations, "NexusWork")
+            && self.has_type(declarations, "NexusAction")
+    }
+
+    fn emits_nexus_engine_support(&self, declarations: &[RustDeclaration]) -> bool {
+        self.runtime_planes().emits_nexus()
+            && self.has_type(declarations, "NexusWork")
+            && self.has_type(declarations, "NexusAction")
+    }
+
+    fn emits_sema_apply_support(&self, declarations: &[RustDeclaration]) -> bool {
+        self.runtime_planes().emits_sema()
+            && self.has_type(declarations, "SemaWriteInput")
+            && self.has_type(declarations, "SemaWriteOutput")
+    }
+
+    fn emits_sema_observe_support(&self, declarations: &[RustDeclaration]) -> bool {
+        self.runtime_planes().emits_sema()
+            && self.has_type(declarations, "SemaReadInput")
+            && self.has_type(declarations, "SemaReadOutput")
+    }
+
     fn emit_schema_plane_trait_support(
         &mut self,
         declarations: &[RustDeclaration],
         root_enums: &[RustEnum],
     ) {
-        let emits_signal_engine = self.has_root_enum(root_enums, "Input")
-            && self.has_root_enum(root_enums, "Output")
-            && self.has_type(declarations, "NexusWork")
-            && self.has_type(declarations, "NexusAction");
-        let emits_nexus_engine =
-            self.has_type(declarations, "NexusWork") && self.has_type(declarations, "NexusAction");
-        let emits_sema_apply = self.has_type(declarations, "SemaWriteInput")
-            && self.has_type(declarations, "SemaWriteOutput");
-        let emits_sema_observe = self.has_type(declarations, "SemaReadInput")
-            && self.has_type(declarations, "SemaReadOutput");
+        let emits_signal_engine = self.emits_signal_engine_support(declarations, root_enums);
+        let emits_nexus_engine = self.emits_nexus_engine_support(declarations);
+        let emits_sema_apply = self.emits_sema_apply_support(declarations);
+        let emits_sema_observe = self.emits_sema_observe_support(declarations);
         let emits_sema_engine = emits_sema_apply || emits_sema_observe;
 
         if emits_signal_engine || emits_nexus_engine || emits_sema_engine {

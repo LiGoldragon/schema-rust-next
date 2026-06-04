@@ -63,21 +63,29 @@ must not grow a second parser for the authored form.
 - `RustEmissionTarget::WireContract` emits the external signal or meta-signal
   wire surface: schema nouns, derives, NOTA/rkyv codecs, short headers, and
   signal-frame encode/decode.
-- `RustEmissionTarget::ComponentRuntime` emits daemon-side runtime support.
-  Runtime plane schemas live as schema files inside the daemon crate, such as
-  `cloud/schema/nexus.schema`, and may import contract roots when daemon logic
-  needs the external wire vocabulary. Runtime code implements the generated
-  Signal, Nexus, and SEMA traits on data-bearing engine objects. Signal triage
-  creates generated Nexus envelopes directly, Nexus executes through the
-  generated mutable trait, and SEMA splits writes from reads.
+- `RustEmissionTarget::NexusRuntime` emits daemon-side Nexus support only:
+  Nexus envelope, Nexus route/trace vocabulary, and `NexusEngine`.
+- `RustEmissionTarget::SemaRuntime` emits daemon-side SEMA support only: SEMA
+  envelope, SEMA route/trace vocabulary, and `SemaEngine`. SEMA write and read
+  halves emit independently, so a read-only SEMA schema still gets
+  `observe`.
+- Runtime plane schemas live as schema files inside the daemon crate, such as
+  `cloud/schema/nexus.schema` and `cloud/schema/sema.schema`, and may import
+  contract roots when daemon logic needs the external wire vocabulary. Runtime
+  code implements generated Nexus and SEMA traits on data-bearing engine
+  objects.
+- `RustEmissionTarget::ComponentRuntime` is the compatibility/bootstrap target
+  for unsplit all-in-one schemas. It emits the old combined Signal/Nexus/SEMA
+  runtime support, including the generic plane enum and cross-plane
+  projections. New daemon schemas use the per-plane targets instead.
 - Signal, Nexus, and SEMA roots are emitted from the same schema shape:
   imports/exports, input, output, and namespace. Emission may attach different
   support traits per plane, but the generated Rust mirrors the same authored
   schema structure.
-- Plane namespaces are emitted for the three runtime planes. `signal::Input`,
-  `nexus::Input`, `sema::WriteInput`, and `sema::ReadInput` are the public
-  shape for plane-local payloads; the current flat backing names are a
-  bootstrap detail until schema files split fully by plane.
+- Plane namespaces are emitted only for the selected runtime plane.
+  `nexus::Work`, `nexus::Action`, `sema::WriteInput`, and `sema::ReadInput`
+  are the public shape for plane-local payloads; the current flat backing
+  names are a bootstrap detail until schema files split fully by plane.
 - Single-colon schema namespaces map to generated Rust module paths. The
   schema path `spirit-next:nexus:Mail` becomes a module/type path under
   `src/schema/` without inventing a second naming system.
@@ -94,11 +102,13 @@ must not grow a second parser for the authored form.
   logic.
 - Generated signal roots emit rkyv-derived data types, NOTA text conversion,
   short-header route triage, and binary signal-frame encode/decode methods.
-- Generated signal roots emit mail-event nouns. `signal::Signal<Root>`,
-  `nexus::Nexus<Root>`, and `sema::Sema<Root>` are the automatic envelopes for
-  root objects in each plane; each has an `origin_route` field plus the root
-  object. `schema::Plane::{Signal,Nexus,Sema}` is the data-carrying match
-  surface for code that needs to branch across planes.
+- Bootstrap all-in-one runtime emission emits mail-event nouns.
+  `signal::Signal<Root>`, `nexus::Nexus<Root>`, and `sema::Sema<Root>` are the
+  automatic envelopes for root objects in each plane; each has an
+  `origin_route` field plus the root object.
+  `schema::Plane::{Signal,Nexus,Sema}` is the data-carrying match surface for
+  code that needs to branch across planes. Per-plane runtime targets emit only
+  their own envelope and do not emit the generic three-plane enum.
   `MessageSent` records the message identifier, origin route, root schema type,
   and short header, and pushes through `MessageSentHook` so routers, UI layers,
   or introspection subscribers can react without polling. `MessageProcessed`
@@ -125,42 +135,42 @@ must not grow a second parser for the authored form.
   runner does not move algorithms into `main`; it gives the component a
   schema-defined place to instantiate Signal, Nexus, SEMA, transport, trace,
   and binary configuration surfaces.
-- Generated engine traits carry minimal lifecycle hooks. `SignalEngine`,
-  `NexusEngine`, and `SemaEngine` each emit default no-op `on_start` and
-  `on_stop` methods returning typed `ActorStartFailure` and
-  `ActorStopFailure` results. These hooks give the generated runner and
-  persona supervision a graceful-start/stop address without introducing full
-  actor mailbox or runtime-control traits before those behaviors are needed.
-- Schemas that declare `Input`/`Output` roots emit a `SignalEngine` trait.
-  The Signal trait only owns boundary triage: Signal input becomes Nexus input,
-  and Nexus replies become Signal output. Schemas that declare
-  `NexusInput`/`NexusOutput` emit a mutable `NexusEngine` trait for the heavier
-  execution and decision plane. Schemas that declare a `SemaWriteInput` /
-  `SemaWriteOutput` pair emit the mutable `SemaEngine::apply` path; schemas
-  that declare a `SemaReadInput` / `SemaReadOutput` pair emit the
-  shared-reference `SemaEngine::observe` path. Tests and runtime code use those
-  generated plane traits so Signal, Nexus, and SEMA take and return routed root
-  messages for their own planes.
+- Generated engine traits carry minimal lifecycle hooks. `NexusEngine` and
+  `SemaEngine` each emit default no-op `on_start` and `on_stop` methods
+  returning typed `ActorStartFailure` and `ActorStopFailure` results. The
+  bootstrap all-in-one `ComponentRuntime` target still emits the historical
+  `SignalEngine` trait while unsplit schemas exist. These hooks give the
+  generated runner and persona supervision a graceful-start/stop address
+  without introducing full actor mailbox or runtime-control traits before those
+  behaviors are needed.
+- The `NexusRuntime` target emits a mutable `NexusEngine` trait for the heavier
+  execution and decision plane. The `SemaRuntime` target emits
+  `SemaEngine`. Schemas that declare a `SemaWriteInput` / `SemaWriteOutput`
+  pair emit the mutable `SemaEngine::apply` path; schemas that declare a
+  `SemaReadInput` / `SemaReadOutput` pair emit the shared-reference
+  `SemaEngine::observe` path. Tests and runtime code use those generated plane
+  traits so Nexus and SEMA take and return routed root messages for their own
+  planes.
 - Cross-plane projections prefer exact operation names before falling back to a
   unique payload type. That lets a realistic interface carry both
   `Lookup(RecordIdentifier)` and `Remove(RecordIdentifier)` without routing the
   read operation to the write plane, while still allowing semantic output
   bridges such as `Recorded(SemaReceipt)` to become
   `RecordAccepted(SemaReceipt)` when the payload type is unique.
-- The engine traits also own testing trace hooks. Implementors provide
-  `triage_inner`, `reply_inner`, `decide`, `apply_inner`, and `observe_inner`;
-  generated default wrappers keep the public method names
-  `triage`/`reply`/`execute`/`apply`/`observe` and call default no-op trace
-  hooks around the inner behavior. Those hooks activate typed generated
-  object names, not strings: Signal receives `SignalObjectName`, Nexus receives
-  `NexusObjectName`, and SEMA receives `SemaObjectName`. Interface/header names
-  use route enums such as `InputRoute`, `NexusInputRoute`, and
+- The engine traits also own testing trace hooks. Per-plane implementors
+  provide `decide`, `apply_inner`, and `observe_inner`; the bootstrap
+  all-in-one target also provides `triage_inner` and `reply_inner`. Generated
+  default wrappers keep the public method names `execute`/`apply`/`observe`
+  (plus `triage`/`reply` in the bootstrap target) and call default no-op trace
+  hooks around the inner behavior. Those hooks activate typed generated object
+  names, not strings: Nexus receives `NexusObjectName`, and SEMA receives
+  `SemaObjectName`; the bootstrap target also emits `SignalObjectName`.
+  Interface/header names use route enums such as `NexusInputRoute` and
   `SemaReadInputRoute`; actor-boundary names live beside the plane that owns
-  them (`SignalObjectName::Started`, `NexusObjectName::Entered`,
-  `SemaObjectName::WriteApplied`, `SemaObjectName::Stopped`). The
-  generated `ObjectName` enum wraps the per-plane names for `TraceEvent`
-  transport. A non-trace consumer gets the no-op defaults without linking a
-  parallel instrumentation API.
+  them (`NexusObjectName::Entered`, `SemaObjectName::WriteApplied`,
+  `SemaObjectName::Stopped`). The generated `ObjectName` enum wraps the emitted
+  per-plane names for `TraceEvent` transport. A non-trace consumer gets the
+  no-op defaults without linking a parallel instrumentation API.
 - Trace remains typed data until the client display boundary. The generated
   `TraceEvent` is the component-specific event noun. Its current emitted shape
   is a transparent tuple newtype over `ObjectName`, so `TraceEvent` serializes
@@ -214,13 +224,15 @@ must not grow a second parser for the authored form.
   `BTreeMap` is a brace block of `key value` pairs `{k1 v1 ...}`, and an
   `Option` is the atom `None` or the paren `(Some inner)`.
 - `RustEmissionOptions` carries `nota_surface` and `target`. The named
-  constructors (`::binary_only`, `::feature_gated_nota("…")`,
+  constructors (`::binary_only`, `::feature_gated_nota("...")`,
   `::always_enabled_nota`) set the compatibility target
   `RustEmissionTarget::ComponentRuntime`; callers use `with_target` to select
   `RustEmissionTarget::WireContract` for external signal and meta-signal
-  contract generation. `RustEmissionOptions::default()` and
-  `RustEmitter::default()` both pick `NotaSurface::FeatureGated { feature:
-  "nota-text" }` plus `ComponentRuntime`. `NotaSurface::Disabled` removes the
+  contract generation, `RustEmissionTarget::NexusRuntime` for daemon Nexus
+  schemas, and `RustEmissionTarget::SemaRuntime` for daemon SEMA schemas.
+  `RustEmissionOptions::default()` and `RustEmitter::default()` both pick
+  `NotaSurface::FeatureGated { feature: "nota-text" }` plus
+  `ComponentRuntime`. `NotaSurface::Disabled` removes the
   NOTA surface entirely: no derives, no `use nota_next::*` items, no
   `from_nota_block` / `to_nota` bridges, no root `FromStr` / `Display`
   impls. `NotaSurface::AlwaysEnabled` keeps the older unconditional emission
