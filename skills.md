@@ -23,3 +23,12 @@ and `RustEmissionTarget::SemaRuntime` for `schema/sema.schema` files. Those
 per-plane runtime schemas import contract roots where needed.
 `RustEmissionTarget::ComponentRuntime` is the compatibility/bootstrap target
 for unsplit all-in-one schemas, not the canonical daemon shape.
+
+Component `build.rs` files should use `schema_rust_next::build` rather than
+hand-rolling package loading, lowering, emission, or checked-in freshness
+logic. Use `GenerationPlan::wire_contract` for contract crates,
+`GenerationPlan::daemon_runtime` for daemon `nexus.schema` + `sema.schema`,
+and `GenerationPlan::component_runtime_compatibility` only for current
+all-in-one bootstrap schemas. Register imported contract schemas through
+`DependencySchema` entries sourced from Cargo build metadata, not hard-coded
+local checkout paths.

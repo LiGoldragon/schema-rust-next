@@ -104,6 +104,12 @@ impl FixtureSchemaDirectory {
             .join("schema")
     }
 
+    pub fn crate_root(&self) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(&self.crate_directory)
+    }
+
     pub fn schema(&self, module_path: impl AsRef<Path>) -> FixtureSchema {
         FixtureSchema::new(
             self.crate_directory

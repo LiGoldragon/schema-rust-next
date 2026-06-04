@@ -86,6 +86,15 @@ schemas import contract roots where the daemon needs the external wire
 vocabulary. `RustEmissionTarget::ComponentRuntime` remains only as the
 compatibility/bootstrap target for unsplit all-in-one schemas.*
 
+*The per-crate generation driver belongs here, beside Rust emission. Component
+build scripts should call `schema_rust_next::build` for the load/lower/emit
+and freshness-check sequence instead of copying a local build loop. Contract
+crates use the wire-contract plan, daemon crates use the daemon-runtime plan
+for `nexus.schema` and `sema.schema`, and unsplit bootstrap crates use the
+component-runtime compatibility plan explicitly until their schemas split.
+Runtime schemas import contract roots through Cargo-exposed dependency schema
+directories, not hard-coded workspace paths.*
+
 *The emitter should move toward a generated component-runner surface for the
 triad engine. A daemon `main` should eventually be a tiny call into generated
 or macro-created startup code; the schema-emitted substrate defines the

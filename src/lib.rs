@@ -6,6 +6,7 @@ use schema_next::{
     TypeDeclaration, TypeReference, Visibility,
 };
 
+pub mod build;
 pub mod migration;
 pub use migration::{DefaultRenderer, MigrationEmitter, TypeRenderer};
 

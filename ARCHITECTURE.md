@@ -13,6 +13,13 @@
 - `RustModulePath` maps single-colon schema identities to crate-local generated
   module paths. The crate namespace segment is dropped; `lib` becomes
   `src/schema/lib.rs`, and nested modules become files under `src/schema/`.
+- `build::GenerationDriver` is the shared build-script orchestrator for
+  source-visible generated schema modules. It owns the per-crate
+  load/lower/emit/freshness sequence so component `build.rs` files do not
+  hand-roll it.
+- `build::GenerationPlan` names the crate package, target modules, and
+  dependency schema directories. `build::ModuleEmission` selects the
+  Rust-emission target for each schema module.
 
 ## Input Contract
 
@@ -78,6 +85,23 @@ must not grow a second parser for the authored form.
   for unsplit all-in-one schemas. It emits the old combined Signal/Nexus/SEMA
   runtime support, including the generic plane enum and cross-plane
   projections. New daemon schemas use the per-plane targets instead.
+- Build scripts use the shared driver rather than local emit loops. A signal or
+  meta-signal contract crate uses `GenerationPlan::wire_contract`, which emits
+  `schema/lib.schema` through `RustEmissionTarget::WireContract`. A daemon
+  crate uses `GenerationPlan::daemon_runtime`, which emits `schema/nexus.schema`
+  through `RustEmissionTarget::NexusRuntime` and `schema/sema.schema` through
+  `RustEmissionTarget::SemaRuntime`. An unsplit bootstrap schema such as
+  Spirit's current `schema/lib.schema` uses
+  `GenerationPlan::component_runtime_compatibility`, keeping
+  `RustEmissionTarget::ComponentRuntime` explicit until the schema is split.
+- Cross-crate imports in daemon runtime schemas come from Cargo-exposed
+  dependency schema directories. Dependency crates publish their `schema/`
+  directory as build metadata, and consumers register those paths as
+  `build::DependencySchema` entries before lowering runtime modules.
+- Driver freshness is source-visible and committed. Generated source schema
+  artifacts, assembled `.asschema` artifacts, and Rust files are checked
+  against the working tree; a component-specific update environment variable
+  rewrites them when the schema intentionally changes.
 - Signal, Nexus, and SEMA roots are emitted from the same schema shape:
   imports/exports, input, output, and namespace. Emission may attach different
   support traits per plane, but the generated Rust mirrors the same authored
