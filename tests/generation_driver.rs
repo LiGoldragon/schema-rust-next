@@ -57,6 +57,16 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
         "nexus runtime target should emit NexusEngine:\n{nexus}"
     );
     assert!(
+        nexus.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"),
+        "nexus runtime target should keep its NOTA surface feature-gated:\n{nexus}"
+    );
+    assert!(
+        nexus.contains(
+            "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]"
+        ),
+        "nexus runtime support nouns should derive NOTA only behind the feature:\n{nexus}"
+    );
+    assert!(
         nexus.contains("pub type NexusRunnerNextStep = triad_runtime::NextStep<ContractOutput, SemaWriteInput, SemaReadInput, std::convert::Infallible, NexusWork>;"),
         "nexus runtime target should emit runner glue over imported contract output:\n{nexus}"
     );
@@ -77,6 +87,16 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
     assert!(
         sema.contains("pub trait SemaEngine"),
         "sema runtime target should emit SemaEngine:\n{sema}"
+    );
+    assert!(
+        sema.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"),
+        "sema runtime target should keep its NOTA surface feature-gated:\n{sema}"
+    );
+    assert!(
+        sema.contains(
+            "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]"
+        ),
+        "sema runtime support nouns should derive NOTA only behind the feature:\n{sema}"
     );
     assert!(
         !sema.contains("pub trait NexusEngine"),

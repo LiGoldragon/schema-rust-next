@@ -271,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "schema-rust-next"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "nota-next",
  "rkyv",

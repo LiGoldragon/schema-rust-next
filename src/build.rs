@@ -133,7 +133,8 @@ impl ModuleEmission {
     pub fn nexus_runtime() -> Self {
         Self::new(
             "nexus",
-            RustEmissionOptions::binary_only().with_target(RustEmissionTarget::NexusRuntime),
+            RustEmissionOptions::feature_gated_nota("nota-text")
+                .with_target(RustEmissionTarget::NexusRuntime),
         )
     }
 
@@ -152,7 +153,8 @@ impl ModuleEmission {
     pub fn sema_runtime() -> Self {
         Self::new(
             "sema",
-            RustEmissionOptions::binary_only().with_target(RustEmissionTarget::SemaRuntime),
+            RustEmissionOptions::feature_gated_nota("nota-text")
+                .with_target(RustEmissionTarget::SemaRuntime),
         )
     }
 

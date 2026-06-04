@@ -102,8 +102,11 @@ must not grow a second parser for the authored form.
   through `RustEmissionTarget::NexusRuntime` and `schema/sema.schema` through
   `RustEmissionTarget::SemaRuntime`; daemon crates that carry a local Signal
   runtime module add `ModuleEmission::signal_runtime_module("signal")`
-  explicitly. An unsplit bootstrap schema such as Spirit's current
-  `schema/lib.schema` uses
+  explicitly. The shared runtime module builders use the same feature-gated
+  `nota-text` surface as contracts: normal binary daemon builds keep
+  `nota-next` absent, while all-feature trace/testing builds can round-trip
+  generated runtime support nouns such as `NexusObjectName` and
+  `SemaObjectName`. An unsplit bootstrap schema uses
   `GenerationPlan::component_runtime_compatibility`, keeping
   `RustEmissionTarget::ComponentRuntime` explicit until the schema is split.
 - Cross-crate imports in daemon runtime schemas come from Cargo-exposed
