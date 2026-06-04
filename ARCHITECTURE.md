@@ -80,7 +80,12 @@ must not grow a second parser for the authored form.
 - `RustEmissionTarget::SemaRuntime` emits daemon-side SEMA support only: SEMA
   envelope, SEMA route/trace vocabulary, and `SemaEngine`. SEMA write and read
   halves emit independently, so a read-only SEMA schema still gets
-  `observe`.
+  `observe`. Split SEMA schemas may use plane-local operation root names
+  (`WriteInput`, `WriteOutput`, `ReadInput`, `ReadOutput`) instead of the old
+  all-in-one backing names (`SemaWriteInput`, `SemaWriteOutput`,
+  `SemaReadInput`, `SemaReadOutput`); the generated public namespace remains
+  `sema::WriteInput`, `sema::WriteOutput`, `sema::ReadInput`, and
+  `sema::ReadOutput`.
 - Runtime plane schemas live as schema files inside the daemon crate, such as
   `cloud/schema/nexus.schema` and `cloud/schema/sema.schema`, and may import
   contract roots when daemon logic needs the external wire vocabulary. Runtime

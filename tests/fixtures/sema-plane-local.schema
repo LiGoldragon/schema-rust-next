@@ -1,0 +1,28 @@
+{}
+[WriteInput ReadInput]
+[WriteOutput ReadOutput]
+{
+  WriteInput [Record Remove]
+  Record Entry
+  Remove RecordIdentifier
+
+  ReadInput [Observe Lookup]
+  Observe Query
+  Lookup RecordIdentifier
+
+  WriteOutput [Recorded Missed]
+  Recorded Receipt
+  Missed ErrorReport
+
+  ReadOutput [Observed Found Missed]
+  Observed RecordSet
+  Found Entry
+
+  Topic String
+  RecordIdentifier Integer
+  Entry { Topic * }
+  Query { Topic * }
+  RecordSet (Vec Entry)
+  Receipt { RecordIdentifier * }
+  ErrorReport { message String }
+}

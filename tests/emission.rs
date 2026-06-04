@@ -668,6 +668,42 @@ fn sema_runtime_target_emits_only_sema_runtime_support_even_when_other_plane_nam
 }
 
 #[test]
+fn sema_runtime_target_accepts_plane_local_root_names() {
+    let asschema = FixtureSchema::new("sema-plane-local.schema").lower("daemon:sema");
+    let generated = RustEmitter::new(
+        RustEmissionOptions::binary_only().with_target(RustEmissionTarget::SemaRuntime),
+    )
+    .emit_file(&asschema);
+    let code = generated.code.as_str();
+
+    assert!(code.contains("pub enum WriteInput"));
+    assert!(code.contains("pub enum ReadInput"));
+    assert!(code.contains("pub enum WriteOutput"));
+    assert!(code.contains("pub enum ReadOutput"));
+    assert!(code.contains("pub struct Sema<Root>"));
+    assert!(code.contains("pub mod sema"));
+    assert!(code.contains("pub type WriteInput = super::WriteInput;"));
+    assert!(code.contains("pub type ReadInput = super::ReadInput;"));
+    assert!(code.contains("impl WriteInput"));
+    assert!(code.contains("impl ReadOutput"));
+    assert!(code.contains("pub enum SemaObjectName"));
+    assert!(code.contains("WriteApplied,"));
+    assert!(code.contains("ReadObserved,"));
+    assert!(code.contains("pub trait SemaEngine"));
+    assert!(code.contains(
+        "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;"
+    ));
+    assert!(code.contains(
+        "fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;"
+    ));
+
+    assert!(!code.contains("pub trait SignalEngine"));
+    assert!(!code.contains("pub trait NexusEngine"));
+    assert!(!code.contains("pub struct Signal<Root>"));
+    assert!(!code.contains("pub struct Nexus<Root>"));
+}
+
+#[test]
 fn runtime_target_emits_read_only_sema_engine_when_read_roots_exist() {
     let asschema = FixtureSchema::new("sema-read-only.schema").lower("daemon:sema");
     let generated = RustEmitter::default().emit_file(&asschema);

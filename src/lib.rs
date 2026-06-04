@@ -1676,13 +1676,13 @@ impl RustWriter {
             Vec::new()
         };
         let sema_roots = if self.runtime_planes().emits_sema() {
-            self.trace_sema_roots(declarations)
+            self.trace_sema_roots(declarations, root_enums)
         } else {
             Vec::new()
         };
         let signal_actor_variants = self.trace_signal_actor_variants(declarations, root_enums);
         let nexus_actor_variants = self.trace_nexus_actor_variants(declarations);
-        let sema_actor_variants = self.trace_sema_actor_variants(declarations);
+        let sema_actor_variants = self.trace_sema_actor_variants(declarations, root_enums);
         let has_signal = !signal_roots.is_empty() || !signal_actor_variants.is_empty();
         let has_nexus = !nexus_roots.is_empty() || !nexus_actor_variants.is_empty();
         let has_sema = !sema_roots.is_empty() || !sema_actor_variants.is_empty();
@@ -1871,22 +1871,29 @@ impl RustWriter {
     fn trace_sema_roots<'schema>(
         &self,
         declarations: &'schema [RustDeclaration],
+        root_enums: &'schema [RustEnum],
     ) -> Vec<TraceInterfaceRoot<'schema>> {
         let mut roots = Vec::new();
-        for (type_name, object_variant, name_prefix) in [
-            ("SemaWriteInput", "WriteInput", "SemaWriteInput"),
-            ("SemaReadInput", "ReadInput", "SemaReadInput"),
-            ("SemaWriteOutput", "WriteOutput", "SemaWriteOutput"),
-            ("SemaReadOutput", "ReadOutput", "SemaReadOutput"),
-        ] {
-            if let Some(declaration) = self.declaration_enum_named(declarations, type_name) {
-                roots.push(TraceInterfaceRoot {
-                    object_variant,
-                    name_prefix,
-                    type_name: declaration.name(),
-                    enum_declaration: declaration,
-                });
-            }
+        for root in [
+            self.sema_write_input_root(declarations, root_enums)
+                .map(|root| (root, "WriteInput", "SemaWriteInput")),
+            self.sema_read_input_root(declarations, root_enums)
+                .map(|root| (root, "ReadInput", "SemaReadInput")),
+            self.sema_write_output_root(declarations, root_enums)
+                .map(|root| (root, "WriteOutput", "SemaWriteOutput")),
+            self.sema_read_output_root(declarations, root_enums)
+                .map(|root| (root, "ReadOutput", "SemaReadOutput")),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let (declaration, object_variant, name_prefix) = root;
+            roots.push(TraceInterfaceRoot {
+                object_variant,
+                name_prefix,
+                type_name: declaration.name(),
+                enum_declaration: declaration,
+            });
         }
         roots
     }
@@ -1923,15 +1930,17 @@ impl RustWriter {
         variants
     }
 
-    fn trace_sema_actor_variants(&self, declarations: &[RustDeclaration]) -> Vec<&'static str> {
+    fn trace_sema_actor_variants(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> Vec<&'static str> {
         let mut variants = Vec::new();
         if !self.runtime_planes().emits_sema() {
             return variants;
         }
-        let has_write = self.has_type(declarations, "SemaWriteInput")
-            && self.has_type(declarations, "SemaWriteOutput");
-        let has_read = self.has_type(declarations, "SemaReadInput")
-            && self.has_type(declarations, "SemaReadOutput");
+        let has_write = self.has_sema_write_roots(declarations, root_enums);
+        let has_read = self.has_sema_read_roots(declarations, root_enums);
         if has_write || has_read {
             variants.extend(["Started", "Stopped"]);
         }
@@ -1949,6 +1958,10 @@ impl RustWriter {
             type_name,
             "NexusWork"
                 | "NexusAction"
+                | "WriteInput"
+                | "WriteOutput"
+                | "ReadInput"
+                | "ReadOutput"
                 | "SemaWriteInput"
                 | "SemaWriteOutput"
                 | "SemaReadInput"
@@ -1963,7 +1976,14 @@ impl RustWriter {
                 || (self.runtime_planes().emits_sema()
                     && matches!(
                         type_name,
-                        "SemaWriteInput" | "SemaWriteOutput" | "SemaReadInput" | "SemaReadOutput"
+                        "WriteInput"
+                            | "WriteOutput"
+                            | "ReadInput"
+                            | "ReadOutput"
+                            | "SemaWriteInput"
+                            | "SemaWriteOutput"
+                            | "SemaReadInput"
+                            | "SemaReadOutput"
                     )))
     }
 
@@ -2199,24 +2219,28 @@ impl RustWriter {
             self.line("}");
             self.blank();
         }
+        let sema_write_input_name = self.sema_write_input_type_name(declarations, root_enums);
+        let sema_write_output_name = self.sema_write_output_type_name(declarations, root_enums);
+        let sema_read_input_name = self.sema_read_input_type_name(declarations, root_enums);
+        let sema_read_output_name = self.sema_read_output_type_name(declarations, root_enums);
         if self.runtime_planes().emits_sema()
-            && (self.has_type(declarations, "SemaWriteInput")
-                || self.has_type(declarations, "SemaWriteOutput")
-                || self.has_type(declarations, "SemaReadInput")
-                || self.has_type(declarations, "SemaReadOutput"))
+            && (sema_write_input_name.is_some()
+                || sema_write_output_name.is_some()
+                || sema_read_input_name.is_some()
+                || sema_read_output_name.is_some())
         {
             self.line("pub mod sema {");
-            if self.has_type(declarations, "SemaWriteInput") {
-                self.line("    pub type WriteInput = super::SemaWriteInput;");
+            if let Some(type_name) = sema_write_input_name {
+                self.line(format!("    pub type WriteInput = super::{type_name};"));
             }
-            if self.has_type(declarations, "SemaWriteOutput") {
-                self.line("    pub type WriteOutput = super::SemaWriteOutput;");
+            if let Some(type_name) = sema_write_output_name {
+                self.line(format!("    pub type WriteOutput = super::{type_name};"));
             }
-            if self.has_type(declarations, "SemaReadInput") {
-                self.line("    pub type ReadInput = super::SemaReadInput;");
+            if let Some(type_name) = sema_read_input_name {
+                self.line(format!("    pub type ReadInput = super::{type_name};"));
             }
-            if self.has_type(declarations, "SemaReadOutput") {
-                self.line("    pub type ReadOutput = super::SemaReadOutput;");
+            if let Some(type_name) = sema_read_output_name {
+                self.line(format!("    pub type ReadOutput = super::{type_name};"));
             }
             self.line("    pub type Sema<Root> = super::Sema<Root>;");
             self.line("}");
@@ -2228,17 +2252,25 @@ impl RustWriter {
         if self.runtime_planes().emits_nexus() && self.has_type(declarations, "NexusAction") {
             self.emit_plane_origin_route_constructor("NexusAction", "nexus::Nexus", "nexus::Nexus");
         }
-        if self.runtime_planes().emits_sema() && self.has_type(declarations, "SemaWriteInput") {
-            self.emit_plane_origin_route_constructor("SemaWriteInput", "sema::Sema", "sema::Sema");
+        if self.runtime_planes().emits_sema()
+            && let Some(type_name) = sema_write_input_name
+        {
+            self.emit_plane_origin_route_constructor(type_name, "sema::Sema", "sema::Sema");
         }
-        if self.runtime_planes().emits_sema() && self.has_type(declarations, "SemaWriteOutput") {
-            self.emit_plane_origin_route_constructor("SemaWriteOutput", "sema::Sema", "sema::Sema");
+        if self.runtime_planes().emits_sema()
+            && let Some(type_name) = sema_write_output_name
+        {
+            self.emit_plane_origin_route_constructor(type_name, "sema::Sema", "sema::Sema");
         }
-        if self.runtime_planes().emits_sema() && self.has_type(declarations, "SemaReadInput") {
-            self.emit_plane_origin_route_constructor("SemaReadInput", "sema::Sema", "sema::Sema");
+        if self.runtime_planes().emits_sema()
+            && let Some(type_name) = sema_read_input_name
+        {
+            self.emit_plane_origin_route_constructor(type_name, "sema::Sema", "sema::Sema");
         }
-        if self.runtime_planes().emits_sema() && self.has_type(declarations, "SemaReadOutput") {
-            self.emit_plane_origin_route_constructor("SemaReadOutput", "sema::Sema", "sema::Sema");
+        if self.runtime_planes().emits_sema()
+            && let Some(type_name) = sema_read_output_name
+        {
+            self.emit_plane_origin_route_constructor(type_name, "sema::Sema", "sema::Sema");
         }
     }
 
@@ -2860,16 +2892,144 @@ impl RustWriter {
             && self.has_type(declarations, "NexusAction")
     }
 
-    fn emits_sema_apply_support(&self, declarations: &[RustDeclaration]) -> bool {
-        self.runtime_planes().emits_sema()
-            && self.has_type(declarations, "SemaWriteInput")
-            && self.has_type(declarations, "SemaWriteOutput")
+    fn sema_write_input_type_name(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> Option<&'static str> {
+        if self.has_type(declarations, "WriteInput") || self.has_root_enum(root_enums, "WriteInput")
+        {
+            Some("WriteInput")
+        } else if self.has_type(declarations, "SemaWriteInput") {
+            Some("SemaWriteInput")
+        } else {
+            None
+        }
     }
 
-    fn emits_sema_observe_support(&self, declarations: &[RustDeclaration]) -> bool {
-        self.runtime_planes().emits_sema()
-            && self.has_type(declarations, "SemaReadInput")
-            && self.has_type(declarations, "SemaReadOutput")
+    fn sema_write_output_type_name(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> Option<&'static str> {
+        if self.has_type(declarations, "WriteOutput")
+            || self.has_root_enum(root_enums, "WriteOutput")
+        {
+            Some("WriteOutput")
+        } else if self.has_type(declarations, "SemaWriteOutput") {
+            Some("SemaWriteOutput")
+        } else {
+            None
+        }
+    }
+
+    fn sema_read_input_type_name(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> Option<&'static str> {
+        if self.has_type(declarations, "ReadInput") || self.has_root_enum(root_enums, "ReadInput") {
+            Some("ReadInput")
+        } else if self.has_type(declarations, "SemaReadInput") {
+            Some("SemaReadInput")
+        } else {
+            None
+        }
+    }
+
+    fn sema_read_output_type_name(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> Option<&'static str> {
+        if self.has_type(declarations, "ReadOutput") || self.has_root_enum(root_enums, "ReadOutput")
+        {
+            Some("ReadOutput")
+        } else if self.has_type(declarations, "SemaReadOutput") {
+            Some("SemaReadOutput")
+        } else {
+            None
+        }
+    }
+
+    fn sema_write_input_root<'schema>(
+        &self,
+        declarations: &'schema [RustDeclaration],
+        root_enums: &'schema [RustEnum],
+    ) -> Option<&'schema RustEnum> {
+        self.declaration_enum_named(declarations, "WriteInput")
+            .or_else(|| self.root_enum_named(root_enums, "WriteInput"))
+            .or_else(|| self.declaration_enum_named(declarations, "SemaWriteInput"))
+    }
+
+    fn sema_write_output_root<'schema>(
+        &self,
+        declarations: &'schema [RustDeclaration],
+        root_enums: &'schema [RustEnum],
+    ) -> Option<&'schema RustEnum> {
+        self.declaration_enum_named(declarations, "WriteOutput")
+            .or_else(|| self.root_enum_named(root_enums, "WriteOutput"))
+            .or_else(|| self.declaration_enum_named(declarations, "SemaWriteOutput"))
+    }
+
+    fn sema_read_input_root<'schema>(
+        &self,
+        declarations: &'schema [RustDeclaration],
+        root_enums: &'schema [RustEnum],
+    ) -> Option<&'schema RustEnum> {
+        self.declaration_enum_named(declarations, "ReadInput")
+            .or_else(|| self.root_enum_named(root_enums, "ReadInput"))
+            .or_else(|| self.declaration_enum_named(declarations, "SemaReadInput"))
+    }
+
+    fn sema_read_output_root<'schema>(
+        &self,
+        declarations: &'schema [RustDeclaration],
+        root_enums: &'schema [RustEnum],
+    ) -> Option<&'schema RustEnum> {
+        self.declaration_enum_named(declarations, "ReadOutput")
+            .or_else(|| self.root_enum_named(root_enums, "ReadOutput"))
+            .or_else(|| self.declaration_enum_named(declarations, "SemaReadOutput"))
+    }
+
+    fn has_sema_write_roots(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> bool {
+        self.sema_write_input_root(declarations, root_enums)
+            .is_some()
+            && self
+                .sema_write_output_root(declarations, root_enums)
+                .is_some()
+    }
+
+    fn has_sema_read_roots(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> bool {
+        self.sema_read_input_root(declarations, root_enums)
+            .is_some()
+            && self
+                .sema_read_output_root(declarations, root_enums)
+                .is_some()
+    }
+
+    fn emits_sema_apply_support(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> bool {
+        self.runtime_planes().emits_sema() && self.has_sema_write_roots(declarations, root_enums)
+    }
+
+    fn emits_sema_observe_support(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> bool {
+        self.runtime_planes().emits_sema() && self.has_sema_read_roots(declarations, root_enums)
     }
 
     fn emit_schema_plane_trait_support(
@@ -2881,8 +3041,8 @@ impl RustWriter {
         let emits_concrete_signal_engine =
             emits_signal_engine && self.emits_concrete_signal_engine_support(declarations);
         let emits_nexus_engine = self.emits_nexus_engine_support(declarations);
-        let emits_sema_apply = self.emits_sema_apply_support(declarations);
-        let emits_sema_observe = self.emits_sema_observe_support(declarations);
+        let emits_sema_apply = self.emits_sema_apply_support(declarations, root_enums);
+        let emits_sema_observe = self.emits_sema_observe_support(declarations, root_enums);
         let emits_sema_engine = emits_sema_apply || emits_sema_observe;
         let nexus_runner_shape = if emits_nexus_engine {
             self.nexus_runner_shape(declarations)
