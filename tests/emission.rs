@@ -510,10 +510,10 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
     ));
     assert!(code.contains("fn continuation_limit(&self) -> triad_runtime::ContinuationLimit"));
     assert!(code.contains(
-        "fn apply_sema_write(&mut self, input: CommandSemaWrite) -> SemaWriteCompleted;"
+        "fn apply_sema_write(&mut self, origin_route: OriginRoute, input: CommandSemaWrite) -> SemaWriteCompleted;"
     ));
     assert!(
-        code.contains("fn observe_sema_read(&self, input: CommandSemaRead) -> SemaReadCompleted;")
+        code.contains("fn observe_sema_read(&self, origin_route: OriginRoute, input: CommandSemaRead) -> SemaReadCompleted;")
     );
     assert!(code.contains("fn run_effect(&mut self, input: CommandEffect) -> EffectCompleted;"));
     assert!(code.contains(

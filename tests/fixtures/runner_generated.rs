@@ -1118,8 +1118,8 @@ pub trait NexusEngine {
         triad_runtime::ContinuationLimit::default()
     }
 
-    fn apply_sema_write(&mut self, input: CommandSemaWrite) -> SemaWriteCompleted;
-    fn observe_sema_read(&self, input: CommandSemaRead) -> SemaReadCompleted;
+    fn apply_sema_write(&mut self, origin_route: OriginRoute, input: CommandSemaWrite) -> SemaWriteCompleted;
+    fn observe_sema_read(&self, origin_route: OriginRoute, input: CommandSemaRead) -> SemaReadCompleted;
     fn run_effect(&mut self, input: CommandEffect) -> EffectCompleted;
     fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ReplyToSignal;
 
@@ -1168,12 +1168,12 @@ where
     }
 
     fn apply_sema_write(&mut self, write: Self::SemaWrite) -> Self::Work {
-        let output: SemaWriteCompleted = NexusEngine::apply_sema_write(self.engine, write);
+        let output: SemaWriteCompleted = NexusEngine::apply_sema_write(self.engine, self.origin_route, write);
         NexusWork::sema_write_completed(output)
     }
 
     fn observe_sema_read(&self, read: Self::SemaRead) -> Self::Work {
-        let output: SemaReadCompleted = NexusEngine::observe_sema_read(self.engine, read);
+        let output: SemaReadCompleted = NexusEngine::observe_sema_read(self.engine, self.origin_route, read);
         NexusWork::sema_read_completed(output)
     }
 

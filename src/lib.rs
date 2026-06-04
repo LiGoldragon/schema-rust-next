@@ -2385,7 +2385,7 @@ impl RustWriter {
         self.line("    fn apply_sema_write(&mut self, write: Self::SemaWrite) -> Self::Work {");
         if let Some(output_type) = shape.sema_write_output_type.as_deref() {
             self.line(format!(
-                "        let output: {output_type} = NexusEngine::apply_sema_write(self.engine, write);"
+                "        let output: {output_type} = NexusEngine::apply_sema_write(self.engine, self.origin_route, write);"
             ));
             self.line("        NexusWork::sema_write_completed(output)");
         } else {
@@ -2396,7 +2396,7 @@ impl RustWriter {
         self.line("    fn observe_sema_read(&self, read: Self::SemaRead) -> Self::Work {");
         if let Some(output_type) = shape.sema_read_output_type.as_deref() {
             self.line(format!(
-                "        let output: {output_type} = NexusEngine::observe_sema_read(self.engine, read);"
+                "        let output: {output_type} = NexusEngine::observe_sema_read(self.engine, self.origin_route, read);"
             ));
             self.line("        NexusWork::sema_read_completed(output)");
         } else {
@@ -2943,7 +2943,7 @@ impl RustWriter {
                     shape.sema_write_output_type.as_deref(),
                 ) {
                     self.line(format!(
-                        "    fn apply_sema_write(&mut self, input: {input_type}) -> {output_type};"
+                        "    fn apply_sema_write(&mut self, origin_route: OriginRoute, input: {input_type}) -> {output_type};"
                     ));
                 }
                 if let (Some(input_type), Some(output_type)) = (
@@ -2951,7 +2951,7 @@ impl RustWriter {
                     shape.sema_read_output_type.as_deref(),
                 ) {
                     self.line(format!(
-                        "    fn observe_sema_read(&self, input: {input_type}) -> {output_type};"
+                        "    fn observe_sema_read(&self, origin_route: OriginRoute, input: {input_type}) -> {output_type};"
                     ));
                 }
                 if let (Some(input_type), Some(output_type)) = (
