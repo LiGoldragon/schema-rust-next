@@ -577,6 +577,7 @@ fn signal_runtime_target_emits_signal_runtime_without_nexus_or_sema_support() {
     assert!(code.contains("pub struct Signal<Root>"));
     assert!(code.contains("pub struct MessageSent"));
     assert!(code.contains("pub struct MessageProcessed<Reply>"));
+    assert!(code.contains("#[allow(clippy::module_inception)]\npub mod signal"));
     assert!(code.contains("pub mod signal"));
     assert!(code.contains("pub enum SignalObjectName"));
     assert!(code.contains("pub trait SignalEngine"));
@@ -614,6 +615,7 @@ fn nexus_runtime_target_emits_only_nexus_runtime_support_even_when_other_plane_n
     assert!(code.contains("pub enum NexusAction"));
     assert!(code.contains("pub struct OriginRoute"));
     assert!(code.contains("pub struct Nexus<Root>"));
+    assert!(code.contains("#[allow(clippy::module_inception)]\npub mod nexus"));
     assert!(code.contains("pub mod nexus"));
     assert!(code.contains("pub enum NexusWorkRoute"));
     assert!(code.contains("pub enum NexusObjectName"));
@@ -646,6 +648,7 @@ fn sema_runtime_target_emits_only_sema_runtime_support_even_when_other_plane_nam
     assert!(code.contains("pub enum SemaReadInput"));
     assert!(code.contains("pub struct OriginRoute"));
     assert!(code.contains("pub struct Sema<Root>"));
+    assert!(code.contains("#[allow(clippy::module_inception)]\npub mod sema"));
     assert!(code.contains("pub mod sema"));
     assert!(code.contains("pub enum SemaWriteInputRoute"));
     assert!(code.contains("pub enum SemaReadInputRoute"));
@@ -681,6 +684,7 @@ fn sema_runtime_target_accepts_plane_local_root_names() {
     assert!(code.contains("pub enum WriteOutput"));
     assert!(code.contains("pub enum ReadOutput"));
     assert!(code.contains("pub struct Sema<Root>"));
+    assert!(code.contains("#[allow(clippy::module_inception)]\npub mod sema"));
     assert!(code.contains("pub mod sema"));
     assert!(code.contains("pub type WriteInput = super::WriteInput;"));
     assert!(code.contains("pub type ReadInput = super::ReadInput;"));

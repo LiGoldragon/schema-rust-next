@@ -1305,6 +1305,7 @@ impl signal::Signal<Output> {
     }
 }
 
+#[allow(clippy::module_inception)]
 pub mod signal {
     pub type Input = super::Input;
     pub type Output = super::Output;

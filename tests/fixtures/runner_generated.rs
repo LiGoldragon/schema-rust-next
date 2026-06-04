@@ -956,18 +956,21 @@ impl signal::Signal<Output> {
     }
 }
 
+#[allow(clippy::module_inception)]
 pub mod signal {
     pub type Input = super::Input;
     pub type Output = super::Output;
     pub type Signal<Root> = super::Signal<Root>;
 }
 
+#[allow(clippy::module_inception)]
 pub mod nexus {
     pub type Work = super::NexusWork;
     pub type Action = super::NexusAction;
     pub type Nexus<Root> = super::Nexus<Root>;
 }
 
+#[allow(clippy::module_inception)]
 pub mod sema {
     pub type WriteInput = super::SemaWriteInput;
     pub type WriteOutput = super::SemaWriteOutput;

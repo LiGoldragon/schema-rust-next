@@ -2193,6 +2193,7 @@ impl RustWriter {
         if self.runtime_planes().emits_signal()
             && (self.has_root_enum(root_enums, "Input") || self.has_root_enum(root_enums, "Output"))
         {
+            self.line("#[allow(clippy::module_inception)]");
             self.line("pub mod signal {");
             if self.has_root_enum(root_enums, "Input") {
                 self.line("    pub type Input = super::Input;");
@@ -2208,6 +2209,7 @@ impl RustWriter {
             && (self.has_type(declarations, "NexusWork")
                 || self.has_type(declarations, "NexusAction"))
         {
+            self.line("#[allow(clippy::module_inception)]");
             self.line("pub mod nexus {");
             if self.has_type(declarations, "NexusWork") {
                 self.line("    pub type Work = super::NexusWork;");
@@ -2229,6 +2231,7 @@ impl RustWriter {
                 || sema_read_input_name.is_some()
                 || sema_read_output_name.is_some())
         {
+            self.line("#[allow(clippy::module_inception)]");
             self.line("pub mod sema {");
             if let Some(type_name) = sema_write_input_name {
                 self.line(format!("    pub type WriteInput = super::{type_name};"));
