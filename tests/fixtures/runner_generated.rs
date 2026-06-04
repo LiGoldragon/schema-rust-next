@@ -7,20 +7,38 @@ pub type Path = std::string::String;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum NexusWork {
-    SignalArrived(Input),
-    SemaWriteCompleted(SemaWriteOutput),
-    SemaReadCompleted(SemaReadOutput),
-    EffectCompleted(NexusEffectResult),
+    SignalArrived(SignalArrived),
+    SemaWriteCompleted(SemaWriteCompleted),
+    SemaReadCompleted(SemaReadCompleted),
+    EffectCompleted(EffectCompleted),
 }
+
+pub type SignalArrived = Input;
+
+pub type SemaWriteCompleted = SemaWriteOutput;
+
+pub type SemaReadCompleted = SemaReadOutput;
+
+pub type EffectCompleted = NexusEffectResult;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum NexusAction {
-    CommandSemaWrite(SemaWriteInput),
-    CommandSemaRead(SemaReadInput),
-    ReplyToSignal(Output),
-    CommandEffect(NexusEffectCommand),
-    Continue(NexusWork),
+    CommandSemaWrite(CommandSemaWrite),
+    CommandSemaRead(CommandSemaRead),
+    ReplyToSignal(ReplyToSignal),
+    CommandEffect(CommandEffect),
+    Continue(Continue),
 }
+
+pub type CommandSemaWrite = SemaWriteInput;
+
+pub type CommandSemaRead = SemaReadInput;
+
+pub type ReplyToSignal = Output;
+
+pub type CommandEffect = NexusEffectCommand;
+
+pub type Continue = NexusWork;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum NexusEffectCommand {
@@ -150,41 +168,41 @@ impl From<Topic> for Query {
 }
 
 impl NexusWork {
-    pub fn signal_arrived(payload: Input) -> Self {
+    pub fn signal_arrived(payload: SignalArrived) -> Self {
         Self::SignalArrived(payload)
     }
 
-    pub fn sema_write_completed(payload: SemaWriteOutput) -> Self {
+    pub fn sema_write_completed(payload: SemaWriteCompleted) -> Self {
         Self::SemaWriteCompleted(payload)
     }
 
-    pub fn sema_read_completed(payload: SemaReadOutput) -> Self {
+    pub fn sema_read_completed(payload: SemaReadCompleted) -> Self {
         Self::SemaReadCompleted(payload)
     }
 
-    pub fn effect_completed(payload: NexusEffectResult) -> Self {
+    pub fn effect_completed(payload: EffectCompleted) -> Self {
         Self::EffectCompleted(payload)
     }
 }
 
 impl NexusAction {
-    pub fn command_sema_write(payload: SemaWriteInput) -> Self {
+    pub fn command_sema_write(payload: CommandSemaWrite) -> Self {
         Self::CommandSemaWrite(payload)
     }
 
-    pub fn command_sema_read(payload: SemaReadInput) -> Self {
+    pub fn command_sema_read(payload: CommandSemaRead) -> Self {
         Self::CommandSemaRead(payload)
     }
 
-    pub fn reply_to_signal(payload: Output) -> Self {
+    pub fn reply_to_signal(payload: ReplyToSignal) -> Self {
         Self::ReplyToSignal(payload)
     }
 
-    pub fn command_effect(payload: NexusEffectCommand) -> Self {
+    pub fn command_effect(payload: CommandEffect) -> Self {
         Self::CommandEffect(payload)
     }
 
-    pub fn r#continue(payload: NexusWork) -> Self {
+    pub fn r#continue(payload: Continue) -> Self {
         Self::Continue(payload)
     }
 }
@@ -254,60 +272,6 @@ impl Output {
 
     pub fn error(payload: ErrorReport) -> Self {
         Self::Error(payload)
-    }
-}
-
-impl From<Input> for NexusWork {
-    fn from(payload: Input) -> Self {
-        Self::SignalArrived(payload)
-    }
-}
-
-impl From<SemaWriteOutput> for NexusWork {
-    fn from(payload: SemaWriteOutput) -> Self {
-        Self::SemaWriteCompleted(payload)
-    }
-}
-
-impl From<SemaReadOutput> for NexusWork {
-    fn from(payload: SemaReadOutput) -> Self {
-        Self::SemaReadCompleted(payload)
-    }
-}
-
-impl From<NexusEffectResult> for NexusWork {
-    fn from(payload: NexusEffectResult) -> Self {
-        Self::EffectCompleted(payload)
-    }
-}
-
-impl From<SemaWriteInput> for NexusAction {
-    fn from(payload: SemaWriteInput) -> Self {
-        Self::CommandSemaWrite(payload)
-    }
-}
-
-impl From<SemaReadInput> for NexusAction {
-    fn from(payload: SemaReadInput) -> Self {
-        Self::CommandSemaRead(payload)
-    }
-}
-
-impl From<Output> for NexusAction {
-    fn from(payload: Output) -> Self {
-        Self::ReplyToSignal(payload)
-    }
-}
-
-impl From<NexusEffectCommand> for NexusAction {
-    fn from(payload: NexusEffectCommand) -> Self {
-        Self::CommandEffect(payload)
-    }
-}
-
-impl From<NexusWork> for NexusAction {
-    fn from(payload: NexusWork) -> Self {
-        Self::Continue(payload)
     }
 }
 
@@ -1048,46 +1012,6 @@ impl SemaReadOutput {
     }
 }
 
-impl nexus::Nexus<nexus::Action> {
-    pub fn into_sema_write_input(self) -> sema::Sema<sema::WriteInput> {
-        let origin_route = self.origin_route();
-        match self.into_root() {
-            NexusAction::CommandSemaWrite(input) => input.with_origin_route(origin_route),
-            _ => panic!("nexus action is not a SEMA write input"),
-        }
-    }
-
-    pub fn into_sema_read_input(self) -> sema::Sema<sema::ReadInput> {
-        let origin_route = self.origin_route();
-        match self.into_root() {
-            NexusAction::CommandSemaRead(input) => input.with_origin_route(origin_route),
-            _ => panic!("nexus action is not a SEMA read input"),
-        }
-    }
-
-    pub fn into_signal_output(self) -> signal::Signal<signal::Output> {
-        let origin_route = self.origin_route();
-        match self.into_root() {
-            NexusAction::ReplyToSignal(output) => output.with_origin_route(origin_route),
-            _ => panic!("nexus action is not a signal reply"),
-        }
-    }
-}
-
-impl sema::Sema<sema::WriteOutput> {
-    pub fn into_nexus_work(self) -> nexus::Nexus<nexus::Work> {
-        let origin_route = self.origin_route();
-        NexusWork::from(self.into_root()).with_origin_route(origin_route)
-    }
-}
-
-impl sema::Sema<sema::ReadOutput> {
-    pub fn into_nexus_work(self) -> nexus::Nexus<nexus::Work> {
-        let origin_route = self.origin_route();
-        NexusWork::from(self.into_root()).with_origin_route(origin_route)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ActorStartFailure {
     ResourceBusy(String),
@@ -1122,7 +1046,7 @@ impl std::fmt::Display for ActorStopFailure {
 
 impl std::error::Error for ActorStopFailure {}
 
-pub type NexusRunnerNextStep = triad_runtime::NextStep<Output, SemaWriteInput, SemaReadInput, NexusEffectCommand, NexusWork>;
+pub type NexusRunnerNextStep = triad_runtime::NextStep<ReplyToSignal, CommandSemaWrite, CommandSemaRead, CommandEffect, NexusWork>;
 
 impl NexusAction {
     pub fn into_runner_next_step(self) -> NexusRunnerNextStep {
@@ -1194,10 +1118,10 @@ pub trait NexusEngine {
         triad_runtime::ContinuationLimit::default()
     }
 
-    fn apply_sema_write(&mut self, input: SemaWriteInput) -> SemaWriteOutput;
-    fn observe_sema_read(&self, input: SemaReadInput) -> SemaReadOutput;
-    fn run_effect(&mut self, input: NexusEffectCommand) -> NexusEffectResult;
-    fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> Output;
+    fn apply_sema_write(&mut self, input: CommandSemaWrite) -> SemaWriteCompleted;
+    fn observe_sema_read(&self, input: CommandSemaRead) -> SemaReadCompleted;
+    fn run_effect(&mut self, input: CommandEffect) -> EffectCompleted;
+    fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ReplyToSignal;
 
     fn decide(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>;
 
@@ -1232,10 +1156,10 @@ impl<'engine, Engine> triad_runtime::RunnerEngines for NexusRunnerAdapter<'engin
 where
     Engine: NexusEngine,
 {
-    type Reply = Output;
-    type SemaWrite = SemaWriteInput;
-    type SemaRead = SemaReadInput;
-    type Effect = NexusEffectCommand;
+    type Reply = ReplyToSignal;
+    type SemaWrite = CommandSemaWrite;
+    type SemaRead = CommandSemaRead;
+    type Effect = CommandEffect;
     type Work = NexusWork;
 
     fn decide_next_step(&mut self, work: Self::Work) -> triad_runtime::runner::RunnerNextStep<Self> {
@@ -1244,17 +1168,17 @@ where
     }
 
     fn apply_sema_write(&mut self, write: Self::SemaWrite) -> Self::Work {
-        let output: SemaWriteOutput = NexusEngine::apply_sema_write(self.engine, write);
+        let output: SemaWriteCompleted = NexusEngine::apply_sema_write(self.engine, write);
         NexusWork::sema_write_completed(output)
     }
 
     fn observe_sema_read(&self, read: Self::SemaRead) -> Self::Work {
-        let output: SemaReadOutput = NexusEngine::observe_sema_read(self.engine, read);
+        let output: SemaReadCompleted = NexusEngine::observe_sema_read(self.engine, read);
         NexusWork::sema_read_completed(output)
     }
 
     fn run_effect(&mut self, effect: Self::Effect) -> Self::Work {
-        let output: NexusEffectResult = NexusEngine::run_effect(self.engine, effect);
+        let output: EffectCompleted = NexusEngine::run_effect(self.engine, effect);
         NexusWork::effect_completed(output)
     }
 

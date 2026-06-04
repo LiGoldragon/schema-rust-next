@@ -2709,6 +2709,28 @@ impl RustWriter {
             .map(ToOwned::to_owned)
     }
 
+    fn type_name_matches_plain_or_alias(
+        &self,
+        declarations: &[RustDeclaration],
+        type_name: &str,
+        expected_type_name: &str,
+    ) -> bool {
+        if type_name == expected_type_name {
+            return true;
+        }
+        declarations.iter().any(|declaration| {
+            declaration.name().as_str() == type_name
+                && matches!(
+                    declaration.value(),
+                    RustTypeDeclaration::Alias(alias)
+                        if matches!(
+                            alias.reference(),
+                            TypeReference::Plain(target) if target.as_str() == expected_type_name
+                        )
+                )
+        })
+    }
+
     fn nexus_runner_shape(&self, declarations: &[RustDeclaration]) -> Option<NexusRunnerShape> {
         let nexus_work = self.declaration_enum_named(declarations, "NexusWork")?;
         let nexus_action = self.declaration_enum_named(declarations, "NexusAction")?;
@@ -2723,11 +2745,11 @@ impl RustWriter {
             self.variant_plain_payload_name(nexus_work, "SemaReadCompleted");
         let effect_command_type = self.variant_plain_payload_name(nexus_action, "CommandEffect");
         let effect_result_type = self.variant_plain_payload_name(nexus_work, "EffectCompleted");
+        let continue_type = self.variant_plain_payload_name(nexus_action, "Continue");
         let has_continue_variant = self.enum_has_variant_named(nexus_action, "Continue");
-        let has_continue = self
-            .variant_plain_payload_name(nexus_action, "Continue")
-            .as_deref()
-            == Some("NexusWork");
+        let has_continue = continue_type.as_deref().is_some_and(|type_name| {
+            self.type_name_matches_plain_or_alias(declarations, type_name, "NexusWork")
+        });
 
         if self.enum_has_variant_named(nexus_action, "CommandSemaWrite")
             != sema_write_input_type.is_some()

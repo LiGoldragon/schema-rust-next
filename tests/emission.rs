@@ -489,7 +489,9 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
     .emit_file(&asschema);
     let code = generated.code.as_str();
 
-    assert!(code.contains("pub type NexusRunnerNextStep = triad_runtime::NextStep<Output, SemaWriteInput, SemaReadInput, NexusEffectCommand, NexusWork>;"));
+    assert_generated_fixture("runner_generated.rs", code);
+
+    assert!(code.contains("pub type NexusRunnerNextStep = triad_runtime::NextStep<ReplyToSignal, CommandSemaWrite, CommandSemaRead, CommandEffect, NexusWork>;"));
     assert!(code.contains("pub fn into_runner_next_step(self) -> NexusRunnerNextStep"));
     assert!(
         code.contains("Self::CommandSemaWrite(input) => triad_runtime::NextStep::SemaWrite(input)")
@@ -507,15 +509,15 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
         "impl<'engine, Engine> triad_runtime::RunnerEngines for NexusRunnerAdapter<'engine, Engine>"
     ));
     assert!(code.contains("fn continuation_limit(&self) -> triad_runtime::ContinuationLimit"));
-    assert!(
-        code.contains("fn apply_sema_write(&mut self, input: SemaWriteInput) -> SemaWriteOutput;")
-    );
-    assert!(code.contains("fn observe_sema_read(&self, input: SemaReadInput) -> SemaReadOutput;"));
-    assert!(
-        code.contains("fn run_effect(&mut self, input: NexusEffectCommand) -> NexusEffectResult;")
-    );
     assert!(code.contains(
-        "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> Output;"
+        "fn apply_sema_write(&mut self, input: CommandSemaWrite) -> SemaWriteCompleted;"
+    ));
+    assert!(
+        code.contains("fn observe_sema_read(&self, input: CommandSemaRead) -> SemaReadCompleted;")
+    );
+    assert!(code.contains("fn run_effect(&mut self, input: CommandEffect) -> EffectCompleted;"));
+    assert!(code.contains(
+        "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ReplyToSignal;"
     ));
     assert!(code.contains("let runner = triad_runtime::Runner::new(self.continuation_limit());"));
     assert!(code.contains("let reply = runner.drive(&mut runner_adapter, first_work);"));
@@ -523,8 +525,6 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
         "let output = NexusAction::reply_to_signal(reply).with_origin_route(origin_route);"
     ));
     assert!(!code.contains("NexusAction::CommandEffect(effect) => panic!"));
-
-    assert_generated_fixture("runner_generated.rs", code);
 }
 
 #[test]
