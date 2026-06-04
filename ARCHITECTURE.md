@@ -98,8 +98,10 @@ must not grow a second parser for the authored form.
   dependency schema directories. Dependency crates publish their `schema/`
   directory as build metadata, and consumers register those paths as
   `build::DependencySchema` entries before lowering runtime modules.
-- Driver freshness is source-visible and committed. Generated source schema
-  artifacts, assembled `.asschema` artifacts, and Rust files are checked
+- Driver freshness is source-visible and committed. Authored `.schema` input
+  is parsed into `SchemaSourceArtifact` and round-tripped through generated
+  schema text as an internal codec witness, but it is not treated as generated
+  output. Generated assembled `.asschema` artifacts and Rust files are checked
   against the working tree; a component-specific update environment variable
   rewrites them when the schema intentionally changes.
 - Signal, Nexus, and SEMA roots are emitted from the same schema shape:

@@ -372,14 +372,17 @@ impl GeneratedModule {
         resolver: &ImportResolver,
     ) -> Result<Self, BuildError> {
         let source = package.load_module(emission.module().clone())?;
-        let source_artifact =
-            SchemaSourceArtifact::new(source.to_schema_source()?).to_schema_text();
+        let source_artifact = SourceArtifactRoundTrip::new(
+            source.path().to_path_buf(),
+            SchemaSourceArtifact::new(source.to_schema_source()?),
+        )
+        .validate()?;
         let asschema = source.lower_with_resolver(engine, resolver)?;
         let asschema_artifact = AsschemaArtifact::new(asschema.clone()).to_nota_source();
         let rust_file = RustEmitter::new(emission.options().clone()).emit_file(&asschema);
         Ok(Self {
             module: emission.module().clone(),
-            source_artifact: GeneratedArtifact::new(source.path().to_path_buf(), source_artifact),
+            source_artifact,
             asschema_artifact: GeneratedArtifact::new(
                 source.path().with_extension("asschema"),
                 asschema_artifact,
@@ -393,7 +396,6 @@ impl GeneratedModule {
         crate_root: &Path,
         check: &FreshnessCheck,
     ) -> Result<(), BuildError> {
-        self.source_artifact.check_with(check)?;
         self.asschema_artifact.check_with(check)?;
         self.rust_artifact(crate_root).check_with(check)?;
         Ok(())
@@ -404,6 +406,27 @@ impl GeneratedModule {
             crate_root.join(&self.rust_file.path),
             self.rust_file.code.as_str().to_owned(),
         )
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SourceArtifactRoundTrip {
+    path: PathBuf,
+    artifact: SchemaSourceArtifact,
+}
+
+impl SourceArtifactRoundTrip {
+    fn new(path: PathBuf, artifact: SchemaSourceArtifact) -> Self {
+        Self { path, artifact }
+    }
+
+    fn validate(self) -> Result<GeneratedArtifact, BuildError> {
+        let source_text = self.artifact.to_schema_text();
+        let recovered = SchemaSourceArtifact::from_schema_text(&source_text)?;
+        if recovered != self.artifact {
+            return Err(BuildError::SchemaSourceRoundTrip { path: self.path });
+        }
+        Ok(GeneratedArtifact::new(self.path, source_text))
     }
 }
 
@@ -521,4 +544,6 @@ pub enum BuildError {
         path: PathBuf,
         update_environment_variable: String,
     },
+    #[error("schema source artifact did not round-trip through generated text at {path:?}")]
+    SchemaSourceRoundTrip { path: PathBuf },
 }

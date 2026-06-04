@@ -71,7 +71,7 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
 }
 
 #[test]
-fn generated_package_carries_checked_in_source_asschema_and_rust_artifacts() {
+fn generated_package_carries_source_asschema_and_rust_artifacts() {
     let generated = DriverFixture::new().generated_runtime();
     let module = generated
         .modules()
