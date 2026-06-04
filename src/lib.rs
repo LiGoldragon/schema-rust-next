@@ -192,21 +192,20 @@ impl RustModule {
         writer.emit_short_headers(&self.root_enums);
         writer.blank();
         writer.emit_signal_frame_support(&self.root_enums);
-        writer.emit_plane_route_support(&self.declarations);
-        writer.emit_trace_support(&self.declarations, &self.root_enums);
-        writer.emit_mail_event_support(&self.root_enums);
-        writer.emit_plane_namespaces(&self.declarations, &self.root_enums);
-        writer.emit_plane_projection_support(&self.declarations, &self.root_enums);
-        writer.emit_schema_plane_trait_support(&self.declarations, &self.root_enums);
-        writer.emit_upgrade_support();
+        if writer.emits_runtime_support() {
+            writer.emit_plane_route_support(&self.declarations);
+            writer.emit_trace_support(&self.declarations, &self.root_enums);
+            writer.emit_mail_event_support(&self.root_enums);
+            writer.emit_plane_namespaces(&self.declarations, &self.root_enums);
+            writer.emit_plane_projection_support(&self.declarations, &self.root_enums);
+            writer.emit_schema_plane_trait_support(&self.declarations, &self.root_enums);
+            writer.emit_upgrade_support();
+        }
         RustCode(writer.finish())
     }
 }
 
-/// The emission knobs passed to [`RustEmitter::new`]. The
-/// `nota_surface` field is public so a caller can construct an options
-/// value either positionally (`RustEmissionOptions { nota_surface:
-/// NotaSurface::Disabled }`) or through the named constructors below.
+/// The emission knobs passed to [`RustEmitter::new`].
 ///
 /// The default is [`NotaSurface::FeatureGated`] with feature name
 /// `"nota-text"`. That is the recommended shape per the codec opt-in
@@ -215,10 +214,13 @@ impl RustModule {
 /// enable through a cargo feature. Binary-only consumers (daemons,
 /// future binary-only clients) build the contract crate with the
 /// default features off and carry no `nota-next` in their dependency
-/// closure.
+/// closure. The default target is [`RustEmissionTarget::ComponentRuntime`]
+/// so existing runtime consumers keep their generated engine traits until
+/// they opt into [`RustEmissionTarget::WireContract`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustEmissionOptions {
     pub nota_surface: NotaSurface,
+    pub target: RustEmissionTarget,
 }
 
 impl Default for RustEmissionOptions {
@@ -235,6 +237,7 @@ impl RustEmissionOptions {
     pub fn always_enabled_nota() -> Self {
         Self {
             nota_surface: NotaSurface::AlwaysEnabled,
+            target: RustEmissionTarget::ComponentRuntime,
         }
     }
 
@@ -250,6 +253,7 @@ impl RustEmissionOptions {
             nota_surface: NotaSurface::FeatureGated {
                 feature: feature.into(),
             },
+            target: RustEmissionTarget::ComponentRuntime,
         }
     }
 
@@ -263,11 +267,33 @@ impl RustEmissionOptions {
     pub fn binary_only() -> Self {
         Self {
             nota_surface: NotaSurface::Disabled,
+            target: RustEmissionTarget::ComponentRuntime,
         }
+    }
+
+    pub fn with_target(mut self, target: RustEmissionTarget) -> Self {
+        self.target = target;
+        self
     }
 
     fn nota_surface(&self) -> &NotaSurface {
         &self.nota_surface
+    }
+
+    pub fn target(&self) -> RustEmissionTarget {
+        self.target
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RustEmissionTarget {
+    WireContract,
+    ComponentRuntime,
+}
+
+impl RustEmissionTarget {
+    fn emits_runtime_support(self) -> bool {
+        matches!(self, Self::ComponentRuntime)
     }
 }
 
@@ -706,6 +732,7 @@ struct RustWriter {
     map_key_types: Vec<String>,
     private_type_names: Vec<String>,
     nota_surface: NotaSurface,
+    target: RustEmissionTarget,
 }
 
 struct EnumConstructorPayload {
@@ -755,11 +782,16 @@ impl RustWriter {
             map_key_types: Vec::new(),
             private_type_names: Vec::new(),
             nota_surface: options.nota_surface().clone(),
+            target: options.target(),
         }
     }
 
     fn nota_surface(&self) -> &NotaSurface {
         &self.nota_surface
+    }
+
+    fn emits_runtime_support(&self) -> bool {
+        self.target.emits_runtime_support()
     }
 
     /// Record the set of type names used as a `BTreeMap` key anywhere
@@ -1732,12 +1764,18 @@ impl RustWriter {
 
     fn trace_sema_actor_variants(&self, declarations: &[RustDeclaration]) -> Vec<&'static str> {
         let mut variants = Vec::new();
-        if self.has_type(declarations, "SemaWriteInput")
-            && self.has_type(declarations, "SemaWriteOutput")
-            && self.has_type(declarations, "SemaReadInput")
-            && self.has_type(declarations, "SemaReadOutput")
-        {
-            variants.extend(["Started", "Stopped", "WriteApplied", "ReadObserved"]);
+        let has_write = self.has_type(declarations, "SemaWriteInput")
+            && self.has_type(declarations, "SemaWriteOutput");
+        let has_read = self.has_type(declarations, "SemaReadInput")
+            && self.has_type(declarations, "SemaReadOutput");
+        if has_write || has_read {
+            variants.extend(["Started", "Stopped"]);
+        }
+        if has_write {
+            variants.push("WriteApplied");
+        }
+        if has_read {
+            variants.push("ReadObserved");
         }
         variants
     }
@@ -2373,10 +2411,11 @@ impl RustWriter {
             && self.has_type(declarations, "NexusAction");
         let emits_nexus_engine =
             self.has_type(declarations, "NexusWork") && self.has_type(declarations, "NexusAction");
-        let emits_sema_engine = self.has_type(declarations, "SemaWriteInput")
-            && self.has_type(declarations, "SemaWriteOutput")
-            && self.has_type(declarations, "SemaReadInput")
+        let emits_sema_apply = self.has_type(declarations, "SemaWriteInput")
+            && self.has_type(declarations, "SemaWriteOutput");
+        let emits_sema_observe = self.has_type(declarations, "SemaReadInput")
             && self.has_type(declarations, "SemaReadOutput");
+        let emits_sema_engine = emits_sema_apply || emits_sema_observe;
 
         if emits_signal_engine || emits_nexus_engine || emits_sema_engine {
             self.emit_actor_lifecycle_support();
@@ -2464,27 +2503,41 @@ impl RustWriter {
             self.line("    }");
             self.blank();
             self.line("    fn trace_sema_activation(&self, _object_name: SemaObjectName) {}");
-            self.line("    fn trace_sema_write_applied(&self) {");
-            self.line("        self.trace_sema_activation(SemaObjectName::WriteApplied);");
-            self.line("    }");
-            self.line("    fn trace_sema_read_observed(&self) {");
-            self.line("        self.trace_sema_activation(SemaObjectName::ReadObserved);");
-            self.line("    }");
+            if emits_sema_apply {
+                self.line("    fn trace_sema_write_applied(&self) {");
+                self.line("        self.trace_sema_activation(SemaObjectName::WriteApplied);");
+                self.line("    }");
+            }
+            if emits_sema_observe {
+                self.line("    fn trace_sema_read_observed(&self) {");
+                self.line("        self.trace_sema_activation(SemaObjectName::ReadObserved);");
+                self.line("    }");
+            }
             self.blank();
-            self.line("    fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;");
-            self.line("    fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;");
+            if emits_sema_apply {
+                self.line("    fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;");
+            }
+            if emits_sema_observe {
+                self.line("    fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;");
+            }
             self.blank();
-            self.line("    fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput> {");
-            self.line("        let output = self.apply_inner(input);");
-            self.line("        self.trace_sema_write_applied();");
-            self.line("        output");
-            self.line("    }");
-            self.blank();
-            self.line("    fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput> {");
-            self.line("        let output = self.observe_inner(input);");
-            self.line("        self.trace_sema_read_observed();");
-            self.line("        output");
-            self.line("    }");
+            if emits_sema_apply {
+                self.line("    fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput> {");
+                self.line("        let output = self.apply_inner(input);");
+                self.line("        self.trace_sema_write_applied();");
+                self.line("        output");
+                self.line("    }");
+                if emits_sema_observe {
+                    self.blank();
+                }
+            }
+            if emits_sema_observe {
+                self.line("    fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput> {");
+                self.line("        let output = self.observe_inner(input);");
+                self.line("        self.trace_sema_read_observed();");
+                self.line("        output");
+                self.line("    }");
+            }
             self.line("}");
             self.blank();
         }

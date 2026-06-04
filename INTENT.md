@@ -69,10 +69,20 @@ the signal boundary triages routed Signal input into routed Nexus input and
 turns routed Nexus replies into routed Signal output. When a schema declares
 `NexusInput` and `NexusOutput`, the emitter provides a mutable `NexusEngine`
 target for execution-plane object flow and heavier decision-making. When a
-schema declares split `SemaWrite*` and `SemaRead*` roots, the emitter provides
-the `SemaEngine` trait with a mutable write method and shared-reference read
-method. Runtime tests must invoke those generated trait surfaces rather than
-primitive or test-local commands.*
+schema declares a `SemaWriteInput` / `SemaWriteOutput` pair, the emitter
+provides the mutable `SemaEngine::apply` path; when it declares a
+`SemaReadInput` / `SemaReadOutput` pair, the emitter provides the
+shared-reference `SemaEngine::observe` path. Runtime tests must invoke those
+generated trait surfaces rather than primitive or test-local commands.*
+
+*Contract and runtime emission are distinct targets. Signal and meta-signal
+contract schemas are external wire surfaces; in `RustEmissionTarget::WireContract`
+this emitter emits schema nouns, derives, NOTA/rkyv codecs, short headers, and
+signal-frame encode/decode only. Runtime and daemon schemas live as schema
+files inside the daemon crate, such as `cloud/schema/nexus.schema`, and use the
+runtime target to emit Signal/Nexus/SEMA plane support, trace hooks, mail
+lifecycle objects, cross-plane projections, and engine traits. Runtime schemas
+import contract roots where the daemon needs the external wire vocabulary.*
 
 *The emitter should move toward a generated component-runner surface for the
 triad engine. A daemon `main` should eventually be a tiny call into generated
@@ -173,23 +183,19 @@ generated runtime. A type used as a map key earns the ordering derives (`Partial
 on both the type and its archived form); other types keep the original derive
 set.*
 
-*The codec opt-in is configured through `RustEmissionOptions { nota_surface:
-NotaSurface }` passed to `RustEmitter::new`. The `nota_surface` field is
-public so callers can construct the options positionally
-(`RustEmissionOptions { nota_surface: NotaSurface::Disabled }`) or through the
-named constructors (`RustEmissionOptions::binary_only`,
-`::feature_gated_nota`, `::always_enabled_nota`). The default
-(`RustEmissionOptions::default()`, used by `RustEmitter::default()`) is
-`NotaSurface::FeatureGated { feature: "nota-text" }`: emitted source carries
-the NOTA derives, the `use nota_next::*` items, the inherent bridges, and the
-root `FromStr` / `Display` impls behind `#[cfg_attr(feature = "nota-text",
-…)]` / `#[cfg(feature = "nota-text")]`. A text-facing client crate enables
-the `nota-text` feature on its contract dependency; a binary-only daemon
-crate builds the contract dependency with `default-features = false` and
-carries no `nota_next` in its dependency closure. `NotaSurface::Disabled`
-omits the NOTA surface entirely — the emitted source has no `nota_next::*`
-references and no `FromStr` / `Display` impls, so the resulting Rust file
-compiles without `nota-next` in the closure at all.*
+*The codec opt-in is configured through `RustEmissionOptions` passed to
+`RustEmitter::new`. `nota_surface` selects the NOTA text projection:
+`RustEmissionOptions::default()` and `RustEmitter::default()` use
+`NotaSurface::FeatureGated { feature: "nota-text" }`, so emitted source carries
+the NOTA derives, `use nota_next::*` items, inherent bridges, and root
+`FromStr` / `Display` impls behind `#[cfg_attr(feature = "nota-text", …)]` /
+`#[cfg(feature = "nota-text")]`. A text-facing client crate enables
+`nota-text`; a binary-only daemon crate builds generated contract dependencies
+with `default-features = false` and carries no `nota_next` in its dependency
+closure. `NotaSurface::Disabled` omits the NOTA surface entirely. `target`
+selects whether the generated file is a `WireContract` or `ComponentRuntime`;
+the default target is `ComponentRuntime` for compatibility while runtime plane
+schema files are still landing.*
 
 *NOTA owns raw delimiter structure and serialization shapes. Schema owns all
 type-name keywords: scalar names such as `String`, `Integer`, and `Boolean`,

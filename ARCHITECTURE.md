@@ -60,12 +60,16 @@ must not grow a second parser for the authored form.
   compile that source rather than hiding the interface in `OUT_DIR`.
 - Emission is tested by source fixture comparison and by compiling the fixture
   as Rust code.
-- Root declarations emit Signal, Nexus, and SEMA traits. Runtime code
-  implements those traits on data-bearing engine objects. Signal triage
+- `RustEmissionTarget::WireContract` emits the external signal or meta-signal
+  wire surface: schema nouns, derives, NOTA/rkyv codecs, short headers, and
+  signal-frame encode/decode.
+- `RustEmissionTarget::ComponentRuntime` emits daemon-side runtime support.
+  Runtime plane schemas live as schema files inside the daemon crate, such as
+  `cloud/schema/nexus.schema`, and may import contract roots when daemon logic
+  needs the external wire vocabulary. Runtime code implements the generated
+  Signal, Nexus, and SEMA traits on data-bearing engine objects. Signal triage
   creates generated Nexus envelopes directly, Nexus executes through the
-  generated mutable trait, and SEMA splits writes from reads. No generated
-  convenience mail wrapper or parallel dispatch trait remains beside the
-  working plane traits.
+  generated mutable trait, and SEMA splits writes from reads.
 - Signal, Nexus, and SEMA roots are emitted from the same schema shape:
   imports/exports, input, output, and namespace. Emission may attach different
   support traits per plane, but the generated Rust mirrors the same authored
@@ -131,12 +135,12 @@ must not grow a second parser for the authored form.
   The Signal trait only owns boundary triage: Signal input becomes Nexus input,
   and Nexus replies become Signal output. Schemas that declare
   `NexusInput`/`NexusOutput` emit a mutable `NexusEngine` trait for the heavier
-  execution and decision plane. Schemas that declare `SemaWriteInput` /
-  `SemaWriteOutput` plus `SemaReadInput` / `SemaReadOutput` emit a
-  `SemaEngine` trait with `apply(&mut self, ...)` for mutations and
-  `observe(&self, ...)` for reads. Tests and runtime code use those generated
-  plane traits so Signal, Nexus, and SEMA take and return routed root messages
-  for their own planes.
+  execution and decision plane. Schemas that declare a `SemaWriteInput` /
+  `SemaWriteOutput` pair emit the mutable `SemaEngine::apply` path; schemas
+  that declare a `SemaReadInput` / `SemaReadOutput` pair emit the
+  shared-reference `SemaEngine::observe` path. Tests and runtime code use those
+  generated plane traits so Signal, Nexus, and SEMA take and return routed root
+  messages for their own planes.
 - Cross-plane projections prefer exact operation names before falling back to a
   unique payload type. That lets a realistic interface carry both
   `Lookup(RecordIdentifier)` and `Remove(RecordIdentifier)` without routing the
@@ -209,15 +213,14 @@ must not grow a second parser for the authored form.
   shared codec shapes: a `Vec` is a square-bracket block `[e1 e2 ...]`, a
   `BTreeMap` is a brace block of `key value` pairs `{k1 v1 ...}`, and an
   `Option` is the atom `None` or the paren `(Some inner)`.
-- `RustEmissionOptions` carries one field — `pub nota_surface: NotaSurface` —
-  which is the only knob today. Callers either construct positionally
-  (`RustEmissionOptions { nota_surface: NotaSurface::Disabled }`) or through
-  the named constructors (`::binary_only`, `::feature_gated_nota("…")`,
-  `::always_enabled_nota`). `RustEmissionOptions::default()` and
+- `RustEmissionOptions` carries `nota_surface` and `target`. The named
+  constructors (`::binary_only`, `::feature_gated_nota("…")`,
+  `::always_enabled_nota`) set the compatibility target
+  `RustEmissionTarget::ComponentRuntime`; callers use `with_target` to select
+  `RustEmissionTarget::WireContract` for external signal and meta-signal
+  contract generation. `RustEmissionOptions::default()` and
   `RustEmitter::default()` both pick `NotaSurface::FeatureGated { feature:
-  "nota-text" }` — the recommended shape per the codec opt-in design (rkyv is
-  universal, NOTA derives gate behind a cargo feature so binary-only
-  consumers don't compile `nota-next`). `NotaSurface::Disabled` removes the
+  "nota-text" }` plus `ComponentRuntime`. `NotaSurface::Disabled` removes the
   NOTA surface entirely: no derives, no `use nota_next::*` items, no
   `from_nota_block` / `to_nota` bridges, no root `FromStr` / `Display`
   impls. `NotaSurface::AlwaysEnabled` keeps the older unconditional emission

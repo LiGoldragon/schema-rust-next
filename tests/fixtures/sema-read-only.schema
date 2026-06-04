@@ -1,0 +1,9 @@
+[(Observe Query)]
+[(Observed Result)]
+{
+  SemaReadInput [(Observe Query)]
+  SemaReadOutput [(Observed Result)]
+  Topic String
+  Query { Topic * }
+  Result { Topic * }
+}

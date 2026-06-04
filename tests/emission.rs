@@ -1,4 +1,6 @@
-use schema_rust_next::{NotaSurface, RustEmissionOptions, RustEmitter, RustTypeDeclaration};
+use schema_rust_next::{
+    NotaSurface, RustEmissionOptions, RustEmissionTarget, RustEmitter, RustTypeDeclaration,
+};
 use std::path::PathBuf;
 
 mod support;
@@ -162,6 +164,7 @@ fn emission_can_disable_nota_surface_for_binary_only_consumers() {
     let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated = RustEmitter::new(RustEmissionOptions {
         nota_surface: NotaSurface::Disabled,
+        target: RustEmissionTarget::ComponentRuntime,
     })
     .emit(&asschema);
     let code = generated.as_str();
@@ -198,6 +201,7 @@ fn emission_can_gate_nota_surface_behind_text_client_feature() {
         nota_surface: NotaSurface::FeatureGated {
             feature: "nota-text".to_owned(),
         },
+        target: RustEmissionTarget::ComponentRuntime,
     })
     .emit(&asschema);
     let code = generated.as_str();
@@ -232,6 +236,7 @@ fn rust_emission_options_default_is_feature_gated_nota_text() {
             feature: "nota-text".to_owned(),
         },
     );
+    assert_eq!(options.target, RustEmissionTarget::ComponentRuntime);
 }
 
 #[test]
@@ -468,6 +473,83 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
             .as_str()
             .contains("impl sema::Sema<sema::ReadOutput>")
     );
+}
+
+#[test]
+fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
+    let asschema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
+    let generated = RustEmitter::new(
+        RustEmissionOptions::binary_only().with_target(RustEmissionTarget::WireContract),
+    )
+    .emit_file(&asschema);
+    let code = generated.code.as_str();
+
+    assert!(code.contains("pub enum Input"));
+    assert!(code.contains("pub enum Output"));
+    assert!(code.contains("pub enum NexusWork"));
+    assert!(code.contains("pub enum SemaReadInput"));
+    assert!(code.contains("rkyv::Archive"));
+    assert!(code.contains("pub mod short_header"));
+    assert!(code.contains("pub enum InputRoute"));
+    assert!(code.contains("pub fn encode_signal_frame"));
+    assert!(code.contains("pub fn decode_signal_frame"));
+
+    assert!(!code.contains("pub trait SignalEngine"));
+    assert!(!code.contains("pub trait NexusEngine"));
+    assert!(!code.contains("pub trait SemaEngine"));
+    assert!(!code.contains("pub enum ActorStartFailure"));
+    assert!(!code.contains("pub struct MessageSent"));
+    assert!(!code.contains("pub struct OriginRoute"));
+    assert!(!code.contains("pub enum Plane"));
+    assert!(!code.contains("pub mod signal"));
+    assert!(!code.contains("pub enum NexusWorkRoute"));
+    assert!(!code.contains("pub struct TraceEvent"));
+    assert!(!code.contains("pub fn into_nexus_action"));
+    assert!(!code.contains("pub trait UpgradeFrom<Previous>"));
+}
+
+#[test]
+fn runtime_target_emits_read_only_sema_engine_when_read_roots_exist() {
+    let asschema = FixtureSchema::new("sema-read-only.schema").lower("daemon:sema");
+    let generated = RustEmitter::default().emit_file(&asschema);
+    let code = generated.code.as_str();
+
+    assert!(code.contains("pub trait SemaEngine"));
+    assert!(code.contains("ReadObserved,"));
+    assert!(code.contains("SemaObjectName::ReadObserved"));
+    assert!(code.contains(
+        "fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;"
+    ));
+    assert!(code.contains(
+        "fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput> {"
+    ));
+
+    assert!(!code.contains("WriteApplied,"));
+    assert!(!code.contains("SemaObjectName::WriteApplied"));
+    assert!(!code.contains("fn apply_inner("));
+    assert!(!code.contains("fn apply(&mut self"));
+}
+
+#[test]
+fn runtime_target_emits_write_only_sema_engine_when_write_roots_exist() {
+    let asschema = FixtureSchema::new("sema-write-only.schema").lower("daemon:sema");
+    let generated = RustEmitter::default().emit_file(&asschema);
+    let code = generated.code.as_str();
+
+    assert!(code.contains("pub trait SemaEngine"));
+    assert!(code.contains("WriteApplied,"));
+    assert!(code.contains("SemaObjectName::WriteApplied"));
+    assert!(code.contains(
+        "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;"
+    ));
+    assert!(code.contains(
+        "fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput> {"
+    ));
+
+    assert!(!code.contains("ReadObserved,"));
+    assert!(!code.contains("SemaObjectName::ReadObserved"));
+    assert!(!code.contains("fn observe_inner("));
+    assert!(!code.contains("fn observe(&self"));
 }
 
 #[test]
