@@ -228,6 +228,11 @@ impl CargoSchemaMetadata {
         }
     }
 
+    pub fn emit_schema_directory(&self, crate_root: &Path) {
+        let schema_directory = crate_root.join("schema");
+        println!("cargo::metadata=schema-dir={}", schema_directory.display());
+    }
+
     pub fn schema_directory(&self) -> Result<Option<PathBuf>, BuildError> {
         let variable = self.schema_directory_variable();
         match env::var_os(&variable) {

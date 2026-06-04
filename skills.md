@@ -32,3 +32,8 @@ and `GenerationPlan::component_runtime_compatibility` only for current
 all-in-one bootstrap schemas. Register imported contract schemas through
 `DependencySchema` entries sourced from Cargo build metadata, not hard-coded
 local checkout paths.
+
+Contract crates that declare a Cargo `links` name should publish their
+`schema/` directory with `CargoSchemaMetadata::emit_schema_directory` after
+the schema freshness check. Daemon crates consume that same convention with
+`DependencySchema::from_cargo_metadata`.

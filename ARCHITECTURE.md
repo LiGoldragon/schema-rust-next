@@ -98,6 +98,10 @@ must not grow a second parser for the authored form.
   dependency schema directories. Dependency crates publish their `schema/`
   directory as build metadata, and consumers register those paths as
   `build::DependencySchema` entries before lowering runtime modules.
+- `build::CargoSchemaMetadata` owns both sides of that Cargo seam. Contract
+  crate build scripts call `emit_schema_directory` after a successful
+  freshness check; daemon build scripts read the corresponding
+  `DEP_<LINKS>_SCHEMA_DIR` value through `DependencySchema::from_cargo_metadata`.
 - Driver freshness is source-visible and committed. Authored `.schema` input
   is parsed into `SchemaSourceArtifact` and round-tripped through generated
   schema text as an internal codec witness, but it is not treated as generated
