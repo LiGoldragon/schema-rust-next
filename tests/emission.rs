@@ -533,7 +533,12 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
 
     assert_generated_fixture("runner_generated.rs", code);
 
-    assert!(code.contains("pub type NexusRunnerNextStep = triad_runtime::NextStep<ReplyToSignal, CommandSemaWrite, CommandSemaRead, CommandEffect, NexusWork>;"));
+    assert!(code.contains("pub type NexusRunnerNextStep = triad_runtime::NextStep<"));
+    assert!(code.contains("    ReplyToSignal,"));
+    assert!(code.contains("    CommandSemaWrite,"));
+    assert!(code.contains("    CommandSemaRead,"));
+    assert!(code.contains("    CommandEffect,"));
+    assert!(code.contains("    NexusWork,"));
     assert!(code.contains("impl triad_runtime::NexusAction for NexusAction"));
     assert!(code.contains("type SemaWrite = CommandSemaWrite;"));
     assert!(code.contains("type SemaRead = CommandSemaRead;"));
@@ -557,9 +562,8 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
     );
     assert!(code.contains("Self::Continue(work) => triad_runtime::NextStep::Continue(work)"));
     assert!(code.contains("struct NexusRunnerAdapter<'engine, Engine>"));
-    assert!(code.contains(
-        "impl<'engine, Engine> triad_runtime::RunnerEngines for NexusRunnerAdapter<'engine, Engine>"
-    ));
+    assert!(code.contains("impl<'engine, Engine> triad_runtime::RunnerEngines"));
+    assert!(code.contains("for NexusRunnerAdapter<'engine, Engine>"));
     assert!(code.contains("triad_runtime::NexusAction::into_next_step(action)"));
     assert!(code.contains("fn continuation_limit(&self) -> triad_runtime::ContinuationLimit"));
     assert!(code.contains(

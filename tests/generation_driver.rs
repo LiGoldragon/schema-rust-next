@@ -67,7 +67,12 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
         "nexus runtime support nouns should derive NOTA only behind the feature:\n{nexus}"
     );
     assert!(
-        nexus.contains("pub type NexusRunnerNextStep = triad_runtime::NextStep<ContractOutput, SemaWriteInput, SemaReadInput, std::convert::Infallible, NexusWork>;"),
+        nexus.contains("pub type NexusRunnerNextStep = triad_runtime::NextStep<")
+            && nexus.contains("    ContractOutput,")
+            && nexus.contains("    SemaWriteInput,")
+            && nexus.contains("    SemaReadInput,")
+            && nexus.contains("    std::convert::Infallible,")
+            && nexus.contains("    NexusWork,"),
         "nexus runtime target should emit runner glue over imported contract output:\n{nexus}"
     );
     assert!(

@@ -1006,6 +1006,24 @@ impl ToTokens for RustTypeReferenceTokens<'_> {
     }
 }
 
+struct RustTypeTokens<'source> {
+    source: &'source str,
+}
+
+impl<'source> RustTypeTokens<'source> {
+    fn new(source: &'source str) -> Self {
+        Self { source }
+    }
+}
+
+impl ToTokens for RustTypeTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        syn::parse_str::<syn::Type>(self.source)
+            .expect("generated Rust type token parses")
+            .to_tokens(tokens);
+    }
+}
+
 struct SignalFrameStreamingSupportTokens<'event> {
     event_payload: &'event TypeReference,
 }
@@ -1075,6 +1093,196 @@ impl ToTokens for SignalFrameStreamingSupportTokens<'_> {
                             event: self,
                         },
                     )
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct NexusRunnerNextStepProjectionTokens<'shape> {
+    shape: &'shape NexusRunnerShape,
+}
+
+impl<'shape> NexusRunnerNextStepProjectionTokens<'shape> {
+    fn new(shape: &'shape NexusRunnerShape) -> Self {
+        Self { shape }
+    }
+}
+
+impl ToTokens for NexusRunnerNextStepProjectionTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let reply_type = RustTypeTokens::new(&self.shape.reply_type);
+        let sema_write_input_type = RustTypeTokens::new(self.shape.sema_write_input_type());
+        let sema_read_input_type = RustTypeTokens::new(self.shape.sema_read_input_type());
+        let effect_command_type = RustTypeTokens::new(self.shape.effect_command_type());
+        let sema_write_arm = self.shape.emits_sema_write().then(|| {
+            quote! {
+                Self::CommandSemaWrite(input) => triad_runtime::NextStep::SemaWrite(input),
+            }
+        });
+        let sema_read_arm = self.shape.emits_sema_read().then(|| {
+            quote! {
+                Self::CommandSemaRead(input) => triad_runtime::NextStep::SemaRead(input),
+            }
+        });
+        let effect_arm = self.shape.emits_effect().then(|| {
+            quote! {
+                Self::CommandEffect(effect) => triad_runtime::NextStep::RunEffect(effect),
+            }
+        });
+        let continue_arm = self.shape.has_continue.then(|| {
+            quote! {
+                Self::Continue(work) => triad_runtime::NextStep::Continue(work),
+            }
+        });
+
+        quote! {
+            pub type NexusRunnerNextStep = triad_runtime::NextStep<
+                #reply_type,
+                #sema_write_input_type,
+                #sema_read_input_type,
+                #effect_command_type,
+                NexusWork,
+            >;
+
+            impl triad_runtime::NexusAction for NexusAction {
+                type Reply = #reply_type;
+                type SemaWrite = #sema_write_input_type;
+                type SemaRead = #sema_read_input_type;
+                type Effect = #effect_command_type;
+                type Work = NexusWork;
+
+                fn into_next_step(self) -> NexusRunnerNextStep {
+                    match self {
+                        #sema_write_arm
+                        #sema_read_arm
+                        Self::ReplyToSignal(output) => triad_runtime::NextStep::Reply(output),
+                        #effect_arm
+                        #continue_arm
+                    }
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct NexusRunnerAdapterTokens<'shape> {
+    shape: &'shape NexusRunnerShape,
+}
+
+impl<'shape> NexusRunnerAdapterTokens<'shape> {
+    fn new(shape: &'shape NexusRunnerShape) -> Self {
+        Self { shape }
+    }
+}
+
+impl ToTokens for NexusRunnerAdapterTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let reply_type = RustTypeTokens::new(&self.shape.reply_type);
+        let sema_write_input_type = RustTypeTokens::new(self.shape.sema_write_input_type());
+        let sema_read_input_type = RustTypeTokens::new(self.shape.sema_read_input_type());
+        let effect_command_type = RustTypeTokens::new(self.shape.effect_command_type());
+        let apply_sema_write_body =
+            if let Some(output_type) = self.shape.sema_write_output_type.as_deref() {
+                let output_type = RustTypeTokens::new(output_type);
+                quote! {
+                    let output: #output_type = NexusEngine::apply_sema_write(
+                        self.engine,
+                        self.origin_route,
+                        write,
+                    );
+                    NexusWork::sema_write_completed(output)
+                }
+            } else {
+                quote! {
+                    match write {}
+                }
+            };
+        let observe_sema_read_body =
+            if let Some(output_type) = self.shape.sema_read_output_type.as_deref() {
+                let output_type = RustTypeTokens::new(output_type);
+                quote! {
+                    let output: #output_type = NexusEngine::observe_sema_read(
+                        self.engine,
+                        self.origin_route,
+                        read,
+                    );
+                    NexusWork::sema_read_completed(output)
+                }
+            } else {
+                quote! {
+                    match read {}
+                }
+            };
+        let run_effect_body = if let Some(output_type) = self.shape.effect_result_type.as_deref() {
+            let output_type = RustTypeTokens::new(output_type);
+            quote! {
+                let output: #output_type = NexusEngine::run_effect(self.engine, effect);
+                NexusWork::effect_completed(output)
+            }
+        } else {
+            quote! {
+                match effect {}
+            }
+        };
+
+        quote! {
+            struct NexusRunnerAdapter<'engine, Engine> {
+                engine: &'engine mut Engine,
+                origin_route: OriginRoute,
+            }
+
+            impl<'engine, Engine> NexusRunnerAdapter<'engine, Engine> {
+                fn new(engine: &'engine mut Engine, origin_route: OriginRoute) -> Self {
+                    Self {
+                        engine,
+                        origin_route,
+                    }
+                }
+            }
+
+            impl<'engine, Engine> triad_runtime::RunnerEngines
+                for NexusRunnerAdapter<'engine, Engine>
+            where
+                Engine: NexusEngine,
+            {
+                type Reply = #reply_type;
+                type SemaWrite = #sema_write_input_type;
+                type SemaRead = #sema_read_input_type;
+                type Effect = #effect_command_type;
+                type Work = NexusWork;
+
+                fn decide_next_step(
+                    &mut self,
+                    work: Self::Work,
+                ) -> triad_runtime::runner::RunnerNextStep<Self> {
+                    let action = NexusEngine::decide(
+                        self.engine,
+                        work.with_origin_route(self.origin_route),
+                    )
+                    .into_root();
+                    triad_runtime::NexusAction::into_next_step(action)
+                }
+
+                fn apply_sema_write(&mut self, write: Self::SemaWrite) -> Self::Work {
+                    #apply_sema_write_body
+                }
+
+                fn observe_sema_read(&self, read: Self::SemaRead) -> Self::Work {
+                    #observe_sema_read_body
+                }
+
+                fn run_effect(&mut self, effect: Self::Effect) -> Self::Work {
+                    #run_effect_body
+                }
+
+                fn budget_exhausted_reply(
+                    &self,
+                    exhausted: triad_runtime::ContinuationExhausted,
+                ) -> Self::Reply {
+                    NexusEngine::budget_exhausted_reply(self.engine, exhausted)
                 }
             }
         }
@@ -3220,128 +3428,12 @@ impl RustWriter {
     }
 
     fn emit_nexus_runner_next_step_projection(&mut self, shape: &NexusRunnerShape) {
-        self.line(format!(
-            "pub type NexusRunnerNextStep = triad_runtime::NextStep<{}, {}, {}, {}, NexusWork>;",
-            shape.reply_type,
-            shape.sema_write_input_type(),
-            shape.sema_read_input_type(),
-            shape.effect_command_type()
-        ));
-        self.blank();
-        self.line("impl triad_runtime::NexusAction for NexusAction {");
-        self.line(format!("    type Reply = {};", shape.reply_type));
-        self.line(format!(
-            "    type SemaWrite = {};",
-            shape.sema_write_input_type()
-        ));
-        self.line(format!(
-            "    type SemaRead = {};",
-            shape.sema_read_input_type()
-        ));
-        self.line(format!(
-            "    type Effect = {};",
-            shape.effect_command_type()
-        ));
-        self.line("    type Work = NexusWork;");
-        self.blank();
-        self.line("    fn into_next_step(self) -> NexusRunnerNextStep {");
-        self.line("        match self {");
-        if shape.emits_sema_write() {
-            self.line("            Self::CommandSemaWrite(input) => triad_runtime::NextStep::SemaWrite(input),");
-        }
-        if shape.emits_sema_read() {
-            self.line("            Self::CommandSemaRead(input) => triad_runtime::NextStep::SemaRead(input),");
-        }
-        self.line(
-            "            Self::ReplyToSignal(output) => triad_runtime::NextStep::Reply(output),",
-        );
-        if shape.emits_effect() {
-            self.line("            Self::CommandEffect(effect) => triad_runtime::NextStep::RunEffect(effect),");
-        }
-        if shape.has_continue {
-            self.line(
-                "            Self::Continue(work) => triad_runtime::NextStep::Continue(work),",
-            );
-        }
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
+        self.emit_item_tokens(NexusRunnerNextStepProjectionTokens::new(shape).into_token_stream());
         self.blank();
     }
 
     fn emit_nexus_runner_adapter(&mut self, shape: &NexusRunnerShape) {
-        self.line("struct NexusRunnerAdapter<'engine, Engine> {");
-        self.line("    engine: &'engine mut Engine,");
-        self.line("    origin_route: OriginRoute,");
-        self.line("}");
-        self.blank();
-        self.line("impl<'engine, Engine> NexusRunnerAdapter<'engine, Engine> {");
-        self.line("    fn new(engine: &'engine mut Engine, origin_route: OriginRoute) -> Self {");
-        self.line("        Self { engine, origin_route }");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line("impl<'engine, Engine> triad_runtime::RunnerEngines for NexusRunnerAdapter<'engine, Engine>");
-        self.line("where");
-        self.line("    Engine: NexusEngine,");
-        self.line("{");
-        self.line(format!("    type Reply = {};", shape.reply_type));
-        self.line(format!(
-            "    type SemaWrite = {};",
-            shape.sema_write_input_type()
-        ));
-        self.line(format!(
-            "    type SemaRead = {};",
-            shape.sema_read_input_type()
-        ));
-        self.line(format!(
-            "    type Effect = {};",
-            shape.effect_command_type()
-        ));
-        self.line("    type Work = NexusWork;");
-        self.blank();
-        self.line("    fn decide_next_step(&mut self, work: Self::Work) -> triad_runtime::runner::RunnerNextStep<Self> {");
-        self.line("        let action = NexusEngine::decide(self.engine, work.with_origin_route(self.origin_route)).into_root();");
-        self.line("        triad_runtime::NexusAction::into_next_step(action)");
-        self.line("    }");
-        self.blank();
-        self.line("    fn apply_sema_write(&mut self, write: Self::SemaWrite) -> Self::Work {");
-        if let Some(output_type) = shape.sema_write_output_type.as_deref() {
-            self.line(format!(
-                "        let output: {output_type} = NexusEngine::apply_sema_write(self.engine, self.origin_route, write);"
-            ));
-            self.line("        NexusWork::sema_write_completed(output)");
-        } else {
-            self.line("        match write {}");
-        }
-        self.line("    }");
-        self.blank();
-        self.line("    fn observe_sema_read(&self, read: Self::SemaRead) -> Self::Work {");
-        if let Some(output_type) = shape.sema_read_output_type.as_deref() {
-            self.line(format!(
-                "        let output: {output_type} = NexusEngine::observe_sema_read(self.engine, self.origin_route, read);"
-            ));
-            self.line("        NexusWork::sema_read_completed(output)");
-        } else {
-            self.line("        match read {}");
-        }
-        self.line("    }");
-        self.blank();
-        self.line("    fn run_effect(&mut self, effect: Self::Effect) -> Self::Work {");
-        if let Some(output_type) = shape.effect_result_type.as_deref() {
-            self.line(format!(
-                "        let output: {output_type} = NexusEngine::run_effect(self.engine, effect);"
-            ));
-            self.line("        NexusWork::effect_completed(output)");
-        } else {
-            self.line("        match effect {}");
-        }
-        self.line("    }");
-        self.blank();
-        self.line("    fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> Self::Reply {");
-        self.line("        NexusEngine::budget_exhausted_reply(self.engine, exhausted)");
-        self.line("    }");
-        self.line("}");
+        self.emit_item_tokens(NexusRunnerAdapterTokens::new(shape).into_token_stream());
         self.blank();
     }
 

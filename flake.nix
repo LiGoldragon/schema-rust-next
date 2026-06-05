@@ -55,7 +55,7 @@
             touch $out
           '';
           no-rust-macro-surface = pkgs.runCommand "schema-rust-next-no-rust-macro-surface" { } ''
-            if grep -R "macro_rules!\\|proc_macro" ${src}/src; then
+            if grep -R -n -E 'macro_rules!|#\[(proc_macro|proc_macro_derive|proc_macro_attribute)\]|proc_macro::' ${src}/src; then
               echo "Rust emission must stay separate from Rust macros in src/" >&2
               exit 1
             fi
@@ -128,7 +128,7 @@
             touch $out
           '';
           no-obsolete-asschema-fixtures = pkgs.runCommand "schema-rust-next-no-obsolete-asschema-fixtures" { } ''
-            grep -R "assert_asschema_data_shape" ${src}/tests/big_emission.rs >/dev/null
+            grep -R "assert_lowers_to_typed_schema_data" ${src}/tests/big_emission.rs >/dev/null
             if find ${src} -name '*.asschema' -print -quit | grep .; then
               echo "obsolete .asschema syntax fixtures must not remain in schema-rust-next" >&2
               exit 1
