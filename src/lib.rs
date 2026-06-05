@@ -272,7 +272,9 @@ impl RustModule {
 
         writer.emit_short_headers(&self.root_enums);
         writer.blank();
-        writer.emit_signal_frame_support(&self.root_enums, &self.streams);
+        if writer.emits_signal() {
+            writer.emit_signal_frame_support(&self.root_enums, &self.streams);
+        }
         if writer.emits_runtime_support() {
             writer.emit_plane_route_support(&self.declarations);
             writer.emit_trace_support(&self.declarations, &self.root_enums);
@@ -497,6 +499,69 @@ impl RuntimePlaneSet {
 
     fn emits_all(self) -> bool {
         self.signal && self.nexus && self.sema
+    }
+
+    /// The planes this set emits, in canonical signal-nexus-sema order.
+    fn active_planes(self) -> Vec<Plane> {
+        let mut planes = Vec::new();
+        if self.signal {
+            planes.push(Plane::Signal);
+        }
+        if self.nexus {
+            planes.push(Plane::Nexus);
+        }
+        if self.sema {
+            planes.push(Plane::Sema);
+        }
+        planes
+    }
+}
+
+/// Runtime plane axis. This owns only plane-intrinsic names; target
+/// selection and schema-presence checks stay on the emitter/writer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Plane {
+    Signal,
+    Nexus,
+    Sema,
+}
+
+impl Plane {
+    fn module_name(&self) -> &'static str {
+        match self {
+            Self::Signal => "signal",
+            Self::Nexus => "nexus",
+            Self::Sema => "sema",
+        }
+    }
+
+    fn wrapper_name(&self) -> &'static str {
+        match self {
+            Self::Signal => "Signal",
+            Self::Nexus => "Nexus",
+            Self::Sema => "Sema",
+        }
+    }
+
+    fn alias_names(&self) -> &'static [&'static str] {
+        match self {
+            Self::Signal => &["Input", "Output"],
+            Self::Nexus => &["Work", "Action"],
+            Self::Sema => &["WriteInput", "WriteOutput", "ReadInput", "ReadOutput"],
+        }
+    }
+
+    fn canonical_source_type_names(&self) -> &'static [&'static str] {
+        match self {
+            Self::Signal => &["Input", "Output"],
+            Self::Nexus => &["NexusWork", "NexusAction"],
+            Self::Sema => &[
+                "SemaWriteInput",
+                "SemaWriteOutput",
+                "SemaReadInput",
+                "SemaReadOutput",
+            ],
+        }
     }
 }
 
@@ -1936,6 +2001,108 @@ impl ToTokens for PlaneEnvelopeTokens<'_> {
     }
 }
 
+struct PlaneNamespaceAlias<'source> {
+    export_name: &'static str,
+    source_type_name: &'source str,
+}
+
+impl<'source> PlaneNamespaceAlias<'source> {
+    fn new(export_name: &'static str, source_type_name: &'source str) -> Self {
+        Self {
+            export_name,
+            source_type_name,
+        }
+    }
+}
+
+impl ToTokens for PlaneNamespaceAlias<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let export = RustIdentifier::new(self.export_name);
+        let source = RustIdentifier::new(self.source_type_name);
+        quote! {
+            pub type #export = super::#source;
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct PlaneNamespaceTokens<'source> {
+    plane: Plane,
+    aliases: Vec<PlaneNamespaceAlias<'source>>,
+}
+
+impl<'source> PlaneNamespaceTokens<'source> {
+    fn new(plane: Plane, aliases: Vec<PlaneNamespaceAlias<'source>>) -> Self {
+        Self { plane, aliases }
+    }
+}
+
+impl ToTokens for PlaneNamespaceTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let module = RustIdentifier::new(self.plane.module_name());
+        let wrapper = RustIdentifier::new(self.plane.wrapper_name());
+        let aliases = &self.aliases;
+        quote! {
+            #[allow(clippy::module_inception)]
+            pub mod #module {
+                #(#aliases)*
+                pub type #wrapper<Root> = super::#wrapper<Root>;
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct PlaneOriginRouteConstructorTokens<'source> {
+    plane: Plane,
+    type_name: &'source str,
+}
+
+impl<'source> PlaneOriginRouteConstructorTokens<'source> {
+    fn new(plane: Plane, type_name: &'source str) -> Self {
+        Self { plane, type_name }
+    }
+}
+
+impl ToTokens for PlaneOriginRouteConstructorTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let type_name = RustIdentifier::new(self.type_name);
+        let wrapper_path = PlaneWrapperPath::new(self.plane);
+        quote! {
+            impl #type_name {
+                pub fn with_origin_route(self, origin_route: OriginRoute) -> #wrapper_path<Self> {
+                    #wrapper_path::new(origin_route, self)
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct PlaneWrapperPath {
+    plane: Plane,
+}
+
+impl PlaneWrapperPath {
+    fn new(plane: Plane) -> Self {
+        Self { plane }
+    }
+}
+
+impl ToTokens for PlaneWrapperPath {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let wrapper = RustIdentifier::new(self.plane.wrapper_name());
+        match self.plane {
+            Plane::Signal => quote! { #wrapper },
+            Plane::Nexus | Plane::Sema => {
+                let module = RustIdentifier::new(self.plane.module_name());
+                quote! { #module::#wrapper }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
 struct TraceObjectNameEnumTokens<'schema, 'context> {
     enum_name: &'static str,
     rendered_prefix: &'static str,
@@ -2607,6 +2774,10 @@ impl RustWriter {
 
     fn emits_runtime_support(&self) -> bool {
         self.target.emits_runtime_support()
+    }
+
+    fn emits_signal(&self) -> bool {
+        self.runtime_planes().emits_signal()
     }
 
     fn runtime_planes(&self) -> RuntimePlaneSet {
@@ -3597,107 +3768,93 @@ impl RustWriter {
     }
 
     fn emit_plane_namespaces(&mut self, declarations: &[RustDeclaration], root_enums: &[RustEnum]) {
-        if self.runtime_planes().emits_signal()
-            && (self.has_root_enum(root_enums, "Input") || self.has_root_enum(root_enums, "Output"))
-        {
-            self.line("#[allow(clippy::module_inception)]");
-            self.line("pub mod signal {");
-            if self.has_root_enum(root_enums, "Input") {
-                self.line("    pub type Input = super::Input;");
+        let active_planes = self.runtime_planes().active_planes();
+        for plane in &active_planes {
+            let aliases = self.plane_namespace_aliases(*plane, declarations, root_enums);
+            if aliases.is_empty() {
+                continue;
             }
-            if self.has_root_enum(root_enums, "Output") {
-                self.line("    pub type Output = super::Output;");
-            }
-            self.line("    pub type Signal<Root> = super::Signal<Root>;");
-            self.line("}");
+            self.emit_item_tokens(PlaneNamespaceTokens::new(*plane, aliases).into_token_stream());
             self.blank();
         }
-        if self.runtime_planes().emits_nexus()
-            && (self.has_type(declarations, "NexusWork")
-                || self.has_type(declarations, "NexusAction"))
-        {
-            self.line("#[allow(clippy::module_inception)]");
-            self.line("pub mod nexus {");
-            if self.has_type(declarations, "NexusWork") {
-                self.line("    pub type Work = super::NexusWork;");
+        for plane in &active_planes {
+            let source_type_names =
+                self.plane_origin_route_source_type_names(*plane, declarations, root_enums);
+            for source_type_name in source_type_names {
+                self.emit_item_tokens(
+                    PlaneOriginRouteConstructorTokens::new(*plane, source_type_name)
+                        .into_token_stream(),
+                );
+                self.blank();
             }
-            if self.has_type(declarations, "NexusAction") {
-                self.line("    pub type Action = super::NexusAction;");
-            }
-            self.line("    pub type Nexus<Root> = super::Nexus<Root>;");
-            self.line("}");
-            self.blank();
-        }
-        let sema_write_input_name = self.sema_write_input_type_name(declarations, root_enums);
-        let sema_write_output_name = self.sema_write_output_type_name(declarations, root_enums);
-        let sema_read_input_name = self.sema_read_input_type_name(declarations, root_enums);
-        let sema_read_output_name = self.sema_read_output_type_name(declarations, root_enums);
-        if self.runtime_planes().emits_sema()
-            && (sema_write_input_name.is_some()
-                || sema_write_output_name.is_some()
-                || sema_read_input_name.is_some()
-                || sema_read_output_name.is_some())
-        {
-            self.line("#[allow(clippy::module_inception)]");
-            self.line("pub mod sema {");
-            if let Some(type_name) = sema_write_input_name {
-                self.line(format!("    pub type WriteInput = super::{type_name};"));
-            }
-            if let Some(type_name) = sema_write_output_name {
-                self.line(format!("    pub type WriteOutput = super::{type_name};"));
-            }
-            if let Some(type_name) = sema_read_input_name {
-                self.line(format!("    pub type ReadInput = super::{type_name};"));
-            }
-            if let Some(type_name) = sema_read_output_name {
-                self.line(format!("    pub type ReadOutput = super::{type_name};"));
-            }
-            self.line("    pub type Sema<Root> = super::Sema<Root>;");
-            self.line("}");
-            self.blank();
-        }
-        if self.runtime_planes().emits_nexus() && self.has_type(declarations, "NexusWork") {
-            self.emit_plane_origin_route_constructor("NexusWork", "nexus::Nexus", "nexus::Nexus");
-        }
-        if self.runtime_planes().emits_nexus() && self.has_type(declarations, "NexusAction") {
-            self.emit_plane_origin_route_constructor("NexusAction", "nexus::Nexus", "nexus::Nexus");
-        }
-        if self.runtime_planes().emits_sema()
-            && let Some(type_name) = sema_write_input_name
-        {
-            self.emit_plane_origin_route_constructor(type_name, "sema::Sema", "sema::Sema");
-        }
-        if self.runtime_planes().emits_sema()
-            && let Some(type_name) = sema_write_output_name
-        {
-            self.emit_plane_origin_route_constructor(type_name, "sema::Sema", "sema::Sema");
-        }
-        if self.runtime_planes().emits_sema()
-            && let Some(type_name) = sema_read_input_name
-        {
-            self.emit_plane_origin_route_constructor(type_name, "sema::Sema", "sema::Sema");
-        }
-        if self.runtime_planes().emits_sema()
-            && let Some(type_name) = sema_read_output_name
-        {
-            self.emit_plane_origin_route_constructor(type_name, "sema::Sema", "sema::Sema");
         }
     }
 
-    fn emit_plane_origin_route_constructor(
-        &mut self,
-        type_name: &str,
-        return_type: &str,
-        constructor: &str,
-    ) {
-        self.line(format!("impl {type_name} {{"));
-        self.line(format!(
-            "    pub fn with_origin_route(self, origin_route: OriginRoute) -> {return_type}<Self> {{"
-        ));
-        self.line(format!("        {constructor}::new(origin_route, self)"));
-        self.line("    }");
-        self.line("}");
-        self.blank();
+    fn plane_namespace_aliases<'declaration>(
+        &self,
+        plane: Plane,
+        declarations: &'declaration [RustDeclaration],
+        root_enums: &'declaration [RustEnum],
+    ) -> Vec<PlaneNamespaceAlias<'declaration>> {
+        match plane {
+            Plane::Signal => plane
+                .alias_names()
+                .iter()
+                .zip(plane.canonical_source_type_names())
+                .filter(|(_, source)| self.has_root_enum(root_enums, source))
+                .map(|(export, source)| PlaneNamespaceAlias::new(export, source))
+                .collect(),
+            Plane::Nexus => plane
+                .alias_names()
+                .iter()
+                .zip(plane.canonical_source_type_names())
+                .filter(|(_, source)| self.has_type(declarations, source))
+                .map(|(export, source)| PlaneNamespaceAlias::new(export, source))
+                .collect(),
+            Plane::Sema => plane
+                .alias_names()
+                .iter()
+                .zip(self.sema_source_type_names(declarations, root_enums))
+                .filter_map(|(export, source)| {
+                    source.map(|source| PlaneNamespaceAlias::new(export, source))
+                })
+                .collect(),
+        }
+    }
+
+    fn plane_origin_route_source_type_names<'declaration>(
+        &self,
+        plane: Plane,
+        declarations: &'declaration [RustDeclaration],
+        root_enums: &'declaration [RustEnum],
+    ) -> Vec<&'declaration str> {
+        match plane {
+            Plane::Signal => Vec::new(),
+            Plane::Nexus => plane
+                .canonical_source_type_names()
+                .iter()
+                .copied()
+                .filter(|source| self.has_type(declarations, source))
+                .collect(),
+            Plane::Sema => self
+                .sema_source_type_names(declarations, root_enums)
+                .into_iter()
+                .flatten()
+                .collect(),
+        }
+    }
+
+    fn sema_source_type_names(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) -> [Option<&'static str>; 4] {
+        [
+            self.sema_write_input_type_name(declarations, root_enums),
+            self.sema_write_output_type_name(declarations, root_enums),
+            self.sema_read_input_type_name(declarations, root_enums),
+            self.sema_read_output_type_name(declarations, root_enums),
+        ]
     }
 
     fn emit_plane_projection_support(

@@ -626,10 +626,11 @@ fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
     assert!(code.contains("pub enum SemaReadInput"));
     assert!(code.contains("rkyv::Archive"));
     assert!(code.contains("pub mod short_header"));
-    assert!(code.contains("pub enum InputRoute"));
-    assert!(code.contains("pub fn encode_signal_frame"));
-    assert!(code.contains("pub fn decode_signal_frame"));
 
+    assert!(!code.contains("pub enum InputRoute"));
+    assert!(!code.contains("pub fn encode_signal_frame"));
+    assert!(!code.contains("pub fn decode_signal_frame"));
+    assert!(!code.contains("pub enum SignalFrameError"));
     assert!(!code.contains("pub trait SignalEngine"));
     assert!(!code.contains("pub trait NexusEngine"));
     assert!(!code.contains("pub trait SemaEngine"));
@@ -718,6 +719,9 @@ fn nexus_runtime_target_emits_only_nexus_runtime_support_even_when_other_plane_n
     assert!(!code.contains("pub enum SemaReadInputRoute"));
     assert!(!code.contains("pub struct MessageSent"));
     assert!(!code.contains("pub enum Plane"));
+    assert!(!code.contains("pub fn encode_signal_frame"));
+    assert!(!code.contains("pub fn decode_signal_frame"));
+    assert!(!code.contains("pub enum SignalFrameError"));
     assert!(!code.contains("pub fn into_nexus_action"));
     assert!(!code.contains("pub fn into_sema_write_input"));
 }
@@ -753,6 +757,9 @@ fn sema_runtime_target_emits_only_sema_runtime_support_even_when_other_plane_nam
     assert!(!code.contains("pub enum NexusWorkRoute"));
     assert!(!code.contains("pub struct MessageSent"));
     assert!(!code.contains("pub enum Plane"));
+    assert!(!code.contains("pub fn encode_signal_frame"));
+    assert!(!code.contains("pub fn decode_signal_frame"));
+    assert!(!code.contains("pub enum SignalFrameError"));
     assert!(!code.contains("pub fn into_nexus_action"));
     assert!(!code.contains("pub fn into_signal_output"));
 }
