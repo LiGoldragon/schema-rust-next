@@ -40,6 +40,12 @@ or freshness-check an intermediate schema artifact, and it does not preserve
 older assembled-schema artifact or path APIs beside the source/schema
 pipeline.
 
+*Rust lowering is a trait surface on the typed schema objects.* `schema-next`
+owns schema semantics and must not depend on Rust emission, so the trait lives
+here and is implemented for `schema_next::Schema` and `schema_next::SchemaSource`.
+`RustEmitter` supplies emission policy; the deserialized schema object owns the
+lowering call.
+
 *NOTA text projection is opted into per-emission target.* Generated binaries
 always carry rkyv support. `nota_next::NotaDecode` and
 `nota_next::NotaEncode` are feature-gated (`nota-text`) or omitted for

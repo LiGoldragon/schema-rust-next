@@ -10,6 +10,12 @@ beside that typed source/schema pipeline.
 ## Interfaces
 
 - `RustEmitter` is the code-generation engine.
+- `RustSchemaLowering` is the trait implemented for `schema-next::Schema`.
+  The deserialized semantic schema object owns the lowering call; the emitter
+  supplies policy such as target, NOTA surface, and generator name.
+- `RustSchemaSourceLowering` is the trait implemented for
+  `schema-next::SchemaSource`. It lowers typed source through `SchemaEngine`
+  and then through `RustSchemaLowering`.
 - `RustModule` is the data model between semantic schema data and rendered
   Rust text. It carries scalar aliases, cross-crate imports, generated Rust
   declarations, root enums, and support metadata before anything is rendered.
@@ -35,10 +41,10 @@ emitter lowers that schema-in-Rust value into Rust interface code.
 `RustEmitter::emit_file_from_schema_source` and
 `emit_module_from_schema_source` are the build-driver path. They ask
 `SchemaEngine` to lower source into `Schema`, then render `RustModule`.
-Callers that already hold the semantic value use
-`emit_file_from_schema`, `emit_code_from_schema`, or
-`emit_module_from_schema`. No generated component path reads or writes a
-separate assembled-schema text file.
+Callers that already hold the semantic value use `Schema`'s
+`RustSchemaLowering` trait methods (`lower_to_rust_file`,
+`lower_to_rust_code`, `lower_to_rust_module`). No generated component path
+reads or writes a separate assembled-schema text file.
 
 The rendered source is `RustModule::render()`, so tests can inspect the module
 data shape before comparing strings. Namespace entries arrive as

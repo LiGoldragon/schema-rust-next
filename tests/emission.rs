@@ -1,5 +1,6 @@
 use schema_rust_next::{
-    NotaSurface, RustEmissionOptions, RustEmissionTarget, RustEmitter, RustTypeDeclaration,
+    NotaSurface, RustEmissionOptions, RustEmissionTarget, RustEmitter, RustSchemaLowering,
+    RustTypeDeclaration,
 };
 use std::path::PathBuf;
 
@@ -99,6 +100,20 @@ fn emits_rust_source_as_a_separate_artifact() {
             .contains("pub fn record(payload: Entry) -> Self")
     );
     assert_generated_fixture("spirit_generated.rs", generated.code.as_str());
+}
+
+#[test]
+fn schema_object_lowers_itself_into_rust_through_emitter_policy() {
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let emitter = RustEmitter::default();
+
+    let generated = schema.lower_to_rust_file(&emitter);
+    let module = schema.lower_to_rust_module(&emitter);
+
+    assert_eq!(generated, emitter.emit_file_from_schema(&schema));
+    assert_eq!(module, emitter.emit_module_from_schema(&schema));
+    assert_eq!(generated.path, "src/schema/lib.rs");
+    assert!(generated.code.as_str().contains("pub enum Input"));
 }
 
 #[test]

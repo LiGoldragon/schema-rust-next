@@ -47,11 +47,7 @@ impl RustEmitter {
     }
 
     pub fn emit_file_from_schema(&self, schema: &Schema) -> GeneratedFile {
-        let module = self.emit_module_from_schema(schema);
-        GeneratedFile {
-            path: module.file_path().to_owned(),
-            code: module.render(),
-        }
+        schema.lower_to_rust_file(self)
     }
 
     pub fn emit_file_from_schema_source(
@@ -61,19 +57,15 @@ impl RustEmitter {
         engine: &SchemaEngine,
         resolver: &ImportResolver,
     ) -> Result<GeneratedFile, SchemaError> {
-        let module = self.emit_module_from_schema_source(source, identity, engine, resolver)?;
-        Ok(GeneratedFile {
-            path: module.file_path().to_owned(),
-            code: module.render(),
-        })
+        source.lower_to_rust_file(identity, engine, resolver, self)
     }
 
     pub fn emit_code_from_schema(&self, schema: &Schema) -> RustCode {
-        self.emit_module_from_schema(schema).render()
+        schema.lower_to_rust_code(self)
     }
 
     pub fn emit_module_from_schema(&self, schema: &Schema) -> RustModule {
-        RustModule::from_schema(schema, self.generator_name, self.options.clone())
+        schema.lower_to_rust_module(self)
     }
 
     pub fn emit_module_from_schema_source(
@@ -83,8 +75,76 @@ impl RustEmitter {
         engine: &SchemaEngine,
         resolver: &ImportResolver,
     ) -> Result<RustModule, SchemaError> {
-        let schema = engine.lower_schema_source_with_resolver(source, identity, resolver)?;
-        Ok(self.emit_module_from_schema(&schema))
+        source.lower_to_rust_module(identity, engine, resolver, self)
+    }
+}
+
+pub trait RustSchemaLowering {
+    fn lower_to_rust_file(&self, emitter: &RustEmitter) -> GeneratedFile;
+    fn lower_to_rust_code(&self, emitter: &RustEmitter) -> RustCode;
+    fn lower_to_rust_module(&self, emitter: &RustEmitter) -> RustModule;
+}
+
+impl RustSchemaLowering for Schema {
+    fn lower_to_rust_file(&self, emitter: &RustEmitter) -> GeneratedFile {
+        let module = self.lower_to_rust_module(emitter);
+        GeneratedFile {
+            path: module.file_path().to_owned(),
+            code: module.render(),
+        }
+    }
+
+    fn lower_to_rust_code(&self, emitter: &RustEmitter) -> RustCode {
+        self.lower_to_rust_module(emitter).render()
+    }
+
+    fn lower_to_rust_module(&self, emitter: &RustEmitter) -> RustModule {
+        RustModule::from_schema(self, emitter.generator_name, emitter.options.clone())
+    }
+}
+
+pub trait RustSchemaSourceLowering {
+    fn lower_to_rust_file(
+        &self,
+        identity: SchemaIdentity,
+        engine: &SchemaEngine,
+        resolver: &ImportResolver,
+        emitter: &RustEmitter,
+    ) -> Result<GeneratedFile, SchemaError>;
+
+    fn lower_to_rust_module(
+        &self,
+        identity: SchemaIdentity,
+        engine: &SchemaEngine,
+        resolver: &ImportResolver,
+        emitter: &RustEmitter,
+    ) -> Result<RustModule, SchemaError>;
+}
+
+impl RustSchemaSourceLowering for SchemaSource {
+    fn lower_to_rust_file(
+        &self,
+        identity: SchemaIdentity,
+        engine: &SchemaEngine,
+        resolver: &ImportResolver,
+        emitter: &RustEmitter,
+    ) -> Result<GeneratedFile, SchemaError> {
+        let module = self.lower_to_rust_module(identity, engine, resolver, emitter)?;
+        Ok(GeneratedFile {
+            path: module.file_path().to_owned(),
+            code: module.render(),
+        })
+    }
+
+    fn lower_to_rust_module(
+        &self,
+        identity: SchemaIdentity,
+        engine: &SchemaEngine,
+        resolver: &ImportResolver,
+        emitter: &RustEmitter,
+    ) -> Result<RustModule, SchemaError> {
+        let schema = engine.lower_schema_source_with_resolver(self, identity, resolver)?;
+        Ok(schema.lower_to_rust_module(emitter))
     }
 }
 
