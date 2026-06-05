@@ -438,6 +438,11 @@ impl SourceArtifactRoundTrip {
         if recovered != self.artifact {
             return Err(BuildError::SchemaSourceRoundTrip { path: self.path });
         }
+        let source_binary = recovered.to_binary_bytes()?;
+        let recovered_from_binary = SchemaSourceArtifact::from_binary_bytes(&source_binary)?;
+        if recovered_from_binary != recovered {
+            return Err(BuildError::SchemaSourceArchiveRoundTrip { path: self.path });
+        }
         Ok(GeneratedArtifact::new(self.path, source_text))
     }
 }
@@ -558,4 +563,8 @@ pub enum BuildError {
     },
     #[error("schema source artifact did not round-trip through generated text at {path:?}")]
     SchemaSourceRoundTrip { path: PathBuf },
+    #[error(
+        "schema source artifact did not round-trip through generated binary archive at {path:?}"
+    )]
+    SchemaSourceArchiveRoundTrip { path: PathBuf },
 }

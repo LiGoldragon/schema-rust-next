@@ -132,12 +132,12 @@ data and must not grow a second parser for the authored form.
   `DEP_<LINKS>_SCHEMA_DIR` value through `DependencySchema::from_cargo_metadata`.
 - Driver freshness is source-visible and committed. Authored `.schema` input
   is parsed into `SchemaSourceArtifact` and round-tripped through generated
-  schema text as an internal codec witness, but it is not treated as generated
-  output. Generated Rust files are checked against the working tree; a
-  component-specific update environment variable rewrites them when the schema
-  intentionally changes. `.asschema` remains available through explicit
-  compatibility artifact APIs, but the shared component driver does not write
-  or freshness-check `.asschema` files.
+  schema text plus rkyv archive bytes as internal codec witnesses, but it is
+  not treated as generated output. Generated Rust files are checked against the
+  working tree; a component-specific update environment variable rewrites them
+  when the schema intentionally changes. `.asschema` remains available through
+  explicit compatibility artifact APIs, but the shared component driver does
+  not write or freshness-check `.asschema` files.
 - Signal, Nexus, and SEMA roots are emitted from the same schema shape:
   imports/exports, input, output, and namespace. Emission may attach different
   support traits per plane, but the generated Rust mirrors the same authored
