@@ -2939,14 +2939,7 @@ impl RustWriter {
         if type_name == "std::convert::Infallible" {
             return;
         }
-        if self
-            .declaration_enum_named(declarations, type_name)
-            .is_some()
-            || self.root_enum_named(root_enums, type_name).is_some()
-            || self
-                .declaration_alias_target(declarations, type_name)
-                .is_some()
-        {
+        if self.local_runtime_role_type_exists(declarations, root_enums, type_name) {
             self.push_role_trait_impl(declarations, role_impls, type_name, trait_name);
         }
     }
@@ -2988,6 +2981,27 @@ impl RustWriter {
                     _ => None,
                 },
                 _ => None,
+            })
+    }
+
+    fn local_runtime_role_type_exists(
+        &self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+        type_name: &str,
+    ) -> bool {
+        if self
+            .declaration_enum_named(declarations, type_name)
+            .is_some()
+            || self.root_enum_named(root_enums, type_name).is_some()
+        {
+            return true;
+        }
+
+        self.declaration_alias_target(declarations, type_name)
+            .is_some_and(|target| {
+                self.declaration_enum_named(declarations, target).is_some()
+                    || self.root_enum_named(root_enums, target).is_some()
             })
     }
 

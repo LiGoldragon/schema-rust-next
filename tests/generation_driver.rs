@@ -71,6 +71,18 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
         "nexus runtime target should emit runner glue over imported contract output:\n{nexus}"
     );
     assert!(
+        nexus.contains("impl triad_runtime::NexusWork for NexusWork {}"),
+        "nexus runtime target should mark the local work enum with the runtime role trait:\n{nexus}"
+    );
+    assert!(
+        !nexus.contains("impl triad_runtime::SemaWriteInput for SemaWriteInput {}"),
+        "nexus runtime target must not re-implement role traits for imported SEMA roots:\n{nexus}"
+    );
+    assert!(
+        !nexus.contains("impl triad_runtime::SemaReadInput for SemaReadInput {}"),
+        "nexus runtime target must not re-implement role traits for imported SEMA roots:\n{nexus}"
+    );
+    assert!(
         nexus.contains(
             "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ContractOutput;"
         ),
@@ -87,6 +99,14 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
     assert!(
         sema.contains("pub trait SemaEngine"),
         "sema runtime target should emit SemaEngine:\n{sema}"
+    );
+    assert!(
+        sema.contains("impl triad_runtime::SemaWriteInput for SemaWriteInput {}"),
+        "sema runtime target should mark its local write input root with the runtime role trait:\n{sema}"
+    );
+    assert!(
+        sema.contains("impl triad_runtime::SemaReadInput for SemaReadInput {}"),
+        "sema runtime target should mark its local read input root with the runtime role trait:\n{sema}"
     );
     assert!(
         sema.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"),
