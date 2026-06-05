@@ -384,37 +384,65 @@ impl Output {
 }
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum SignalObjectName {
     Input(InputRoute),
     Output(OutputRoute),
 }
-
 impl SignalObjectName {
     pub fn name(self) -> &'static str {
         match self {
-            Self::Input(route) => match route {
-                InputRoute::Record => "SignalInputRecord",
-                InputRoute::Observe => "SignalInputObserve",
-            },
-            Self::Output(route) => match route {
-                OutputRoute::RecordAccepted => "SignalOutputRecordAccepted",
-                OutputRoute::RecordsObserved => "SignalOutputRecordsObserved",
-            },
+            Self::Input(route) => {
+                match route {
+                    InputRoute::Record => "SignalInputRecord",
+                    InputRoute::Observe => "SignalInputObserve",
+                }
+            }
+            Self::Output(route) => {
+                match route {
+                    OutputRoute::RecordAccepted => "SignalOutputRecordAccepted",
+                    OutputRoute::RecordsObserved => "SignalOutputRecordsObserved",
+                }
+            }
         }
     }
 }
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum ObjectName {
     Signal(SignalObjectName),
 }
-
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub struct TraceEvent(pub ObjectName);
-
 impl ObjectName {
     pub fn name(self) -> &'static str {
         match self {
@@ -422,16 +450,13 @@ impl ObjectName {
         }
     }
 }
-
 impl TraceEvent {
     pub fn new(object_name: ObjectName) -> Self {
         Self(object_name)
     }
-
     pub fn object_name(&self) -> ObjectName {
         self.0
     }
-
     pub fn name(&self) -> &'static str {
         self.0.name()
     }

@@ -600,7 +600,16 @@ impl SemaReadOutput {
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum SignalObjectName {
     Input(InputRoute),
     Output(OutputRoute),
@@ -611,19 +620,22 @@ pub enum SignalObjectName {
     Triaged,
     Replied,
 }
-
 impl SignalObjectName {
     pub fn name(self) -> &'static str {
         match self {
-            Self::Input(route) => match route {
-                InputRoute::Record => "SignalInputRecord",
-                InputRoute::Observe => "SignalInputObserve",
-            },
-            Self::Output(route) => match route {
-                OutputRoute::RecordAccepted => "SignalOutputRecordAccepted",
-                OutputRoute::RecordsStashed => "SignalOutputRecordsStashed",
-                OutputRoute::Error => "SignalOutputError",
-            },
+            Self::Input(route) => {
+                match route {
+                    InputRoute::Record => "SignalInputRecord",
+                    InputRoute::Observe => "SignalInputObserve",
+                }
+            }
+            Self::Output(route) => {
+                match route {
+                    OutputRoute::RecordAccepted => "SignalOutputRecordAccepted",
+                    OutputRoute::RecordsStashed => "SignalOutputRecordsStashed",
+                    OutputRoute::Error => "SignalOutputError",
+                }
+            }
             Self::Started => "SignalStarted",
             Self::Stopped => "SignalStopped",
             Self::Admitted => "SignalAdmitted",
@@ -634,7 +646,16 @@ impl SignalObjectName {
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum NexusObjectName {
     Work(NexusWorkRoute),
     Action(NexusActionRoute),
@@ -643,23 +664,26 @@ pub enum NexusObjectName {
     Entered,
     Decided,
 }
-
 impl NexusObjectName {
     pub fn name(self) -> &'static str {
         match self {
-            Self::Work(route) => match route {
-                NexusWorkRoute::SignalArrived => "NexusWorkSignalArrived",
-                NexusWorkRoute::SemaWriteCompleted => "NexusWorkSemaWriteCompleted",
-                NexusWorkRoute::SemaReadCompleted => "NexusWorkSemaReadCompleted",
-                NexusWorkRoute::EffectCompleted => "NexusWorkEffectCompleted",
-            },
-            Self::Action(route) => match route {
-                NexusActionRoute::CommandSemaWrite => "NexusActionCommandSemaWrite",
-                NexusActionRoute::CommandSemaRead => "NexusActionCommandSemaRead",
-                NexusActionRoute::ReplyToSignal => "NexusActionReplyToSignal",
-                NexusActionRoute::CommandEffect => "NexusActionCommandEffect",
-                NexusActionRoute::Continue => "NexusActionContinue",
-            },
+            Self::Work(route) => {
+                match route {
+                    NexusWorkRoute::SignalArrived => "NexusWorkSignalArrived",
+                    NexusWorkRoute::SemaWriteCompleted => "NexusWorkSemaWriteCompleted",
+                    NexusWorkRoute::SemaReadCompleted => "NexusWorkSemaReadCompleted",
+                    NexusWorkRoute::EffectCompleted => "NexusWorkEffectCompleted",
+                }
+            }
+            Self::Action(route) => {
+                match route {
+                    NexusActionRoute::CommandSemaWrite => "NexusActionCommandSemaWrite",
+                    NexusActionRoute::CommandSemaRead => "NexusActionCommandSemaRead",
+                    NexusActionRoute::ReplyToSignal => "NexusActionReplyToSignal",
+                    NexusActionRoute::CommandEffect => "NexusActionCommandEffect",
+                    NexusActionRoute::Continue => "NexusActionContinue",
+                }
+            }
             Self::Started => "NexusStarted",
             Self::Stopped => "NexusStopped",
             Self::Entered => "NexusEntered",
@@ -668,7 +692,16 @@ impl NexusObjectName {
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum SemaObjectName {
     WriteInput(SemaWriteInputRoute),
     ReadInput(SemaReadInputRoute),
@@ -679,24 +712,31 @@ pub enum SemaObjectName {
     WriteApplied,
     ReadObserved,
 }
-
 impl SemaObjectName {
     pub fn name(self) -> &'static str {
         match self {
-            Self::WriteInput(route) => match route {
-                SemaWriteInputRoute::Record => "SemaWriteInputRecord",
-            },
-            Self::ReadInput(route) => match route {
-                SemaReadInputRoute::Observe => "SemaReadInputObserve",
-            },
-            Self::WriteOutput(route) => match route {
-                SemaWriteOutputRoute::Recorded => "SemaWriteOutputRecorded",
-                SemaWriteOutputRoute::Missed => "SemaWriteOutputMissed",
-            },
-            Self::ReadOutput(route) => match route {
-                SemaReadOutputRoute::Observed => "SemaReadOutputObserved",
-                SemaReadOutputRoute::Missed => "SemaReadOutputMissed",
-            },
+            Self::WriteInput(route) => {
+                match route {
+                    SemaWriteInputRoute::Record => "SemaWriteInputRecord",
+                }
+            }
+            Self::ReadInput(route) => {
+                match route {
+                    SemaReadInputRoute::Observe => "SemaReadInputObserve",
+                }
+            }
+            Self::WriteOutput(route) => {
+                match route {
+                    SemaWriteOutputRoute::Recorded => "SemaWriteOutputRecorded",
+                    SemaWriteOutputRoute::Missed => "SemaWriteOutputMissed",
+                }
+            }
+            Self::ReadOutput(route) => {
+                match route {
+                    SemaReadOutputRoute::Observed => "SemaReadOutputObserved",
+                    SemaReadOutputRoute::Missed => "SemaReadOutputMissed",
+                }
+            }
             Self::Started => "SemaStarted",
             Self::Stopped => "SemaStopped",
             Self::WriteApplied => "SemaWriteApplied",
@@ -705,16 +745,32 @@ impl SemaObjectName {
     }
 }
 
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum ObjectName {
     Signal(SignalObjectName),
     Nexus(NexusObjectName),
     Sema(SemaObjectName),
 }
-
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub struct TraceEvent(pub ObjectName);
-
 impl ObjectName {
     pub fn name(self) -> &'static str {
         match self {
@@ -724,16 +780,13 @@ impl ObjectName {
         }
     }
 }
-
 impl TraceEvent {
     pub fn new(object_name: ObjectName) -> Self {
         Self(object_name)
     }
-
     pub fn object_name(&self) -> ObjectName {
         self.0
     }
-
     pub fn name(&self) -> &'static str {
         self.0.name()
     }

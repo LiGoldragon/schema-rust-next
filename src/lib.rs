@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{ToTokens, quote};
 use schema_next::{
     AliasDeclaration, Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, ImportResolver,
@@ -1075,6 +1075,167 @@ impl ToTokens for SignalFrameStreamingSupportTokens<'_> {
                             event: self,
                         },
                     )
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct TraceObjectNameEnumTokens<'schema, 'context> {
+    enum_name: &'static str,
+    rendered_prefix: &'static str,
+    interface_roots: &'schema [TraceInterfaceRoot<'schema>],
+    actor_variants: &'schema [&'static str],
+    context: &'context RustRenderContext,
+}
+
+impl<'schema, 'context> TraceObjectNameEnumTokens<'schema, 'context> {
+    fn new(
+        enum_name: &'static str,
+        rendered_prefix: &'static str,
+        interface_roots: &'schema [TraceInterfaceRoot<'schema>],
+        actor_variants: &'schema [&'static str],
+        context: &'context RustRenderContext,
+    ) -> Self {
+        Self {
+            enum_name,
+            rendered_prefix,
+            interface_roots,
+            actor_variants,
+            context,
+        }
+    }
+}
+
+impl ToTokens for TraceObjectNameEnumTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let enum_name = RustIdentifier::new(self.enum_name);
+        let attributes = self.context.derive_attributes(true, false);
+        let interface_variants = self.interface_roots.iter().map(|root| {
+            let object_variant = RustIdentifier::new(root.object_variant);
+            let route_name = format!("{}Route", root.type_name.as_str());
+            let route_type = RustIdentifier::new(&route_name);
+            quote! { #object_variant(#route_type), }
+        });
+        let actor_variants = self.actor_variants.iter().map(|variant| {
+            let variant = RustIdentifier::new(variant);
+            quote! { #variant, }
+        });
+        let interface_match_arms = self.interface_roots.iter().map(|root| {
+            let object_variant = RustIdentifier::new(root.object_variant);
+            let route_name = format!("{}Route", root.type_name.as_str());
+            let route_type = RustIdentifier::new(&route_name);
+            let route_arms = root.enum_declaration.variants().iter().map(|variant| {
+                let variant_name = RustIdentifier::new(variant.name().as_str());
+                let rendered_name = format!("{}{}", root.name_prefix, variant.name());
+                let rendered_name = Literal::string(&rendered_name);
+                quote! { #route_type::#variant_name => #rendered_name, }
+            });
+            quote! {
+                Self::#object_variant(route) => match route {
+                    #( #route_arms )*
+                },
+            }
+        });
+        let actor_match_arms = self.actor_variants.iter().map(|variant| {
+            let variant_name = RustIdentifier::new(variant);
+            let rendered_name = format!("{}{}", self.rendered_prefix, variant);
+            let rendered_name = Literal::string(&rendered_name);
+            quote! { Self::#variant_name => #rendered_name, }
+        });
+        quote! {
+            #( #attributes )*
+            pub enum #enum_name {
+                #( #interface_variants )*
+                #( #actor_variants )*
+            }
+
+            impl #enum_name {
+                pub fn name(self) -> &'static str {
+                    match self {
+                        #( #interface_match_arms )*
+                        #( #actor_match_arms )*
+                    }
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct TraceSupportTokens<'context> {
+    has_signal: bool,
+    has_nexus: bool,
+    has_sema: bool,
+    context: &'context RustRenderContext,
+}
+
+impl<'context> TraceSupportTokens<'context> {
+    fn new(
+        has_signal: bool,
+        has_nexus: bool,
+        has_sema: bool,
+        context: &'context RustRenderContext,
+    ) -> Self {
+        Self {
+            has_signal,
+            has_nexus,
+            has_sema,
+            context,
+        }
+    }
+}
+
+impl ToTokens for TraceSupportTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let attributes = self.context.derive_attributes(true, false);
+        let signal_variant = self
+            .has_signal
+            .then(|| quote! { Signal(SignalObjectName), });
+        let nexus_variant = self.has_nexus.then(|| quote! { Nexus(NexusObjectName), });
+        let sema_variant = self.has_sema.then(|| quote! { Sema(SemaObjectName), });
+        let signal_match = self
+            .has_signal
+            .then(|| quote! { Self::Signal(object_name) => object_name.name(), });
+        let nexus_match = self
+            .has_nexus
+            .then(|| quote! { Self::Nexus(object_name) => object_name.name(), });
+        let sema_match = self
+            .has_sema
+            .then(|| quote! { Self::Sema(object_name) => object_name.name(), });
+        quote! {
+            #( #attributes )*
+            pub enum ObjectName {
+                #signal_variant
+                #nexus_variant
+                #sema_variant
+            }
+
+            #( #attributes )*
+            pub struct TraceEvent(pub ObjectName);
+
+            impl ObjectName {
+                pub fn name(self) -> &'static str {
+                    match self {
+                        #signal_match
+                        #nexus_match
+                        #sema_match
+                    }
+                }
+            }
+
+            impl TraceEvent {
+                pub fn new(object_name: ObjectName) -> Self {
+                    Self(object_name)
+                }
+
+                pub fn object_name(&self) -> ObjectName {
+                    self.0
+                }
+
+                pub fn name(&self) -> &'static str {
+                    self.0.name()
                 }
             }
         }
@@ -2280,117 +2441,55 @@ impl RustWriter {
         if !has_signal && !has_nexus && !has_sema {
             return;
         }
+        let context = self.render_context();
         self.emit_object_name_enum(
             "SignalObjectName",
             "Signal",
             &signal_roots,
             &signal_actor_variants,
+            &context,
         );
         self.emit_object_name_enum(
             "NexusObjectName",
             "Nexus",
             &nexus_roots,
             &nexus_actor_variants,
+            &context,
         );
-        self.emit_object_name_enum("SemaObjectName", "Sema", &sema_roots, &sema_actor_variants);
-        self.line(self.copy_data_type_derive());
-        self.line("pub enum ObjectName {");
-        if has_signal {
-            self.line("    Signal(SignalObjectName),");
-        }
-        if has_nexus {
-            self.line("    Nexus(NexusObjectName),");
-        }
-        if has_sema {
-            self.line("    Sema(SemaObjectName),");
-        }
-        self.line("}");
-        self.blank();
-        self.line(self.copy_data_type_derive());
-        self.line("pub struct TraceEvent(pub ObjectName);");
-        self.blank();
-        self.line("impl ObjectName {");
-        self.line("    pub fn name(self) -> &'static str {");
-        self.line("        match self {");
-        if has_signal {
-            self.line("            Self::Signal(object_name) => object_name.name(),");
-        }
-        if has_nexus {
-            self.line("            Self::Nexus(object_name) => object_name.name(),");
-        }
-        if has_sema {
-            self.line("            Self::Sema(object_name) => object_name.name(),");
-        }
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line("impl TraceEvent {");
-        self.line("    pub fn new(object_name: ObjectName) -> Self {");
-        self.line("        Self(object_name)");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn object_name(&self) -> ObjectName {");
-        self.line("        self.0");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn name(&self) -> &'static str {");
-        self.line("        self.0.name()");
-        self.line("    }");
-        self.line("}");
+        self.emit_object_name_enum(
+            "SemaObjectName",
+            "Sema",
+            &sema_roots,
+            &sema_actor_variants,
+            &context,
+        );
+        self.emit_item_tokens(
+            TraceSupportTokens::new(has_signal, has_nexus, has_sema, &context).into_token_stream(),
+        );
         self.blank();
     }
 
     fn emit_object_name_enum(
         &mut self,
-        enum_name: &str,
-        rendered_prefix: &str,
+        enum_name: &'static str,
+        rendered_prefix: &'static str,
         interface_roots: &[TraceInterfaceRoot<'_>],
-        actor_variants: &[&str],
+        actor_variants: &[&'static str],
+        context: &RustRenderContext,
     ) {
         if interface_roots.is_empty() && actor_variants.is_empty() {
             return;
         }
-        self.line(self.copy_data_type_derive());
-        self.line(format!("pub enum {enum_name} {{"));
-        for root in interface_roots {
-            self.line(format!(
-                "    {}({}Route),",
-                root.object_variant, root.type_name
-            ));
-        }
-        for variant in actor_variants {
-            self.line(format!("    {variant},"));
-        }
-        self.line("}");
-        self.blank();
-        self.line(format!("impl {enum_name} {{"));
-        self.line("    pub fn name(self) -> &'static str {");
-        self.line("        match self {");
-        for root in interface_roots {
-            self.line(format!(
-                "            Self::{}(route) => match route {{",
-                root.object_variant
-            ));
-            for variant in root.enum_declaration.variants() {
-                self.line(format!(
-                    "                {}Route::{} => \"{}{}\",",
-                    root.type_name,
-                    variant.name(),
-                    root.name_prefix,
-                    variant.name()
-                ));
-            }
-            self.line("            },");
-        }
-        for variant in actor_variants {
-            self.line(format!(
-                "            Self::{variant} => \"{rendered_prefix}{variant}\","
-            ));
-        }
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
+        self.emit_item_tokens(
+            TraceObjectNameEnumTokens::new(
+                enum_name,
+                rendered_prefix,
+                interface_roots,
+                actor_variants,
+                context,
+            )
+            .into_token_stream(),
+        );
         self.blank();
     }
 

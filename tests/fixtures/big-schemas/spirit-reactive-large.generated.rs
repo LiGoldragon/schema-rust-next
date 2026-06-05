@@ -667,47 +667,75 @@ impl Output {
 }
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum SignalObjectName {
     Input(InputRoute),
     Output(OutputRoute),
 }
-
 impl SignalObjectName {
     pub fn name(self) -> &'static str {
         match self {
-            Self::Input(route) => match route {
-                InputRoute::Record => "SignalInputRecord",
-                InputRoute::Correct => "SignalInputCorrect",
-                InputRoute::Observe => "SignalInputObserve",
-                InputRoute::Watch => "SignalInputWatch",
-                InputRoute::Unwatch => "SignalInputUnwatch",
-                InputRoute::Reindex => "SignalInputReindex",
-                InputRoute::Compact => "SignalInputCompact",
-            },
-            Self::Output(route) => match route {
-                OutputRoute::Recorded => "SignalOutputRecorded",
-                OutputRoute::Corrected => "SignalOutputCorrected",
-                OutputRoute::Observed => "SignalOutputObserved",
-                OutputRoute::Watching => "SignalOutputWatching",
-                OutputRoute::Unwatched => "SignalOutputUnwatched",
-                OutputRoute::Rejected => "SignalOutputRejected",
-                OutputRoute::Indexed => "SignalOutputIndexed",
-            },
+            Self::Input(route) => {
+                match route {
+                    InputRoute::Record => "SignalInputRecord",
+                    InputRoute::Correct => "SignalInputCorrect",
+                    InputRoute::Observe => "SignalInputObserve",
+                    InputRoute::Watch => "SignalInputWatch",
+                    InputRoute::Unwatch => "SignalInputUnwatch",
+                    InputRoute::Reindex => "SignalInputReindex",
+                    InputRoute::Compact => "SignalInputCompact",
+                }
+            }
+            Self::Output(route) => {
+                match route {
+                    OutputRoute::Recorded => "SignalOutputRecorded",
+                    OutputRoute::Corrected => "SignalOutputCorrected",
+                    OutputRoute::Observed => "SignalOutputObserved",
+                    OutputRoute::Watching => "SignalOutputWatching",
+                    OutputRoute::Unwatched => "SignalOutputUnwatched",
+                    OutputRoute::Rejected => "SignalOutputRejected",
+                    OutputRoute::Indexed => "SignalOutputIndexed",
+                }
+            }
         }
     }
 }
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum ObjectName {
     Signal(SignalObjectName),
 }
-
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub struct TraceEvent(pub ObjectName);
-
 impl ObjectName {
     pub fn name(self) -> &'static str {
         match self {
@@ -715,16 +743,13 @@ impl ObjectName {
         }
     }
 }
-
 impl TraceEvent {
     pub fn new(object_name: ObjectName) -> Self {
         Self(object_name)
     }
-
     pub fn object_name(&self) -> ObjectName {
         self.0
     }
-
     pub fn name(&self) -> &'static str {
         self.0.name()
     }
