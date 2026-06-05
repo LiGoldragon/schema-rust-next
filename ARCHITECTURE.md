@@ -10,12 +10,23 @@ beside that typed source/schema pipeline.
 ## Interfaces
 
 - `RustEmitter` is the code-generation engine.
-- `RustSchemaLowering` is the trait implemented for `schema-next::Schema`.
+- `RustSchemaLowering` is the entry trait implemented for `schema-next::Schema`.
   The deserialized semantic schema object owns the lowering call; the emitter
   supplies policy such as target, NOTA surface, and generator name.
 - `RustSchemaSourceLowering` is the trait implemented for
   `schema-next::SchemaSource`. It lowers typed source through `SchemaEngine`
   and then through `RustSchemaLowering`.
+- `LowerToRust<Target>` is the recursive projection trait implemented for the
+  schema subobjects that own each piece of the Rust model: imports,
+  declarations, type declarations, aliases, newtypes, structs, fields, enums,
+  variants, and support metadata. The top-level lowering traits are facades
+  over these per-noun projections, not a place where schema meaning is
+  reassembled centrally.
+- The Rust declaration renderer uses `proc_macro2::TokenStream` and `quote`
+  through context-carrying token wrappers over Rust-model nouns. Plain
+  `ToTokens` has no context parameter, so generation-wide switches such as the
+  NOTA feature gate and private-type visibility flow through
+  `RustRenderContext` wrappers instead of being copied into every noun.
 - `RustModule` is the data model between semantic schema data and rendered
   Rust text. It carries scalar aliases, cross-crate imports, generated Rust
   declarations, root enums, and support metadata before anything is rendered.
@@ -43,11 +54,13 @@ emitter lowers that schema-in-Rust value into Rust interface code.
 `SchemaEngine` to lower source into `Schema`, then render `RustModule`.
 Callers that already hold the semantic value use `Schema`'s
 `RustSchemaLowering` trait methods (`lower_to_rust_file`,
-`lower_to_rust_code`, `lower_to_rust_module`). No generated component path
-reads or writes a separate assembled-schema text file.
+`lower_to_rust_code`, `lower_to_rust_module`). Those methods build a
+`RustLoweringContext` and recursively ask schema subobjects to lower
+themselves into Rust-model nouns. No generated component path reads or writes a
+separate assembled-schema text file.
 
 The rendered source is `RustModule::render()`, so tests can inspect the module
-data shape before comparing strings. Namespace entries arrive as
+data shape before comparing generated source text. Namespace entries arrive as
 visibility-tagged declarations: `(Public Name Value)` or `(Private Name
 Value)`. The emitter must project that boundary into Rust instead of
 flattening every type into the same public surface.
@@ -74,7 +87,10 @@ grow a second parser for the authored form.
   declaration with exactly one field emits as a tuple newtype.
   `TypeDeclaration::Struct` is the named-field map shape.
 - Generated Rust is source-visible under `src/schema/`; consumers include or
-  compile that source rather than hiding the interface in `OUT_DIR`.
+  compile that source rather than hiding the interface in `OUT_DIR` or behind a
+  compiler macro expansion. The emitter uses Rust syntax token machinery
+  internally where it owns Rust syntax, then pretty-prints tokens into checked
+  source files.
 - Emission is tested by source fixture comparison and by compiling the fixture
   as Rust code.
 - `RustEmissionTarget::WireContract` emits the external signal or meta-signal

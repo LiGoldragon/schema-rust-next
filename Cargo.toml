@@ -1,6 +1,6 @@
 [package]
 name         = "schema-rust-next"
-version      = "0.1.12"
+version      = "0.1.13"
 edition      = "2024"
 rust-version = "1.85"
 license      = "MIT OR Apache-2.0"
@@ -13,7 +13,11 @@ name = "schema_rust_next"
 path = "src/lib.rs"
 
 [dependencies]
+prettyplease = "0.2"
+proc-macro2 = "1"
+quote = "1"
 schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "main" }
+syn = { version = "2", features = ["full"] }
 thiserror = "2"
 
 [features]

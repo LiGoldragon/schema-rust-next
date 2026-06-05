@@ -40,11 +40,29 @@ or freshness-check an intermediate schema artifact, and it does not preserve
 older assembled-schema artifact or path APIs beside the source/schema
 pipeline.
 
-*Rust lowering is a trait surface on the typed schema objects.* `schema-next`
-owns schema semantics and must not depend on Rust emission, so the trait lives
-here and is implemented for `schema_next::Schema` and `schema_next::SchemaSource`.
-`RustEmitter` supplies emission policy; the deserialized schema object owns the
-lowering call.
+*Rust lowering is a trait surface on the typed schema objects and their
+subobjects.* `schema-next` owns schema semantics and must not depend on Rust
+emission, so the trait lives here and is implemented for `schema_next::Schema`,
+`schema_next::SchemaSource`, and the schema nouns that project into Rust-model
+nouns: declarations, imports, type declarations, aliases, newtypes, structs,
+fields, enums, variants, and support metadata. `RustEmitter` supplies emission
+policy; the deserialized schema structure owns the lowering calls recursively
+instead of handing the whole tree to a centralized adapter.
+
+*Generated Rust syntax is built as Rust tokens, then written as visible source.*
+The emitter should use Rust's macro/codegen substrate (`proc_macro2` and
+`quote`) for syntax construction rather than treating Rust as ad hoc formatted
+strings. The source-visible boundary still stands: generated modules are
+pretty-printed into `src/schema/*.rs` and freshness-checked by the build
+driver rather than hidden behind compiler macro expansion.
+
+*Context stays contextual while nouns own intrinsic shape.* Intrinsic properties
+such as declaration visibility and field names belong on the Rust-model nouns.
+Generation-wide options such as the NOTA text feature gate or the selected
+runtime target are contextual and must not be duplicated into every noun.
+Context-carrying token wrappers are the correct bridge: each wrapper implements
+`ToTokens` for the noun in a `RustRenderContext`, while the noun itself stays a
+clean model of its own syntax.
 
 *NOTA text projection is opted into per-emission target.* Generated binaries
 always carry rkyv support. `nota_next::NotaDecode` and

@@ -1,6 +1,6 @@
 use schema_rust_next::{
-    NotaSurface, RustEmissionOptions, RustEmissionTarget, RustEmitter, RustSchemaLowering,
-    RustTypeDeclaration,
+    LowerToRust, NotaSurface, RustEmissionOptions, RustEmissionTarget, RustEmitter,
+    RustLoweringContext, RustSchemaLowering, RustTypeDeclaration,
 };
 use std::path::PathBuf;
 
@@ -114,6 +114,33 @@ fn schema_object_lowers_itself_into_rust_through_emitter_policy() {
     assert_eq!(module, emitter.emit_module_from_schema(&schema));
     assert_eq!(generated.path, "src/schema/lib.rs");
     assert!(generated.code.as_str().contains("pub enum Input"));
+}
+
+#[test]
+fn schema_subobjects_lower_themselves_into_rust_model_nouns() {
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let context = RustLoweringContext::from_emitter(&RustEmitter::default());
+
+    let entry = schema
+        .namespace()
+        .iter()
+        .find(|declaration| declaration.name().as_str() == "Entry")
+        .expect("schema entry declaration");
+    let rust_entry = entry.lower_to_rust(&context);
+    let RustTypeDeclaration::Struct(entry_struct) = rust_entry.value() else {
+        panic!("Entry lowers to a Rust struct noun");
+    };
+    assert_eq!(entry_struct.name().as_str(), "Entry");
+    assert_eq!(entry_struct.fields()[0].name().as_str(), "topics");
+
+    let input = schema
+        .input_and_output()
+        .into_iter()
+        .find(|root| root.name.as_str() == "Input")
+        .expect("schema input root");
+    let rust_input = input.lower_to_rust(&context);
+    assert_eq!(rust_input.name().as_str(), "Input");
+    assert_eq!(rust_input.variants()[0].name().as_str(), "Record");
 }
 
 #[test]

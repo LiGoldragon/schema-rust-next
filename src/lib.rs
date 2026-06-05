@@ -1,3 +1,5 @@
+use proc_macro2::{Ident, Span, TokenStream};
+use quote::{ToTokens, quote};
 use schema_next::{
     AliasDeclaration, Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, ImportResolver,
     Name, NewtypeDeclaration, ResolvedImport, Schema, SchemaEngine, SchemaError, SchemaIdentity,
@@ -99,7 +101,8 @@ impl RustSchemaLowering for Schema {
     }
 
     fn lower_to_rust_module(&self, emitter: &RustEmitter) -> RustModule {
-        RustModule::from_schema(self, emitter.generator_name, emitter.options.clone())
+        let context = RustLoweringContext::from_emitter(emitter);
+        self.lower_to_rust(&context)
     }
 }
 
@@ -148,6 +151,37 @@ impl RustSchemaSourceLowering for SchemaSource {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct RustLoweringContext {
+    generator_name: String,
+    options: RustEmissionOptions,
+}
+
+impl RustLoweringContext {
+    pub fn new(generator_name: impl Into<String>, options: RustEmissionOptions) -> Self {
+        Self {
+            generator_name: generator_name.into(),
+            options,
+        }
+    }
+
+    pub fn from_emitter(emitter: &RustEmitter) -> Self {
+        Self::new(emitter.generator_name, emitter.options.clone())
+    }
+
+    fn generator_name(&self) -> &str {
+        &self.generator_name
+    }
+
+    fn options(&self) -> RustEmissionOptions {
+        self.options.clone()
+    }
+}
+
+pub trait LowerToRust<Target> {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> Target;
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustModule {
     file_path: String,
@@ -166,30 +200,8 @@ impl RustModule {
         generator_name: impl Into<String>,
         options: RustEmissionOptions,
     ) -> Self {
-        let declarations = schema
-            .namespace()
-            .iter()
-            .map(RustDeclaration::from_schema_declaration)
-            .collect::<Vec<_>>();
-        let root_enums = schema
-            .input_and_output()
-            .into_iter()
-            .map(RustEnum::from_schema_enum)
-            .collect::<Vec<_>>();
-        Self {
-            file_path: RustModulePath::new(schema.identity().component().clone()).to_file_path(),
-            generator_name: generator_name.into(),
-            scalar_aliases: RustScalarAlias::default_aliases(),
-            imports: schema
-                .resolved_imports()
-                .iter()
-                .map(RustImport::from_resolved_import)
-                .collect(),
-            declarations,
-            root_enums,
-            support: RustSupportModel::from_schema(schema),
-            options,
-        }
+        let context = RustLoweringContext::new(generator_name, options);
+        schema.lower_to_rust(&context)
     }
 
     pub fn file_path(&self) -> &str {
@@ -266,6 +278,35 @@ impl RustModule {
             writer.emit_upgrade_support();
         }
         RustCode(writer.finish())
+    }
+}
+
+impl LowerToRust<RustModule> for Schema {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustModule {
+        let declarations = self
+            .namespace()
+            .iter()
+            .map(|declaration| declaration.lower_to_rust(context))
+            .collect::<Vec<_>>();
+        let root_enums = self
+            .input_and_output()
+            .into_iter()
+            .map(|root| root.lower_to_rust(context))
+            .collect::<Vec<_>>();
+        RustModule {
+            file_path: RustModulePath::new(self.identity().component().clone()).to_file_path(),
+            generator_name: context.generator_name().to_owned(),
+            scalar_aliases: RustScalarAlias::default_aliases(),
+            imports: self
+                .resolved_imports()
+                .iter()
+                .map(|import| import.lower_to_rust(context))
+                .collect(),
+            declarations,
+            root_enums,
+            support: <Self as LowerToRust<RustSupportModel>>::lower_to_rust(self, context),
+            options: context.options(),
+        }
     }
 }
 
@@ -523,14 +564,16 @@ pub struct RustImport {
 }
 
 impl RustImport {
-    fn from_resolved_import(import: &ResolvedImport) -> Self {
-        Self {
-            use_item: import.use_item(),
-        }
-    }
-
     pub fn use_item(&self) -> &str {
         &self.use_item
+    }
+}
+
+impl LowerToRust<RustImport> for ResolvedImport {
+    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustImport {
+        RustImport {
+            use_item: self.use_item(),
+        }
     }
 }
 
@@ -542,14 +585,6 @@ pub struct RustDeclaration {
 }
 
 impl RustDeclaration {
-    fn from_schema_declaration(declaration: &Declaration) -> Self {
-        Self {
-            visibility: declaration.visibility(),
-            name: declaration.name().clone(),
-            value: RustTypeDeclaration::from_schema_type(declaration.value()),
-        }
-    }
-
     pub fn visibility(&self) -> Visibility {
         self.visibility
     }
@@ -563,6 +598,16 @@ impl RustDeclaration {
     }
 }
 
+impl LowerToRust<RustDeclaration> for Declaration {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustDeclaration {
+        RustDeclaration {
+            visibility: self.visibility(),
+            name: self.name().clone(),
+            value: self.value().lower_to_rust(context),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RustTypeDeclaration {
     Alias(RustAlias),
@@ -571,20 +616,20 @@ pub enum RustTypeDeclaration {
     Newtype(RustNewtype),
 }
 
-impl RustTypeDeclaration {
-    fn from_schema_type(declaration: &TypeDeclaration) -> Self {
-        match declaration {
+impl LowerToRust<RustTypeDeclaration> for TypeDeclaration {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustTypeDeclaration {
+        match self {
             TypeDeclaration::Alias(declaration) => {
-                Self::Alias(RustAlias::from_schema_alias(declaration))
+                RustTypeDeclaration::Alias(declaration.lower_to_rust(context))
             }
             TypeDeclaration::Struct(declaration) => {
-                Self::Struct(RustStruct::from_schema_struct(declaration))
+                RustTypeDeclaration::Struct(declaration.lower_to_rust(context))
             }
             TypeDeclaration::Enum(declaration) => {
-                Self::Enum(RustEnum::from_schema_enum(declaration))
+                RustTypeDeclaration::Enum(declaration.lower_to_rust(context))
             }
             TypeDeclaration::Newtype(declaration) => {
-                Self::Newtype(RustNewtype::from_schema_newtype(declaration))
+                RustTypeDeclaration::Newtype(declaration.lower_to_rust(context))
             }
         }
     }
@@ -597,19 +642,21 @@ pub struct RustAlias {
 }
 
 impl RustAlias {
-    fn from_schema_alias(declaration: &AliasDeclaration) -> Self {
-        Self {
-            name: declaration.name.clone(),
-            reference: declaration.reference.clone(),
-        }
-    }
-
     pub fn name(&self) -> &Name {
         &self.name
     }
 
     pub fn reference(&self) -> &TypeReference {
         &self.reference
+    }
+}
+
+impl LowerToRust<RustAlias> for AliasDeclaration {
+    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustAlias {
+        RustAlias {
+            name: self.name.clone(),
+            reference: self.reference.clone(),
+        }
     }
 }
 
@@ -620,19 +667,21 @@ pub struct RustNewtype {
 }
 
 impl RustNewtype {
-    fn from_schema_newtype(declaration: &NewtypeDeclaration) -> Self {
-        Self {
-            name: declaration.name.clone(),
-            reference: declaration.reference.clone(),
-        }
-    }
-
     pub fn name(&self) -> &Name {
         &self.name
     }
 
     pub fn reference(&self) -> &TypeReference {
         &self.reference
+    }
+}
+
+impl LowerToRust<RustNewtype> for NewtypeDeclaration {
+    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustNewtype {
+        RustNewtype {
+            name: self.name.clone(),
+            reference: self.reference.clone(),
+        }
     }
 }
 
@@ -643,23 +692,25 @@ pub struct RustStruct {
 }
 
 impl RustStruct {
-    fn from_schema_struct(declaration: &StructDeclaration) -> Self {
-        Self {
-            name: declaration.name.clone(),
-            fields: declaration
-                .fields
-                .iter()
-                .map(RustField::from_schema_field)
-                .collect(),
-        }
-    }
-
     pub fn name(&self) -> &Name {
         &self.name
     }
 
     pub fn fields(&self) -> &[RustField] {
         &self.fields
+    }
+}
+
+impl LowerToRust<RustStruct> for StructDeclaration {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustStruct {
+        RustStruct {
+            name: self.name.clone(),
+            fields: self
+                .fields
+                .iter()
+                .map(|field| field.lower_to_rust(context))
+                .collect(),
+        }
     }
 }
 
@@ -670,19 +721,21 @@ pub struct RustField {
 }
 
 impl RustField {
-    fn from_schema_field(field: &FieldDeclaration) -> Self {
-        Self {
-            name: field.name.clone(),
-            reference: field.reference.clone(),
-        }
-    }
-
     pub fn name(&self) -> &Name {
         &self.name
     }
 
     pub fn reference(&self) -> &TypeReference {
         &self.reference
+    }
+}
+
+impl LowerToRust<RustField> for FieldDeclaration {
+    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustField {
+        RustField {
+            name: self.name.clone(),
+            reference: self.reference.clone(),
+        }
     }
 }
 
@@ -693,23 +746,25 @@ pub struct RustEnum {
 }
 
 impl RustEnum {
-    fn from_schema_enum(declaration: &EnumDeclaration) -> Self {
-        Self {
-            name: declaration.name.clone(),
-            variants: declaration
-                .variants
-                .iter()
-                .map(RustEnumVariant::from_schema_variant)
-                .collect(),
-        }
-    }
-
     pub fn name(&self) -> &Name {
         &self.name
     }
 
     pub fn variants(&self) -> &[RustEnumVariant] {
         &self.variants
+    }
+}
+
+impl LowerToRust<RustEnum> for EnumDeclaration {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustEnum {
+        RustEnum {
+            name: self.name.clone(),
+            variants: self
+                .variants
+                .iter()
+                .map(|variant| variant.lower_to_rust(context))
+                .collect(),
+        }
     }
 }
 
@@ -720,19 +775,21 @@ pub struct RustEnumVariant {
 }
 
 impl RustEnumVariant {
-    fn from_schema_variant(variant: &EnumVariant) -> Self {
-        Self {
-            name: variant.name.clone(),
-            payload: variant.payload.clone(),
-        }
-    }
-
     pub fn name(&self) -> &Name {
         &self.name
     }
 
     pub fn payload(&self) -> Option<&TypeReference> {
         self.payload.as_ref()
+    }
+}
+
+impl LowerToRust<RustEnumVariant> for EnumVariant {
+    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustEnumVariant {
+        RustEnumVariant {
+            name: self.name.clone(),
+            payload: self.payload.clone(),
+        }
     }
 }
 
@@ -743,10 +800,20 @@ struct RustSupportModel {
 }
 
 impl RustSupportModel {
-    fn from_schema(schema: &Schema) -> Self {
-        Self {
-            map_key_type_names: CollectionScan::new(schema).map_key_type_names(),
-            private_type_names: schema
+    fn map_key_type_names(&self) -> &[String] {
+        &self.map_key_type_names
+    }
+
+    fn private_type_names(&self) -> &[String] {
+        &self.private_type_names
+    }
+}
+
+impl LowerToRust<RustSupportModel> for Schema {
+    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustSupportModel {
+        RustSupportModel {
+            map_key_type_names: CollectionScan::new(self).map_key_type_names(),
+            private_type_names: self
                 .namespace()
                 .iter()
                 .filter(|declaration| declaration.is_private())
@@ -754,13 +821,445 @@ impl RustSupportModel {
                 .collect(),
         }
     }
+}
 
-    fn map_key_type_names(&self) -> &[String] {
-        &self.map_key_type_names
+#[derive(Clone, Debug)]
+struct RustRenderContext {
+    map_key_type_names: Vec<String>,
+    private_type_names: Vec<String>,
+    nota_surface: NotaSurface,
+}
+
+impl RustRenderContext {
+    fn new(
+        map_key_type_names: Vec<String>,
+        private_type_names: Vec<String>,
+        nota_surface: NotaSurface,
+    ) -> Self {
+        Self {
+            map_key_type_names,
+            private_type_names,
+            nota_surface,
+        }
     }
 
-    fn private_type_names(&self) -> &[String] {
-        &self.private_type_names
+    fn data_type_attributes(&self, type_name: &Name) -> Vec<TokenStream> {
+        self.derive_attributes(
+            false,
+            self.map_key_type_names
+                .iter()
+                .any(|name| name == type_name.as_str()),
+        )
+    }
+
+    fn root_data_type_attributes(&self) -> Vec<TokenStream> {
+        self.derive_attributes(false, false)
+    }
+
+    fn derive_attributes(&self, includes_copy: bool, includes_ordering: bool) -> Vec<TokenStream> {
+        let mut attributes = Vec::new();
+        if let NotaSurface::FeatureGated { feature } = &self.nota_surface {
+            attributes.push(quote! {
+                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+            });
+        }
+        let nota_derives = if self.nota_surface.includes_nota_in_derive() {
+            quote! { nota_next::NotaDecode, nota_next::NotaEncode, }
+        } else {
+            TokenStream::new()
+        };
+        let copy_derive = if includes_copy {
+            quote! { Copy, }
+        } else {
+            TokenStream::new()
+        };
+        let ordering_derives = if includes_ordering {
+            quote! { PartialOrd, Ord, }
+        } else {
+            TokenStream::new()
+        };
+        attributes.push(quote! {
+            #[derive(
+                #nota_derives
+                rkyv::Archive,
+                rkyv::Serialize,
+                rkyv::Deserialize,
+                Clone,
+                #copy_derive
+                Debug,
+                PartialEq,
+                Eq,
+                #ordering_derives
+            )]
+        });
+        if includes_ordering {
+            attributes.push(quote! {
+                #[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]
+            });
+        }
+        attributes
+    }
+
+    fn visibility_tokens(&self, visibility: Visibility) -> TokenStream {
+        match visibility {
+            Visibility::Public => quote! { pub },
+            Visibility::Private => quote! { pub(crate) },
+        }
+    }
+
+    fn field_visibility_tokens(
+        &self,
+        visibility: Visibility,
+        reference: &TypeReference,
+    ) -> TokenStream {
+        if visibility == Visibility::Public && self.references_private_type(reference) {
+            quote! { pub(crate) }
+        } else {
+            self.visibility_tokens(visibility)
+        }
+    }
+
+    fn references_private_type(&self, reference: &TypeReference) -> bool {
+        match reference {
+            TypeReference::Plain(name) => self
+                .private_type_names
+                .iter()
+                .any(|private_name| private_name == name.as_str()),
+            TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
+                self.references_private_type(inner)
+            }
+            TypeReference::Map(key, value) => {
+                self.references_private_type(key) || self.references_private_type(value)
+            }
+            TypeReference::String
+            | TypeReference::Integer
+            | TypeReference::Boolean
+            | TypeReference::Path => false,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RustIdentifier<'name> {
+    name: &'name str,
+}
+
+impl<'name> RustIdentifier<'name> {
+    fn new(name: &'name str) -> Self {
+        Self { name }
+    }
+
+    fn ident(&self) -> Ident {
+        if RustKeyword::new(self.name).is_reserved() {
+            Ident::new_raw(self.name, Span::call_site())
+        } else {
+            Ident::new(self.name, Span::call_site())
+        }
+    }
+}
+
+impl ToTokens for RustIdentifier<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.ident().to_tokens(tokens);
+    }
+}
+
+struct RustTypeReferenceTokens<'reference> {
+    reference: &'reference TypeReference,
+}
+
+impl<'reference> RustTypeReferenceTokens<'reference> {
+    fn new(reference: &'reference TypeReference) -> Self {
+        Self { reference }
+    }
+}
+
+impl ToTokens for RustTypeReferenceTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self.reference {
+            TypeReference::String => quote! { String }.to_tokens(tokens),
+            TypeReference::Integer => quote! { Integer }.to_tokens(tokens),
+            TypeReference::Boolean => quote! { Boolean }.to_tokens(tokens),
+            TypeReference::Path => quote! { Path }.to_tokens(tokens),
+            TypeReference::Plain(name) => RustIdentifier::new(name.as_str()).to_tokens(tokens),
+            TypeReference::Vector(inner) => {
+                let inner = Self::new(inner);
+                quote! { Vec<#inner> }.to_tokens(tokens);
+            }
+            TypeReference::Map(key, value) => {
+                let key = Self::new(key);
+                let value = Self::new(value);
+                quote! { std::collections::BTreeMap<#key, #value> }.to_tokens(tokens);
+            }
+            TypeReference::Optional(inner) => {
+                let inner = Self::new(inner);
+                quote! { Option<#inner> }.to_tokens(tokens);
+            }
+        }
+    }
+}
+
+struct RustDeclarationTokens<'declaration, 'context> {
+    declaration: &'declaration RustDeclaration,
+    context: &'context RustRenderContext,
+}
+
+impl<'declaration, 'context> RustDeclarationTokens<'declaration, 'context> {
+    fn new(
+        declaration: &'declaration RustDeclaration,
+        context: &'context RustRenderContext,
+    ) -> Self {
+        Self {
+            declaration,
+            context,
+        }
+    }
+}
+
+impl ToTokens for RustDeclarationTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self.declaration.value() {
+            RustTypeDeclaration::Alias(value) => {
+                RustAliasTokens::new(value, self.declaration.visibility(), self.context)
+                    .to_tokens(tokens)
+            }
+            RustTypeDeclaration::Struct(value) => {
+                RustStructTokens::new(value, self.declaration.visibility(), self.context)
+                    .to_tokens(tokens)
+            }
+            RustTypeDeclaration::Enum(value) => {
+                RustEnumTokens::new(value, self.declaration.visibility(), self.context)
+                    .to_tokens(tokens)
+            }
+            RustTypeDeclaration::Newtype(value) => {
+                RustNewtypeTokens::new(value, self.declaration.visibility(), self.context)
+                    .to_tokens(tokens)
+            }
+        }
+    }
+}
+
+struct RustAliasTokens<'alias, 'context> {
+    alias: &'alias RustAlias,
+    visibility: Visibility,
+    context: &'context RustRenderContext,
+}
+
+impl<'alias, 'context> RustAliasTokens<'alias, 'context> {
+    fn new(
+        alias: &'alias RustAlias,
+        visibility: Visibility,
+        context: &'context RustRenderContext,
+    ) -> Self {
+        Self {
+            alias,
+            visibility,
+            context,
+        }
+    }
+}
+
+impl ToTokens for RustAliasTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let visibility = self.context.visibility_tokens(self.visibility);
+        let name = RustIdentifier::new(self.alias.name().as_str());
+        let reference = RustTypeReferenceTokens::new(self.alias.reference());
+        quote! {
+            #visibility type #name = #reference;
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct RustNewtypeTokens<'newtype, 'context> {
+    newtype: &'newtype RustNewtype,
+    visibility: Visibility,
+    context: &'context RustRenderContext,
+}
+
+impl<'newtype, 'context> RustNewtypeTokens<'newtype, 'context> {
+    fn new(
+        newtype: &'newtype RustNewtype,
+        visibility: Visibility,
+        context: &'context RustRenderContext,
+    ) -> Self {
+        Self {
+            newtype,
+            visibility,
+            context,
+        }
+    }
+}
+
+impl ToTokens for RustNewtypeTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let attributes = self.context.data_type_attributes(self.newtype.name());
+        let visibility = self.context.visibility_tokens(self.visibility);
+        let name = RustIdentifier::new(self.newtype.name().as_str());
+        let reference = RustTypeReferenceTokens::new(self.newtype.reference());
+        quote! {
+            #(#attributes)*
+            #visibility struct #name(#visibility #reference);
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct RustStructTokens<'structure, 'context> {
+    structure: &'structure RustStruct,
+    visibility: Visibility,
+    context: &'context RustRenderContext,
+}
+
+impl<'structure, 'context> RustStructTokens<'structure, 'context> {
+    fn new(
+        structure: &'structure RustStruct,
+        visibility: Visibility,
+        context: &'context RustRenderContext,
+    ) -> Self {
+        Self {
+            structure,
+            visibility,
+            context,
+        }
+    }
+}
+
+impl ToTokens for RustStructTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let attributes = self.context.data_type_attributes(self.structure.name());
+        let visibility = self.context.visibility_tokens(self.visibility);
+        let name = RustIdentifier::new(self.structure.name().as_str());
+        let fields = self
+            .structure
+            .fields()
+            .iter()
+            .map(|field| RustFieldTokens::new(field, self.visibility, self.context))
+            .collect::<Vec<_>>();
+        quote! {
+            #(#attributes)*
+            #visibility struct #name {
+                #(#fields)*
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct RustFieldTokens<'field, 'context> {
+    field: &'field RustField,
+    visibility: Visibility,
+    context: &'context RustRenderContext,
+}
+
+impl<'field, 'context> RustFieldTokens<'field, 'context> {
+    fn new(
+        field: &'field RustField,
+        visibility: Visibility,
+        context: &'context RustRenderContext,
+    ) -> Self {
+        Self {
+            field,
+            visibility,
+            context,
+        }
+    }
+}
+
+impl ToTokens for RustFieldTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let visibility = self
+            .context
+            .field_visibility_tokens(self.visibility, self.field.reference());
+        let name = RustIdentifier::new(self.field.name().as_str());
+        let reference = RustTypeReferenceTokens::new(self.field.reference());
+        quote! {
+            #visibility #name: #reference,
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct RustEnumTokens<'enumeration, 'context> {
+    enumeration: &'enumeration RustEnum,
+    visibility: Visibility,
+    context: &'context RustRenderContext,
+    root: bool,
+}
+
+impl<'enumeration, 'context> RustEnumTokens<'enumeration, 'context> {
+    fn new(
+        enumeration: &'enumeration RustEnum,
+        visibility: Visibility,
+        context: &'context RustRenderContext,
+    ) -> Self {
+        Self {
+            enumeration,
+            visibility,
+            context,
+            root: false,
+        }
+    }
+
+    fn root(enumeration: &'enumeration RustEnum, context: &'context RustRenderContext) -> Self {
+        Self {
+            enumeration,
+            visibility: Visibility::Public,
+            context,
+            root: true,
+        }
+    }
+
+    fn attributes(&self) -> Vec<TokenStream> {
+        if self.root {
+            self.context.root_data_type_attributes()
+        } else {
+            self.context.data_type_attributes(self.enumeration.name())
+        }
+    }
+}
+
+impl ToTokens for RustEnumTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let attributes = self.attributes();
+        let visibility = self.context.visibility_tokens(self.visibility);
+        let name = RustIdentifier::new(self.enumeration.name().as_str());
+        let variants = self
+            .enumeration
+            .variants()
+            .iter()
+            .map(RustEnumVariantTokens::new)
+            .collect::<Vec<_>>();
+        quote! {
+            #(#attributes)*
+            #visibility enum #name {
+                #(#variants)*
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct RustEnumVariantTokens<'variant> {
+    variant: &'variant RustEnumVariant,
+}
+
+impl<'variant> RustEnumVariantTokens<'variant> {
+    fn new(variant: &'variant RustEnumVariant) -> Self {
+        Self { variant }
+    }
+}
+
+impl ToTokens for RustEnumVariantTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = RustIdentifier::new(self.variant.name().as_str());
+        match self.variant.payload() {
+            Some(reference) => {
+                let reference = RustTypeReferenceTokens::new(reference);
+                quote! { #name(#reference), }.to_tokens(tokens);
+            }
+            None => quote! { #name, }.to_tokens(tokens),
+        }
     }
 }
 
@@ -996,6 +1495,14 @@ impl RustWriter {
         self.target.runtime_planes()
     }
 
+    fn render_context(&self) -> RustRenderContext {
+        RustRenderContext::new(
+            self.map_key_types.clone(),
+            self.private_type_names.clone(),
+            self.nota_surface.clone(),
+        )
+    }
+
     fn emits_all_runtime_planes(&self) -> bool {
         self.runtime_planes().emits_all()
     }
@@ -1013,23 +1520,8 @@ impl RustWriter {
         self.private_type_names = names;
     }
 
-    /// The derive attribute line for a data-bearing emitted type. Adds
-    /// the ordering derives when the type is used as a map key.
-    fn data_type_derive(&self, type_name: &Name) -> String {
-        self.derive_attribute(
-            false,
-            self.map_key_types
-                .iter()
-                .any(|key| key == type_name.as_str()),
-        )
-    }
-
     fn copy_data_type_derive(&self) -> String {
         self.derive_attribute(true, false)
-    }
-
-    fn root_data_type_derive(&self) -> String {
-        self.derive_attribute(false, false)
     }
 
     fn derive_attribute(&self, includes_copy: bool, includes_ordering: bool) -> String {
@@ -1076,38 +1568,11 @@ impl RustWriter {
         self.output
     }
 
-    fn rust_visibility(&self, visibility: Visibility) -> &'static str {
-        match visibility {
-            Visibility::Public => "pub",
-            Visibility::Private => "pub(crate)",
-        }
-    }
-
-    fn field_visibility(&self, visibility: Visibility, reference: &TypeReference) -> &'static str {
-        if visibility == Visibility::Public && self.references_private_type(reference) {
-            "pub(crate)"
-        } else {
-            self.rust_visibility(visibility)
-        }
-    }
-
-    fn references_private_type(&self, reference: &TypeReference) -> bool {
-        match reference {
-            TypeReference::Plain(name) => self
-                .private_type_names
-                .iter()
-                .any(|private_name| private_name == name.as_str()),
-            TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
-                self.references_private_type(inner)
-            }
-            TypeReference::Map(key, value) => {
-                self.references_private_type(key) || self.references_private_type(value)
-            }
-            TypeReference::String
-            | TypeReference::Integer
-            | TypeReference::Boolean
-            | TypeReference::Path => false,
-        }
+    fn emit_item_tokens(&mut self, tokens: TokenStream) {
+        let file = syn::parse2::<syn::File>(tokens).expect("generated Rust item tokens parse");
+        let source = prettyplease::unparse(&file);
+        self.output.push_str(source.trim_end());
+        self.output.push('\n');
     }
 
     /// Emit a `pub use` alias for each cross-crate import.
@@ -1135,14 +1600,10 @@ impl RustWriter {
     }
 
     fn emit_type(&mut self, declaration: &RustDeclaration) {
-        match declaration.value() {
-            RustTypeDeclaration::Alias(value) => self.emit_alias(declaration.visibility(), value),
-            RustTypeDeclaration::Struct(value) => self.emit_struct(declaration.visibility(), value),
-            RustTypeDeclaration::Newtype(value) => {
-                self.emit_newtype(declaration.visibility(), value)
-            }
-            RustTypeDeclaration::Enum(value) => self.emit_enum(declaration.visibility(), value),
-        }
+        let context = self.render_context();
+        self.emit_item_tokens(
+            RustDeclarationTokens::new(declaration, &context).into_token_stream(),
+        );
     }
 
     fn emit_nota_support(&mut self) {
@@ -1153,27 +1614,6 @@ impl RustWriter {
         self.line("pub use nota_next::{");
         self.line("    NotaDecode, NotaDecodeError, NotaEncode, NotaSource,");
         self.line("};");
-    }
-
-    fn emit_alias(&mut self, visibility: Visibility, declaration: &RustAlias) {
-        self.line(format!(
-            "{} type {} = {};",
-            self.rust_visibility(visibility),
-            declaration.name(),
-            self.rust_type(declaration.reference())
-        ));
-    }
-
-    fn emit_newtype(&mut self, visibility: Visibility, declaration: &RustNewtype) {
-        let derive = self.data_type_derive(declaration.name());
-        self.line(derive);
-        self.line(format!(
-            "{} struct {}({} {});",
-            self.rust_visibility(visibility),
-            declaration.name(),
-            self.rust_visibility(visibility),
-            self.rust_type(declaration.reference())
-        ));
     }
 
     fn emit_newtype_inherent_impls(&mut self, declarations: &[RustDeclaration]) {
@@ -1218,57 +1658,9 @@ impl RustWriter {
         self.line("}");
     }
 
-    fn emit_struct(&mut self, visibility: Visibility, declaration: &RustStruct) {
-        let derive = self.data_type_derive(declaration.name());
-        self.line(derive);
-        self.line(format!(
-            "{} struct {} {{",
-            self.rust_visibility(visibility),
-            declaration.name()
-        ));
-        for field in declaration.fields() {
-            self.line(format!(
-                "    {} {}: {},",
-                self.field_visibility(visibility, field.reference()),
-                field.name().as_str(),
-                self.rust_type(field.reference())
-            ));
-        }
-        self.line("}");
-    }
-
-    fn emit_enum(&mut self, visibility: Visibility, declaration: &RustEnum) {
-        let derive = self.data_type_derive(declaration.name());
-        self.line(derive);
-        self.line(format!(
-            "{} enum {} {{",
-            self.rust_visibility(visibility),
-            declaration.name()
-        ));
-        for variant in declaration.variants() {
-            self.emit_variant(variant);
-        }
-        self.line("}");
-    }
-
     fn emit_root_enum(&mut self, root_enum: &RustEnum) {
-        self.line(self.root_data_type_derive());
-        self.line(format!("pub enum {} {{", root_enum.name()));
-        for variant in root_enum.variants() {
-            self.emit_variant(variant);
-        }
-        self.line("}");
-    }
-
-    fn emit_variant(&mut self, variant: &RustEnumVariant) {
-        match variant.payload() {
-            Some(reference) => self.line(format!(
-                "    {}({}),",
-                variant.name(),
-                self.rust_type(reference)
-            )),
-            None => self.line(format!("    {},", variant.name())),
-        }
+        let context = self.render_context();
+        self.emit_item_tokens(RustEnumTokens::root(root_enum, &context).into_token_stream());
     }
 
     fn emit_enum_payload_from_impls(
