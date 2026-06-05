@@ -534,7 +534,17 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
     assert_generated_fixture("runner_generated.rs", code);
 
     assert!(code.contains("pub type NexusRunnerNextStep = triad_runtime::NextStep<ReplyToSignal, CommandSemaWrite, CommandSemaRead, CommandEffect, NexusWork>;"));
-    assert!(code.contains("pub fn into_runner_next_step(self) -> NexusRunnerNextStep"));
+    assert!(code.contains("impl triad_runtime::NexusAction for NexusAction"));
+    assert!(code.contains("type SemaWrite = CommandSemaWrite;"));
+    assert!(code.contains("type SemaRead = CommandSemaRead;"));
+    assert!(code.contains("type Effect = CommandEffect;"));
+    assert!(code.contains("type Work = NexusWork;"));
+    assert!(code.contains("fn into_next_step(self) -> NexusRunnerNextStep"));
+    assert!(code.contains("impl triad_runtime::NexusWork for NexusWork {}"));
+    assert!(code.contains("impl triad_runtime::SemaWriteInput for CommandSemaWrite {}"));
+    assert!(code.contains("impl triad_runtime::SemaReadInput for CommandSemaRead {}"));
+    assert!(code.contains("impl triad_runtime::NexusEffectCommand for CommandEffect {}"));
+    assert!(code.contains("impl triad_runtime::NexusEffectResult for EffectCompleted {}"));
     assert!(
         code.contains("Self::CommandSemaWrite(input) => triad_runtime::NextStep::SemaWrite(input)")
     );
@@ -550,6 +560,7 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
     assert!(code.contains(
         "impl<'engine, Engine> triad_runtime::RunnerEngines for NexusRunnerAdapter<'engine, Engine>"
     ));
+    assert!(code.contains("triad_runtime::NexusAction::into_next_step(action)"));
     assert!(code.contains("fn continuation_limit(&self) -> triad_runtime::ContinuationLimit"));
     assert!(code.contains(
         "fn apply_sema_write(&mut self, origin_route: OriginRoute, input: CommandSemaWrite) -> SemaWriteCompleted;"
@@ -599,6 +610,9 @@ fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
     assert!(!code.contains("pub enum NexusWorkRoute"));
     assert!(!code.contains("pub struct TraceEvent"));
     assert!(!code.contains("pub fn into_nexus_action"));
+    assert!(!code.contains("impl triad_runtime::NexusWork"));
+    assert!(!code.contains("impl triad_runtime::SemaWriteInput"));
+    assert!(!code.contains("impl triad_runtime::NexusAction for NexusAction"));
     assert!(!code.contains("pub trait UpgradeFrom<Previous>"));
 }
 

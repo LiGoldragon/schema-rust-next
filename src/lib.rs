@@ -274,6 +274,7 @@ impl RustModule {
             writer.emit_mail_event_support(&self.root_enums);
             writer.emit_plane_namespaces(&self.declarations, &self.root_enums);
             writer.emit_plane_projection_support(&self.declarations, &self.root_enums);
+            writer.emit_runtime_role_trait_impls(&self.declarations, &self.root_enums);
             writer.emit_schema_plane_trait_support(&self.declarations, &self.root_enums);
             writer.emit_upgrade_support();
         }
@@ -1433,6 +1434,12 @@ struct NexusRunnerShape {
     has_continue: bool,
 }
 
+struct RuntimeRoleTraitImpl {
+    type_name: String,
+    trait_name: &'static str,
+    canonical_type_name: String,
+}
+
 impl NexusRunnerShape {
     fn sema_write_input_type(&self) -> &str {
         self.sema_write_input_type
@@ -1462,6 +1469,20 @@ impl NexusRunnerShape {
 
     fn emits_effect(&self) -> bool {
         self.effect_command_type.is_some()
+    }
+}
+
+impl RuntimeRoleTraitImpl {
+    fn new(type_name: String, trait_name: &'static str, canonical_type_name: String) -> Self {
+        Self {
+            type_name,
+            trait_name,
+            canonical_type_name,
+        }
+    }
+
+    fn matches(&self, type_name: &str, trait_name: &'static str) -> bool {
+        self.canonical_type_name == type_name && self.trait_name == trait_name
     }
 }
 
@@ -2815,6 +2836,161 @@ impl RustWriter {
         }
     }
 
+    fn emit_runtime_role_trait_impls(
+        &mut self,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+    ) {
+        let mut role_impls = Vec::<RuntimeRoleTraitImpl>::new();
+
+        if self.runtime_planes().emits_nexus() {
+            self.push_role_trait_impl_if_local_role_type(
+                &mut role_impls,
+                declarations,
+                root_enums,
+                "NexusWork",
+                "triad_runtime::NexusWork",
+            );
+            if let Some(shape) = self.nexus_runner_shape(declarations) {
+                self.push_role_trait_impl_if_local_role_type(
+                    &mut role_impls,
+                    declarations,
+                    root_enums,
+                    shape.sema_write_input_type(),
+                    "triad_runtime::SemaWriteInput",
+                );
+                self.push_role_trait_impl_if_local_role_type(
+                    &mut role_impls,
+                    declarations,
+                    root_enums,
+                    shape.sema_read_input_type(),
+                    "triad_runtime::SemaReadInput",
+                );
+                self.push_role_trait_impl_if_local_role_type(
+                    &mut role_impls,
+                    declarations,
+                    root_enums,
+                    shape.effect_command_type(),
+                    "triad_runtime::NexusEffectCommand",
+                );
+                if let Some(effect_result_type) = shape.effect_result_type.as_deref() {
+                    self.push_role_trait_impl_if_local_role_type(
+                        &mut role_impls,
+                        declarations,
+                        root_enums,
+                        effect_result_type,
+                        "triad_runtime::NexusEffectResult",
+                    );
+                }
+            }
+        }
+
+        if self.runtime_planes().emits_sema() {
+            if let Some(root) = self.sema_write_input_root(declarations, root_enums) {
+                self.push_role_trait_impl(
+                    declarations,
+                    &mut role_impls,
+                    root.name().as_str(),
+                    "triad_runtime::SemaWriteInput",
+                );
+            }
+            if let Some(root) = self.sema_write_output_root(declarations, root_enums) {
+                self.push_role_trait_impl(
+                    declarations,
+                    &mut role_impls,
+                    root.name().as_str(),
+                    "triad_runtime::SemaWriteOutput",
+                );
+            }
+            if let Some(root) = self.sema_read_input_root(declarations, root_enums) {
+                self.push_role_trait_impl(
+                    declarations,
+                    &mut role_impls,
+                    root.name().as_str(),
+                    "triad_runtime::SemaReadInput",
+                );
+            }
+            if let Some(root) = self.sema_read_output_root(declarations, root_enums) {
+                self.push_role_trait_impl(
+                    declarations,
+                    &mut role_impls,
+                    root.name().as_str(),
+                    "triad_runtime::SemaReadOutput",
+                );
+            }
+        }
+
+        for role_impl in role_impls {
+            let type_name = role_impl.type_name;
+            let trait_name = role_impl.trait_name;
+            self.line(format!("impl {trait_name} for {type_name} {{}}"));
+            self.blank();
+        }
+    }
+
+    fn push_role_trait_impl_if_local_role_type(
+        &self,
+        role_impls: &mut Vec<RuntimeRoleTraitImpl>,
+        declarations: &[RustDeclaration],
+        root_enums: &[RustEnum],
+        type_name: &str,
+        trait_name: &'static str,
+    ) {
+        if type_name == "std::convert::Infallible" {
+            return;
+        }
+        if self
+            .declaration_enum_named(declarations, type_name)
+            .is_some()
+            || self.root_enum_named(root_enums, type_name).is_some()
+            || self
+                .declaration_alias_target(declarations, type_name)
+                .is_some()
+        {
+            self.push_role_trait_impl(declarations, role_impls, type_name, trait_name);
+        }
+    }
+
+    fn push_role_trait_impl(
+        &self,
+        declarations: &[RustDeclaration],
+        role_impls: &mut Vec<RuntimeRoleTraitImpl>,
+        type_name: &str,
+        trait_name: &'static str,
+    ) {
+        let canonical_type_name = self
+            .declaration_alias_target(declarations, type_name)
+            .unwrap_or(type_name)
+            .to_owned();
+        if !role_impls
+            .iter()
+            .any(|role_impl| role_impl.matches(&canonical_type_name, trait_name))
+        {
+            role_impls.push(RuntimeRoleTraitImpl::new(
+                type_name.to_owned(),
+                trait_name,
+                canonical_type_name,
+            ));
+        }
+    }
+
+    fn declaration_alias_target<'schema>(
+        &self,
+        declarations: &'schema [RustDeclaration],
+        type_name: &str,
+    ) -> Option<&'schema str> {
+        declarations
+            .iter()
+            .find(|declaration| declaration.name().as_str() == type_name)
+            .and_then(|declaration| match declaration.value() {
+                RustTypeDeclaration::Alias(alias) => match alias.reference() {
+                    TypeReference::Plain(target) => Some(target.as_str()),
+                    _ => None,
+                },
+                _ => None,
+            })
+    }
+
     fn emit_nexus_runner_next_step_projection(&mut self, shape: &NexusRunnerShape) {
         self.line(format!(
             "pub type NexusRunnerNextStep = triad_runtime::NextStep<{}, {}, {}, {}, NexusWork>;",
@@ -2824,8 +3000,23 @@ impl RustWriter {
             shape.effect_command_type()
         ));
         self.blank();
-        self.line("impl NexusAction {");
-        self.line("    pub fn into_runner_next_step(self) -> NexusRunnerNextStep {");
+        self.line("impl triad_runtime::NexusAction for NexusAction {");
+        self.line(format!("    type Reply = {};", shape.reply_type));
+        self.line(format!(
+            "    type SemaWrite = {};",
+            shape.sema_write_input_type()
+        ));
+        self.line(format!(
+            "    type SemaRead = {};",
+            shape.sema_read_input_type()
+        ));
+        self.line(format!(
+            "    type Effect = {};",
+            shape.effect_command_type()
+        ));
+        self.line("    type Work = NexusWork;");
+        self.blank();
+        self.line("    fn into_next_step(self) -> NexusRunnerNextStep {");
         self.line("        match self {");
         if shape.emits_sema_write() {
             self.line("            Self::CommandSemaWrite(input) => triad_runtime::NextStep::SemaWrite(input),");
@@ -2883,7 +3074,7 @@ impl RustWriter {
         self.blank();
         self.line("    fn decide_next_step(&mut self, work: Self::Work) -> triad_runtime::runner::RunnerNextStep<Self> {");
         self.line("        let action = NexusEngine::decide(self.engine, work.with_origin_route(self.origin_route)).into_root();");
-        self.line("        action.into_runner_next_step()");
+        self.line("        triad_runtime::NexusAction::into_next_step(action)");
         self.line("    }");
         self.blank();
         self.line("    fn apply_sema_write(&mut self, write: Self::SemaWrite) -> Self::Work {");
