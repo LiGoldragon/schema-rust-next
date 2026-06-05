@@ -270,8 +270,10 @@ impl RustModule {
             writer.blank();
         }
 
-        writer.emit_short_headers(&self.root_enums);
-        writer.blank();
+        if writer.emits_short_headers() {
+            writer.emit_short_headers(&self.root_enums);
+            writer.blank();
+        }
         if writer.emits_signal() {
             writer.emit_signal_frame_support(&self.root_enums, &self.streams);
         }
@@ -561,6 +563,30 @@ impl Plane {
                 "SemaReadInput",
                 "SemaReadOutput",
             ],
+        }
+    }
+
+    fn engine_trait_name(&self) -> &'static str {
+        match self {
+            Self::Signal => "SignalEngine",
+            Self::Nexus => "NexusEngine",
+            Self::Sema => "SemaEngine",
+        }
+    }
+
+    fn trace_enum_name(&self) -> &'static str {
+        match self {
+            Self::Signal => "SignalObjectName",
+            Self::Nexus => "NexusObjectName",
+            Self::Sema => "SemaObjectName",
+        }
+    }
+
+    fn trace_activation_method_name(&self) -> &'static str {
+        match self {
+            Self::Signal => "trace_signal_activation",
+            Self::Nexus => "trace_nexus_activation",
+            Self::Sema => "trace_sema_activation",
         }
     }
 }
@@ -1407,12 +1433,14 @@ impl ToTokens for ActorLifecycleSupportTokens {
 }
 
 struct SignalEngineTraitTokens {
+    plane: Plane,
     emits_concrete_signal_engine: bool,
 }
 
 impl SignalEngineTraitTokens {
     fn new(emits_concrete_signal_engine: bool) -> Self {
         Self {
+            plane: Plane::Signal,
             emits_concrete_signal_engine,
         }
     }
@@ -1420,6 +1448,9 @@ impl SignalEngineTraitTokens {
 
 impl ToTokens for SignalEngineTraitTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        let engine_trait = RustIdentifier::new(self.plane.engine_trait_name());
+        let trace_enum = RustIdentifier::new(self.plane.trace_enum_name());
+        let trace_activation = RustIdentifier::new(self.plane.trace_activation_method_name());
         let associated_nexus_types = (!self.emits_concrete_signal_engine).then(|| {
             quote! {
                 type NexusInput;
@@ -1465,7 +1496,7 @@ impl ToTokens for SignalEngineTraitTokens {
         };
 
         quote! {
-            pub trait SignalEngine {
+            pub trait #engine_trait {
                 #associated_nexus_types
 
                 fn on_start(&mut self) -> Result<(), ActorStartFailure> {
@@ -1476,22 +1507,22 @@ impl ToTokens for SignalEngineTraitTokens {
                     Ok(())
                 }
 
-                fn trace_signal_activation(&self, _object_name: SignalObjectName) {}
+                fn #trace_activation(&self, _object_name: #trace_enum) {}
 
                 fn trace_signal_admitted(&self) {
-                    self.trace_signal_activation(SignalObjectName::Admitted);
+                    self.#trace_activation(#trace_enum::Admitted);
                 }
 
                 fn trace_signal_rejected(&self) {
-                    self.trace_signal_activation(SignalObjectName::Rejected);
+                    self.#trace_activation(#trace_enum::Rejected);
                 }
 
                 fn trace_signal_triaged(&self) {
-                    self.trace_signal_activation(SignalObjectName::Triaged);
+                    self.#trace_activation(#trace_enum::Triaged);
                 }
 
                 fn trace_signal_replied(&self) {
-                    self.trace_signal_activation(SignalObjectName::Replied);
+                    self.#trace_activation(#trace_enum::Replied);
                 }
 
                 #triage_inner
@@ -1516,17 +1547,24 @@ impl ToTokens for SignalEngineTraitTokens {
 }
 
 struct NexusEngineTraitTokens<'shape> {
+    plane: Plane,
     runner_shape: Option<&'shape NexusRunnerShape>,
 }
 
 impl<'shape> NexusEngineTraitTokens<'shape> {
     fn new(runner_shape: Option<&'shape NexusRunnerShape>) -> Self {
-        Self { runner_shape }
+        Self {
+            plane: Plane::Nexus,
+            runner_shape,
+        }
     }
 }
 
 impl ToTokens for NexusEngineTraitTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        let engine_trait = RustIdentifier::new(self.plane.engine_trait_name());
+        let trace_enum = RustIdentifier::new(self.plane.trace_enum_name());
+        let trace_activation = RustIdentifier::new(self.plane.trace_activation_method_name());
         let runner_hooks = self.runner_shape.map(|shape| {
             let sema_write_hook = match (
                 shape.sema_write_input_type.as_deref(),
@@ -1615,7 +1653,7 @@ impl ToTokens for NexusEngineTraitTokens<'_> {
         };
 
         quote! {
-            pub trait NexusEngine {
+            pub trait #engine_trait {
                 fn on_start(&mut self) -> Result<(), ActorStartFailure> {
                     Ok(())
                 }
@@ -1624,14 +1662,14 @@ impl ToTokens for NexusEngineTraitTokens<'_> {
                     Ok(())
                 }
 
-                fn trace_nexus_activation(&self, _object_name: NexusObjectName) {}
+                fn #trace_activation(&self, _object_name: #trace_enum) {}
 
                 fn trace_nexus_entered(&self) {
-                    self.trace_nexus_activation(NexusObjectName::Entered);
+                    self.#trace_activation(#trace_enum::Entered);
                 }
 
                 fn trace_nexus_decided(&self) {
-                    self.trace_nexus_activation(NexusObjectName::Decided);
+                    self.#trace_activation(#trace_enum::Decided);
                 }
 
                 #runner_hooks
@@ -1659,6 +1697,7 @@ impl ToTokens for NexusEngineTraitTokens<'_> {
 }
 
 struct SemaEngineTraitTokens {
+    plane: Plane,
     emits_apply: bool,
     emits_observe: bool,
 }
@@ -1666,6 +1705,7 @@ struct SemaEngineTraitTokens {
 impl SemaEngineTraitTokens {
     fn new(emits_apply: bool, emits_observe: bool) -> Self {
         Self {
+            plane: Plane::Sema,
             emits_apply,
             emits_observe,
         }
@@ -1674,17 +1714,20 @@ impl SemaEngineTraitTokens {
 
 impl ToTokens for SemaEngineTraitTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        let engine_trait = RustIdentifier::new(self.plane.engine_trait_name());
+        let trace_enum = RustIdentifier::new(self.plane.trace_enum_name());
+        let trace_activation = RustIdentifier::new(self.plane.trace_activation_method_name());
         let write_trace = self.emits_apply.then(|| {
             quote! {
                 fn trace_sema_write_applied(&self) {
-                    self.trace_sema_activation(SemaObjectName::WriteApplied);
+                    self.#trace_activation(#trace_enum::WriteApplied);
                 }
             }
         });
         let read_trace = self.emits_observe.then(|| {
             quote! {
                 fn trace_sema_read_observed(&self) {
-                    self.trace_sema_activation(SemaObjectName::ReadObserved);
+                    self.#trace_activation(#trace_enum::ReadObserved);
                 }
             }
         });
@@ -1727,7 +1770,7 @@ impl ToTokens for SemaEngineTraitTokens {
         });
 
         quote! {
-            pub trait SemaEngine {
+            pub trait #engine_trait {
                 fn on_start(&mut self) -> Result<(), ActorStartFailure> {
                     Ok(())
                 }
@@ -1736,7 +1779,7 @@ impl ToTokens for SemaEngineTraitTokens {
                     Ok(())
                 }
 
-                fn trace_sema_activation(&self, _object_name: SemaObjectName) {}
+                fn #trace_activation(&self, _object_name: #trace_enum) {}
 
                 #write_trace
 
@@ -2778,6 +2821,10 @@ impl RustWriter {
 
     fn emits_signal(&self) -> bool {
         self.runtime_planes().emits_signal()
+    }
+
+    fn emits_short_headers(&self) -> bool {
+        matches!(self.target, RustEmissionTarget::WireContract) || self.emits_signal()
     }
 
     fn runtime_planes(&self) -> RuntimePlaneSet {

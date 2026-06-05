@@ -719,6 +719,7 @@ fn nexus_runtime_target_emits_only_nexus_runtime_support_even_when_other_plane_n
     assert!(!code.contains("pub enum SemaReadInputRoute"));
     assert!(!code.contains("pub struct MessageSent"));
     assert!(!code.contains("pub enum Plane"));
+    assert!(!code.contains("pub mod short_header"));
     assert!(!code.contains("pub fn encode_signal_frame"));
     assert!(!code.contains("pub fn decode_signal_frame"));
     assert!(!code.contains("pub enum SignalFrameError"));
@@ -757,6 +758,7 @@ fn sema_runtime_target_emits_only_sema_runtime_support_even_when_other_plane_nam
     assert!(!code.contains("pub enum NexusWorkRoute"));
     assert!(!code.contains("pub struct MessageSent"));
     assert!(!code.contains("pub enum Plane"));
+    assert!(!code.contains("pub mod short_header"));
     assert!(!code.contains("pub fn encode_signal_frame"));
     assert!(!code.contains("pub fn decode_signal_frame"));
     assert!(!code.contains("pub enum SignalFrameError"));

@@ -36,6 +36,12 @@ beside that typed source/schema pipeline.
   trace object-name support, Nexus runner next-step projection and adapter
   emission, actor lifecycle support, and the generated Signal/Nexus/SEMA
   engine traits.
+- Runtime plane naming has a three-tier boundary. `Plane` owns only
+  plane-intrinsic names such as the module, wrapper, export aliases, engine
+  trait, and trace enum names. `RuntimePlaneSet` / `RustEmissionTarget` own
+  which planes a target emits. Schema-presence and construct-presence checks
+  stay on the emitter nouns that inspect declarations and roots. Do not move
+  target selection or schema logic into `Plane`.
 - `RustModule` is the data model between semantic schema data and rendered
   Rust text. It carries scalar aliases, cross-crate imports, generated Rust
   declarations, root enums, and support metadata before anything is rendered.
