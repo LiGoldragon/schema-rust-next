@@ -110,8 +110,9 @@ grow a second parser for the authored form.
 - Emission is tested by source fixture comparison and by compiling the fixture
   as Rust code.
 - `RustEmissionTarget::WireContract` emits the external signal or meta-signal
-  wire surface: schema nouns, derives, NOTA/rkyv codecs, short headers, and
-  signal-frame encode/decode.
+  wire surface: schema nouns, derives, NOTA/rkyv codecs, and short-header
+  route constants. It does not emit runtime envelopes, engine traits, mail
+  support, trace support, or signal-frame encode/decode helpers.
 - `RustEmissionTarget::SignalRuntime` emits daemon-local Signal runtime
   support over signal roots: the Signal envelope, origin route, mail lifecycle
   nouns, Signal trace object names, and `SignalEngine`. The engine bridge uses

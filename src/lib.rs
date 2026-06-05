@@ -2147,8 +2147,7 @@ impl ToTokens for PlaneWrapperPath {
 }
 
 struct TraceObjectNameEnumTokens<'schema, 'context> {
-    enum_name: &'static str,
-    rendered_prefix: &'static str,
+    plane: Plane,
     interface_roots: &'schema [TraceInterfaceRoot<'schema>],
     actor_variants: &'schema [&'static str],
     context: &'context RustRenderContext,
@@ -2156,15 +2155,13 @@ struct TraceObjectNameEnumTokens<'schema, 'context> {
 
 impl<'schema, 'context> TraceObjectNameEnumTokens<'schema, 'context> {
     fn new(
-        enum_name: &'static str,
-        rendered_prefix: &'static str,
+        plane: Plane,
         interface_roots: &'schema [TraceInterfaceRoot<'schema>],
         actor_variants: &'schema [&'static str],
         context: &'context RustRenderContext,
     ) -> Self {
         Self {
-            enum_name,
-            rendered_prefix,
+            plane,
             interface_roots,
             actor_variants,
             context,
@@ -2174,7 +2171,7 @@ impl<'schema, 'context> TraceObjectNameEnumTokens<'schema, 'context> {
 
 impl ToTokens for TraceObjectNameEnumTokens<'_, '_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let enum_name = RustIdentifier::new(self.enum_name);
+        let enum_name = RustIdentifier::new(self.plane.trace_enum_name());
         let attributes = self.context.derive_attributes(true, false);
         let interface_variants = self.interface_roots.iter().map(|root| {
             let object_variant = RustIdentifier::new(root.object_variant);
@@ -2204,7 +2201,7 @@ impl ToTokens for TraceObjectNameEnumTokens<'_, '_> {
         });
         let actor_match_arms = self.actor_variants.iter().map(|variant| {
             let variant_name = RustIdentifier::new(variant);
-            let rendered_name = format!("{}{}", self.rendered_prefix, variant);
+            let rendered_name = format!("{}{}", self.plane.wrapper_name(), variant);
             let rendered_name = Literal::string(&rendered_name);
             quote! { Self::#variant_name => #rendered_name, }
         });
@@ -2229,51 +2226,32 @@ impl ToTokens for TraceObjectNameEnumTokens<'_, '_> {
 }
 
 struct TraceSupportTokens<'context> {
-    has_signal: bool,
-    has_nexus: bool,
-    has_sema: bool,
+    planes: Vec<Plane>,
     context: &'context RustRenderContext,
 }
 
 impl<'context> TraceSupportTokens<'context> {
-    fn new(
-        has_signal: bool,
-        has_nexus: bool,
-        has_sema: bool,
-        context: &'context RustRenderContext,
-    ) -> Self {
-        Self {
-            has_signal,
-            has_nexus,
-            has_sema,
-            context,
-        }
+    fn new(planes: Vec<Plane>, context: &'context RustRenderContext) -> Self {
+        Self { planes, context }
     }
 }
 
 impl ToTokens for TraceSupportTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let attributes = self.context.derive_attributes(true, false);
-        let signal_variant = self
-            .has_signal
-            .then(|| quote! { Signal(SignalObjectName), });
-        let nexus_variant = self.has_nexus.then(|| quote! { Nexus(NexusObjectName), });
-        let sema_variant = self.has_sema.then(|| quote! { Sema(SemaObjectName), });
-        let signal_match = self
-            .has_signal
-            .then(|| quote! { Self::Signal(object_name) => object_name.name(), });
-        let nexus_match = self
-            .has_nexus
-            .then(|| quote! { Self::Nexus(object_name) => object_name.name(), });
-        let sema_match = self
-            .has_sema
-            .then(|| quote! { Self::Sema(object_name) => object_name.name(), });
+        let variants = self.planes.iter().map(|plane| {
+            let variant = RustIdentifier::new(plane.wrapper_name());
+            let trace_enum = RustIdentifier::new(plane.trace_enum_name());
+            quote! { #variant(#trace_enum), }
+        });
+        let match_arms = self.planes.iter().map(|plane| {
+            let variant = RustIdentifier::new(plane.wrapper_name());
+            quote! { Self::#variant(object_name) => object_name.name(), }
+        });
         quote! {
             #( #attributes )*
             pub enum ObjectName {
-                #signal_variant
-                #nexus_variant
-                #sema_variant
+                #( #variants )*
             }
 
             #( #attributes )*
@@ -2282,9 +2260,7 @@ impl ToTokens for TraceSupportTokens<'_> {
             impl ObjectName {
                 pub fn name(self) -> &'static str {
                     match self {
-                        #signal_match
-                        #nexus_match
-                        #sema_match
+                        #( #match_arms )*
                     }
                 }
             }
@@ -3513,38 +3489,32 @@ impl RustWriter {
         if !has_signal && !has_nexus && !has_sema {
             return;
         }
+        let mut planes = Vec::new();
         let context = self.render_context();
+        if has_signal {
+            planes.push(Plane::Signal);
+        }
         self.emit_object_name_enum(
-            "SignalObjectName",
-            "Signal",
+            Plane::Signal,
             &signal_roots,
             &signal_actor_variants,
             &context,
         );
-        self.emit_object_name_enum(
-            "NexusObjectName",
-            "Nexus",
-            &nexus_roots,
-            &nexus_actor_variants,
-            &context,
-        );
-        self.emit_object_name_enum(
-            "SemaObjectName",
-            "Sema",
-            &sema_roots,
-            &sema_actor_variants,
-            &context,
-        );
-        self.emit_item_tokens(
-            TraceSupportTokens::new(has_signal, has_nexus, has_sema, &context).into_token_stream(),
-        );
+        if has_nexus {
+            planes.push(Plane::Nexus);
+        }
+        self.emit_object_name_enum(Plane::Nexus, &nexus_roots, &nexus_actor_variants, &context);
+        if has_sema {
+            planes.push(Plane::Sema);
+        }
+        self.emit_object_name_enum(Plane::Sema, &sema_roots, &sema_actor_variants, &context);
+        self.emit_item_tokens(TraceSupportTokens::new(planes, &context).into_token_stream());
         self.blank();
     }
 
     fn emit_object_name_enum(
         &mut self,
-        enum_name: &'static str,
-        rendered_prefix: &'static str,
+        plane: Plane,
         interface_roots: &[TraceInterfaceRoot<'_>],
         actor_variants: &[&'static str],
         context: &RustRenderContext,
@@ -3553,14 +3523,8 @@ impl RustWriter {
             return;
         }
         self.emit_item_tokens(
-            TraceObjectNameEnumTokens::new(
-                enum_name,
-                rendered_prefix,
-                interface_roots,
-                actor_variants,
-                context,
-            )
-            .into_token_stream(),
+            TraceObjectNameEnumTokens::new(plane, interface_roots, actor_variants, context)
+                .into_token_stream(),
         );
         self.blank();
     }
