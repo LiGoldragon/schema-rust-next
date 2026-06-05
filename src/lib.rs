@@ -1006,6 +1006,82 @@ impl ToTokens for RustTypeReferenceTokens<'_> {
     }
 }
 
+struct SignalFrameStreamingSupportTokens<'event> {
+    event_payload: &'event TypeReference,
+}
+
+impl<'event> SignalFrameStreamingSupportTokens<'event> {
+    fn new(event_payload: &'event TypeReference) -> Self {
+        Self { event_payload }
+    }
+}
+
+impl ToTokens for SignalFrameStreamingSupportTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let event_type = RustTypeReferenceTokens::new(self.event_payload);
+        quote! {
+            impl signal_frame::RequestPayload for Input {}
+
+            impl signal_frame::LogVariant for Input {
+                fn log_variant(&self) -> u64 {
+                    self.short_header()
+                }
+            }
+
+            pub type Frame = signal_frame::StreamingFrame<Input, Output, #event_type>;
+            pub type FrameBody = signal_frame::StreamingFrameBody<Input, Output, #event_type>;
+            pub type Request = signal_frame::Request<Input>;
+            pub type ReplyEnvelope = signal_frame::Reply<Output>;
+            pub type RequestBuilder = signal_frame::RequestBuilder<Input>;
+
+            impl Input {
+                pub fn into_frame(self, exchange: signal_frame::ExchangeIdentifier) -> Frame {
+                    let short_header = signal_frame::ShortHeader::new(self.short_header());
+                    let request = signal_frame::Request::from_payload(self);
+                    Frame::with_short_header(
+                        short_header,
+                        FrameBody::Request { exchange, request },
+                    )
+                }
+            }
+
+            impl Output {
+                pub fn into_reply_frame(
+                    self,
+                    exchange: signal_frame::ExchangeIdentifier,
+                ) -> Frame {
+                    let short_header = signal_frame::ShortHeader::new(self.short_header());
+                    let reply = signal_frame::Reply::committed(signal_frame::NonEmpty::single(
+                        signal_frame::SubReply::Ok(self),
+                    ));
+                    Frame::with_short_header(
+                        short_header,
+                        FrameBody::Reply { exchange, reply },
+                    )
+                }
+            }
+
+            impl #event_type {
+                pub fn into_subscription_frame(
+                    self,
+                    event_identifier: signal_frame::StreamEventIdentifier,
+                    token: signal_frame::SubscriptionTokenInner,
+                ) -> Frame {
+                    Frame::with_short_header(
+                        signal_frame::ShortHeader::new(short_header::OUTPUT_EVENT),
+                        FrameBody::SubscriptionEvent {
+                            event_identifier,
+                            token,
+                            event: self,
+                        },
+                    )
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
 struct RustDeclarationTokens<'declaration, 'context> {
     declaration: &'declaration RustDeclaration,
     context: &'context RustRenderContext,
@@ -2174,73 +2250,9 @@ impl RustWriter {
     }
 
     fn emit_signal_frame_streaming_support(&mut self, event_payload: &TypeReference) {
-        let event_type = self.rust_type(event_payload);
-        self.line("impl signal_frame::RequestPayload for Input {}");
-        self.blank();
-        self.line("impl signal_frame::LogVariant for Input {");
-        self.line("    fn log_variant(&self) -> u64 {");
-        self.line("        self.short_header()");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line(format!(
-            "pub type Frame = signal_frame::StreamingFrame<Input, Output, {event_type}>;"
-        ));
-        self.line(format!(
-            "pub type FrameBody = signal_frame::StreamingFrameBody<Input, Output, {event_type}>;"
-        ));
-        self.line("pub type Request = signal_frame::Request<Input>;");
-        self.line("pub type ReplyEnvelope = signal_frame::Reply<Output>;");
-        self.line("pub type RequestBuilder = signal_frame::RequestBuilder<Input>;");
-        self.blank();
-        self.line("impl Input {");
-        self.line(
-            "    pub fn into_frame(self, exchange: signal_frame::ExchangeIdentifier) -> Frame {",
+        self.emit_item_tokens(
+            SignalFrameStreamingSupportTokens::new(event_payload).into_token_stream(),
         );
-        self.line(
-            "        let short_header = signal_frame::ShortHeader::new(self.short_header());",
-        );
-        self.line("        let request = signal_frame::Request::from_payload(self);");
-        self.line("        Frame::with_short_header(");
-        self.line("            short_header,");
-        self.line("            FrameBody::Request { exchange, request },");
-        self.line("        )");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line("impl Output {");
-        self.line("    pub fn into_reply_frame(self, exchange: signal_frame::ExchangeIdentifier) -> Frame {");
-        self.line(
-            "        let short_header = signal_frame::ShortHeader::new(self.short_header());",
-        );
-        self.line(
-            "        let reply = signal_frame::Reply::committed(signal_frame::NonEmpty::single(",
-        );
-        self.line("            signal_frame::SubReply::Ok(self),");
-        self.line("        ));");
-        self.line("        Frame::with_short_header(");
-        self.line("            short_header,");
-        self.line("            FrameBody::Reply { exchange, reply },");
-        self.line("        )");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line(format!("impl {event_type} {{"));
-        self.line("    pub fn into_subscription_frame(");
-        self.line("        self,");
-        self.line("        event_identifier: signal_frame::StreamEventIdentifier,");
-        self.line("        token: signal_frame::SubscriptionTokenInner,");
-        self.line("    ) -> Frame {");
-        self.line("        Frame::with_short_header(");
-        self.line("            signal_frame::ShortHeader::new(short_header::OUTPUT_EVENT),");
-        self.line("            FrameBody::SubscriptionEvent {");
-        self.line("                event_identifier,");
-        self.line("                token,");
-        self.line("                event: self,");
-        self.line("            },");
-        self.line("        )");
-        self.line("    }");
-        self.line("}");
     }
 
     fn emit_trace_support(&mut self, declarations: &[RustDeclaration], root_enums: &[RustEnum]) {

@@ -63,6 +63,11 @@ The emitter should use Rust's macro/codegen substrate (`proc_macro2` and
 strings. The source-visible boundary still stands: generated modules are
 pretty-printed into `src/schema/*.rs` and freshness-checked by the build
 driver rather than hidden behind compiler macro expansion.
+The remaining runtime emitter code that still builds Rust with
+`format!`/`self.line` is migration debt, not an accepted design. New runtime
+support should be token-first, and existing runtime/plane/runner emission
+should move toward Rust-native token lowering as it is touched. (Spirit record
+`0bw0`, High certainty.)
 
 *Context stays contextual while nouns own intrinsic shape.* Intrinsic properties
 such as declaration visibility and field names belong on the Rust-model nouns.

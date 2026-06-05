@@ -1005,43 +1005,44 @@ impl Output {
 }
 
 impl signal_frame::RequestPayload for Input {}
-
 impl signal_frame::LogVariant for Input {
     fn log_variant(&self) -> u64 {
         self.short_header()
     }
 }
-
 pub type Frame = signal_frame::StreamingFrame<Input, Output, RuntimeEvent>;
 pub type FrameBody = signal_frame::StreamingFrameBody<Input, Output, RuntimeEvent>;
 pub type Request = signal_frame::Request<Input>;
 pub type ReplyEnvelope = signal_frame::Reply<Output>;
 pub type RequestBuilder = signal_frame::RequestBuilder<Input>;
-
 impl Input {
     pub fn into_frame(self, exchange: signal_frame::ExchangeIdentifier) -> Frame {
         let short_header = signal_frame::ShortHeader::new(self.short_header());
         let request = signal_frame::Request::from_payload(self);
         Frame::with_short_header(
             short_header,
-            FrameBody::Request { exchange, request },
+            FrameBody::Request {
+                exchange,
+                request,
+            },
         )
     }
 }
-
 impl Output {
     pub fn into_reply_frame(self, exchange: signal_frame::ExchangeIdentifier) -> Frame {
         let short_header = signal_frame::ShortHeader::new(self.short_header());
-        let reply = signal_frame::Reply::committed(signal_frame::NonEmpty::single(
-            signal_frame::SubReply::Ok(self),
-        ));
+        let reply = signal_frame::Reply::committed(
+            signal_frame::NonEmpty::single(signal_frame::SubReply::Ok(self)),
+        );
         Frame::with_short_header(
             short_header,
-            FrameBody::Reply { exchange, reply },
+            FrameBody::Reply {
+                exchange,
+                reply,
+            },
         )
     }
 }
-
 impl RuntimeEvent {
     pub fn into_subscription_frame(
         self,

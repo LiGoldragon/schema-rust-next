@@ -27,6 +27,11 @@ beside that typed source/schema pipeline.
   `ToTokens` has no context parameter, so generation-wide switches such as the
   NOTA feature gate and private-type visibility flow through
   `RustRenderContext` wrappers instead of being copied into every noun.
+- The runtime and plane emitters are on the same migration path. Any remaining
+  runtime code that hand-builds Rust with `format!` and `self.line` is debt
+  against the Rust-native lowering direction, not a competing accepted design.
+  New support surfaces should emit tokens first, then pretty-print into
+  source-visible files.
 - `RustModule` is the data model between semantic schema data and rendered
   Rust text. It carries scalar aliases, cross-crate imports, generated Rust
   declarations, root enums, and support metadata before anything is rendered.
@@ -90,7 +95,8 @@ grow a second parser for the authored form.
   compile that source rather than hiding the interface in `OUT_DIR` or behind a
   compiler macro expansion. The emitter uses Rust syntax token machinery
   internally where it owns Rust syntax, then pretty-prints tokens into checked
-  source files.
+  source files. Per Spirit record `0bw0`, the string-based runtime emitter is
+  a migration target, not the desired end state.
 - Emission is tested by source fixture comparison and by compiling the fixture
   as Rust code.
 - `RustEmissionTarget::WireContract` emits the external signal or meta-signal
