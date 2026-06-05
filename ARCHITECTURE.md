@@ -1,7 +1,9 @@
 # Architecture
 
-`schema-rust-next` emits Rust source from typed schema data. Its current
-compatibility input is `schema-next::Asschema`.
+`schema-rust-next` emits Rust interface source from typed schema data. Its
+current compatibility input is `schema-next::Asschema`; the target input is the
+schema-in-Rust value produced when authored `.schema` deserializes into Rust
+datatypes that fully define the schema and serialize through rkyv.
 
 ## Interfaces
 
@@ -27,11 +29,13 @@ compatibility input is `schema-next::Asschema`.
 The current compatibility input contract is assembled schema. `Asschema` has
 already resolved all macros and sugar, and the emitter does not read authored
 macro calls, sigils, or structural macro captures. The target input after the
-schema-source migration is typed schema source data decoded through
-structural macro node codecs, with no Asschema intermediate. The active test
-path still gets `Asschema` as typed data from `schema-next` lowering real
-`.schema` fixtures, then proves the emitter can consume the same value after an
-asschema NOTA artifact file read and an asschema rkyv artifact file read.
+schema-source migration is typed schema source data decoded through structural
+macro node codecs: authored `.schema` deserializes into schema-defining Rust
+datatypes, those datatypes are rkyv-serializable, and this emitter lowers that
+schema-in-Rust value into Rust interface code. The active test path still gets
+`Asschema` as typed data from `schema-next` lowering real `.schema` fixtures,
+then proves the emitter can consume the same value after an asschema NOTA
+artifact file read and an asschema rkyv artifact file read.
 That keeps Rust emission attached to live typed data while the compatibility
 endpoint remains.
 `RustEmitter::emit_file_from_artifact`, `emit_file_from_nota_path`, and

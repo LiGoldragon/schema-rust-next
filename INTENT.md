@@ -255,10 +255,12 @@ directly.*
 *The emitter currently starts from assembled schema data as a compatibility
 surface, not from authored macro syntax. That assembled data is live: it can
 be written as NOTA, read back, written as rkyv bytes, and read back before
-emission. The target after Asschema retirement is for Rust emission to consume
-typed schema source/schema nouns decoded through structural macro node codecs.
-Checked-in assembled-schema text fixtures must not remain in active code or
-fixtures. Rust emission must not compensate for unresolved schema sugar.*
+emission. The target after Asschema retirement is the schema-in-Rust pipeline:
+authored `.schema` deserializes into Rust datatypes that fully define the
+schema, that typed schema value is rkyv-serializable, and Rust interface code is
+lowered from that value. Checked-in assembled-schema text fixtures must not
+remain in active code or fixtures. Rust emission must not compensate for
+unresolved schema sugar.*
 
 *Rust emission can consume the assembled schema as an explicit compatibility
 artifact. The emitter still accepts `&Asschema` for in-process callers, but it
