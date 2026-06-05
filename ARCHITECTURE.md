@@ -1,6 +1,7 @@
 # Architecture
 
-`schema-rust-next` consumes `schema-next::Asschema` and emits Rust source.
+`schema-rust-next` emits Rust source from typed schema data. Its current
+compatibility input is `schema-next::Asschema`.
 
 ## Interfaces
 
@@ -21,16 +22,18 @@
   dependency schema directories. `build::ModuleEmission` selects the
   Rust-emission target for each schema module.
 
-## Input Contract
+## Compatibility Input Contract
 
-The input contract is assembled schema, not authored schema. `Asschema` has
-already resolved all macros and sugar; the emitter does not read authored macro
-calls, sigils, or structural macro captures. The active test path gets that
-`Asschema` as typed data from `schema-next` lowering real `.schema` fixtures,
-then proves the emitter can consume the same value after an asschema NOTA
-artifact file read and an asschema rkyv artifact file read. That keeps Rust
-emission attached to the live assembled data object rather than to hidden
-parser state.
+The current compatibility input contract is assembled schema. `Asschema` has
+already resolved all macros and sugar, and the emitter does not read authored
+macro calls, sigils, or structural macro captures. The target input after the
+schema-source migration is typed schema source data decoded through
+structural macro node codecs, with no Asschema intermediate. The active test
+path still gets `Asschema` as typed data from `schema-next` lowering real
+`.schema` fixtures, then proves the emitter can consume the same value after an
+asschema NOTA artifact file read and an asschema rkyv artifact file read.
+That keeps Rust emission attached to live typed data while the compatibility
+endpoint remains.
 `RustEmitter::emit_file_from_artifact`, `emit_file_from_nota_path`, and
 `emit_file_from_binary_path` are the explicit artifact handoff methods; the
 plain `emit_file(&Asschema)` path remains for callers that already hold the
@@ -42,11 +45,11 @@ Namespace entries arrive as visibility-tagged declarations: `(Public Name
 Value)` or `(Private Name Value)`. The emitter must project that boundary into
 Rust instead of flattening every type into the same public surface.
 
-The active fixtures use the current enum-body signature shape: square
-brackets contain one vector element type, so unit variants are bare symbols
-and data-carrying variants are parenthesized records such as
-`(Record Entry)`. This emitter only sees the resulting `Asschema` data and
-must not grow a second parser for the authored form.
+The active fixtures use the current enum-body signature shape: square brackets
+contain one vector element type, so unit variants are bare symbols and
+data-carrying variants are parenthesized records such as `(Record Entry)`.
+Until the migration lands, this emitter only sees the resulting `Asschema`
+data and must not grow a second parser for the authored form.
 
 ## Constraints
 

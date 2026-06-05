@@ -26,8 +26,8 @@ source-visible modules under `src/schema/`, using single-colon schema paths as
 the source naming convention and Rust modules as the emitted form. The current
 schema files still provide Input and Output as the first two roots. In
 assembled schema those roots are direct product fields, not a homogeneous
-vector of wrappers; the emitter consumes `Asschema::input_and_output()` as the
-two direct root enum definitions.*
+vector of wrappers; the current compatibility emitter consumes
+`Asschema::input_and_output()` as the two direct root enum definitions.*
 
 *Plane payload names are scoped by emitted namespaces. The generated public
 surface should read `signal::Input`, `nexus::Input`,
@@ -252,17 +252,20 @@ ordinary code names the operation once. If the variant stores an alias, there
 is no wrapper to construct and the constructor accepts the alias target
 directly.*
 
-*The emitter starts from assembled schema data, not from authored macro syntax.
-That assembled data is live: it can be written as NOTA, read back, written as
-rkyv bytes, and read back before emission. Checked-in assembled-schema text
-fixtures must not remain in active code or fixtures. Rust emission must not
-compensate for unresolved schema sugar.*
+*The emitter currently starts from assembled schema data as a compatibility
+surface, not from authored macro syntax. That assembled data is live: it can
+be written as NOTA, read back, written as rkyv bytes, and read back before
+emission. The target after Asschema retirement is for Rust emission to consume
+typed schema source/schema nouns decoded through structural macro node codecs.
+Checked-in assembled-schema text fixtures must not remain in active code or
+fixtures. Rust emission must not compensate for unresolved schema sugar.*
 
-*Rust emission can consume the assembled schema as an explicit artifact. The
-emitter still accepts `&Asschema` for in-process callers, but it also accepts
-`AsschemaArtifact` and `.asschema` / `.asschema.rkyv` file paths, so build
-pipelines can prove the handoff is serialized data before generated Rust
-appears.*
+*Rust emission can consume the assembled schema as an explicit compatibility
+artifact. The emitter still accepts `&Asschema` for in-process callers, but it
+also accepts `AsschemaArtifact` and `.asschema` / `.asschema.rkyv` file paths,
+so build pipelines can prove the handoff is serialized data before generated
+Rust appears. Those artifact paths are retained only until the structural
+schema-source handoff replaces Asschema.*
 
 *Rust emission is data before it is text. The emitter maps `Asschema` into a
 typed `RustModule` object carrying scalar aliases, cross-crate imports, Rust
