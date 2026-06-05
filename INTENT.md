@@ -68,6 +68,9 @@ The remaining runtime emitter code that still builds Rust with
 support should be token-first, and existing runtime/plane/runner emission
 should move toward Rust-native token lowering as it is touched. (Spirit record
 `0bw0`, High certainty.)
+Per Spirit record `o7a3` (High certainty), runtime emission must move to
+`quote!` typed tokens now; hand-formatted runtime emission is migration debt
+to pay down before downstream components copy the generated base.
 
 *Context stays contextual while nouns own intrinsic shape.* Intrinsic properties
 such as declaration visibility and field names belong on the Rust-model nouns.

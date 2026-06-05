@@ -1290,6 +1290,406 @@ impl ToTokens for NexusRunnerAdapterTokens<'_> {
     }
 }
 
+struct ActorLifecycleSupportTokens;
+
+impl ToTokens for ActorLifecycleSupportTokens {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        quote! {
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            pub enum ActorStartFailure {
+                ResourceBusy(String),
+                ConfigurationInvalid(String),
+            }
+
+            impl std::fmt::Display for ActorStartFailure {
+                fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    match self {
+                        Self::ResourceBusy(message) => {
+                            write!(formatter, "actor resource busy: {message}")
+                        }
+                        Self::ConfigurationInvalid(message) => {
+                            write!(formatter, "actor configuration invalid: {message}")
+                        }
+                    }
+                }
+            }
+
+            impl std::error::Error for ActorStartFailure {}
+
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            pub enum ActorStopFailure {
+                ResourceLocked(String),
+                ChildStillRunning(String),
+            }
+
+            impl std::fmt::Display for ActorStopFailure {
+                fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    match self {
+                        Self::ResourceLocked(message) => {
+                            write!(formatter, "actor resource locked: {message}")
+                        }
+                        Self::ChildStillRunning(message) => {
+                            write!(formatter, "actor child still running: {message}")
+                        }
+                    }
+                }
+            }
+
+            impl std::error::Error for ActorStopFailure {}
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct SignalEngineTraitTokens {
+    emits_concrete_signal_engine: bool,
+}
+
+impl SignalEngineTraitTokens {
+    fn new(emits_concrete_signal_engine: bool) -> Self {
+        Self {
+            emits_concrete_signal_engine,
+        }
+    }
+}
+
+impl ToTokens for SignalEngineTraitTokens {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let associated_nexus_types = (!self.emits_concrete_signal_engine).then(|| {
+            quote! {
+                type NexusInput;
+                type NexusOutput;
+            }
+        });
+        let triage_inner = if self.emits_concrete_signal_engine {
+            quote! {
+                fn triage_inner(
+                    &self,
+                    input: signal::Signal<signal::Input>,
+                ) -> nexus::Nexus<nexus::Work>;
+            }
+        } else {
+            quote! {
+                fn triage_inner(&self, input: signal::Signal<signal::Input>) -> Self::NexusInput;
+            }
+        };
+        let reply_inner = if self.emits_concrete_signal_engine {
+            quote! {
+                fn reply_inner(
+                    &self,
+                    output: nexus::Nexus<nexus::Action>,
+                ) -> signal::Signal<signal::Output>;
+            }
+        } else {
+            quote! {
+                fn reply_inner(
+                    &self,
+                    output: Self::NexusOutput,
+                ) -> signal::Signal<signal::Output>;
+            }
+        };
+        let triage_output = if self.emits_concrete_signal_engine {
+            quote! { nexus::Nexus<nexus::Work> }
+        } else {
+            quote! { Self::NexusInput }
+        };
+        let reply_input = if self.emits_concrete_signal_engine {
+            quote! { nexus::Nexus<nexus::Action> }
+        } else {
+            quote! { Self::NexusOutput }
+        };
+
+        quote! {
+            pub trait SignalEngine {
+                #associated_nexus_types
+
+                fn on_start(&mut self) -> Result<(), ActorStartFailure> {
+                    Ok(())
+                }
+
+                fn on_stop(&mut self) -> Result<(), ActorStopFailure> {
+                    Ok(())
+                }
+
+                fn trace_signal_activation(&self, _object_name: SignalObjectName) {}
+
+                fn trace_signal_admitted(&self) {
+                    self.trace_signal_activation(SignalObjectName::Admitted);
+                }
+
+                fn trace_signal_rejected(&self) {
+                    self.trace_signal_activation(SignalObjectName::Rejected);
+                }
+
+                fn trace_signal_triaged(&self) {
+                    self.trace_signal_activation(SignalObjectName::Triaged);
+                }
+
+                fn trace_signal_replied(&self) {
+                    self.trace_signal_activation(SignalObjectName::Replied);
+                }
+
+                #triage_inner
+
+                #reply_inner
+
+                fn triage(&self, input: signal::Signal<signal::Input>) -> #triage_output {
+                    let output = self.triage_inner(input);
+                    self.trace_signal_triaged();
+                    output
+                }
+
+                fn reply(&self, output: #reply_input) -> signal::Signal<signal::Output> {
+                    let signal_output = self.reply_inner(output);
+                    self.trace_signal_replied();
+                    signal_output
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct NexusEngineTraitTokens<'shape> {
+    runner_shape: Option<&'shape NexusRunnerShape>,
+}
+
+impl<'shape> NexusEngineTraitTokens<'shape> {
+    fn new(runner_shape: Option<&'shape NexusRunnerShape>) -> Self {
+        Self { runner_shape }
+    }
+}
+
+impl ToTokens for NexusEngineTraitTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let runner_hooks = self.runner_shape.map(|shape| {
+            let sema_write_hook = match (
+                shape.sema_write_input_type.as_deref(),
+                shape.sema_write_output_type.as_deref(),
+            ) {
+                (Some(input_type), Some(output_type)) => {
+                    let input_type = RustTypeTokens::new(input_type);
+                    let output_type = RustTypeTokens::new(output_type);
+                    quote! {
+                        fn apply_sema_write(
+                            &mut self,
+                            origin_route: OriginRoute,
+                            input: #input_type,
+                        ) -> #output_type;
+                    }
+                }
+                _ => quote! {},
+            };
+            let sema_read_hook = match (
+                shape.sema_read_input_type.as_deref(),
+                shape.sema_read_output_type.as_deref(),
+            ) {
+                (Some(input_type), Some(output_type)) => {
+                    let input_type = RustTypeTokens::new(input_type);
+                    let output_type = RustTypeTokens::new(output_type);
+                    quote! {
+                        fn observe_sema_read(
+                            &self,
+                            origin_route: OriginRoute,
+                            input: #input_type,
+                        ) -> #output_type;
+                    }
+                }
+                _ => quote! {},
+            };
+            let effect_hook = match (
+                shape.effect_command_type.as_deref(),
+                shape.effect_result_type.as_deref(),
+            ) {
+                (Some(input_type), Some(output_type)) => {
+                    let input_type = RustTypeTokens::new(input_type);
+                    let output_type = RustTypeTokens::new(output_type);
+                    quote! {
+                        fn run_effect(&mut self, input: #input_type) -> #output_type;
+                    }
+                }
+                _ => quote! {},
+            };
+            let reply_type = RustTypeTokens::new(&shape.reply_type);
+            quote! {
+                fn continuation_limit(&self) -> triad_runtime::ContinuationLimit {
+                    triad_runtime::ContinuationLimit::default()
+                }
+
+                #sema_write_hook
+
+                #sema_read_hook
+
+                #effect_hook
+
+                fn budget_exhausted_reply(
+                    &self,
+                    exhausted: triad_runtime::ContinuationExhausted,
+                ) -> #reply_type;
+            }
+        });
+        let sized_where = self.runner_shape.is_some().then(|| {
+            quote! {
+                where
+                    Self: Sized,
+            }
+        });
+        let execute_body = if self.runner_shape.is_some() {
+            quote! {
+                let origin_route = input.origin_route();
+                let first_work = input.into_root();
+                let runner = triad_runtime::Runner::new(self.continuation_limit());
+                let mut runner_adapter = NexusRunnerAdapter::new(self, origin_route);
+                let reply = runner.drive(&mut runner_adapter, first_work);
+                let output = NexusAction::reply_to_signal(reply).with_origin_route(origin_route);
+            }
+        } else {
+            quote! {
+                let output = self.decide(input);
+            }
+        };
+
+        quote! {
+            pub trait NexusEngine {
+                fn on_start(&mut self) -> Result<(), ActorStartFailure> {
+                    Ok(())
+                }
+
+                fn on_stop(&mut self) -> Result<(), ActorStopFailure> {
+                    Ok(())
+                }
+
+                fn trace_nexus_activation(&self, _object_name: NexusObjectName) {}
+
+                fn trace_nexus_entered(&self) {
+                    self.trace_nexus_activation(NexusObjectName::Entered);
+                }
+
+                fn trace_nexus_decided(&self) {
+                    self.trace_nexus_activation(NexusObjectName::Decided);
+                }
+
+                #runner_hooks
+
+                fn decide(
+                    &mut self,
+                    input: nexus::Nexus<nexus::Work>,
+                ) -> nexus::Nexus<nexus::Action>;
+
+                fn execute(
+                    &mut self,
+                    input: nexus::Nexus<nexus::Work>,
+                ) -> nexus::Nexus<nexus::Action>
+                #sized_where
+                {
+                    self.trace_nexus_entered();
+                    #execute_body
+                    self.trace_nexus_decided();
+                    output
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct SemaEngineTraitTokens {
+    emits_apply: bool,
+    emits_observe: bool,
+}
+
+impl SemaEngineTraitTokens {
+    fn new(emits_apply: bool, emits_observe: bool) -> Self {
+        Self {
+            emits_apply,
+            emits_observe,
+        }
+    }
+}
+
+impl ToTokens for SemaEngineTraitTokens {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let write_trace = self.emits_apply.then(|| {
+            quote! {
+                fn trace_sema_write_applied(&self) {
+                    self.trace_sema_activation(SemaObjectName::WriteApplied);
+                }
+            }
+        });
+        let read_trace = self.emits_observe.then(|| {
+            quote! {
+                fn trace_sema_read_observed(&self) {
+                    self.trace_sema_activation(SemaObjectName::ReadObserved);
+                }
+            }
+        });
+        let apply_inner = self.emits_apply.then(|| {
+            quote! {
+                fn apply_inner(
+                    &mut self,
+                    input: sema::Sema<sema::WriteInput>,
+                ) -> sema::Sema<sema::WriteOutput>;
+            }
+        });
+        let observe_inner = self.emits_observe.then(|| {
+            quote! {
+                fn observe_inner(
+                    &self,
+                    input: sema::Sema<sema::ReadInput>,
+                ) -> sema::Sema<sema::ReadOutput>;
+            }
+        });
+        let apply = self.emits_apply.then(|| {
+            quote! {
+                fn apply(
+                    &mut self,
+                    input: sema::Sema<sema::WriteInput>,
+                ) -> sema::Sema<sema::WriteOutput> {
+                    let output = self.apply_inner(input);
+                    self.trace_sema_write_applied();
+                    output
+                }
+            }
+        });
+        let observe = self.emits_observe.then(|| {
+            quote! {
+                fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput> {
+                    let output = self.observe_inner(input);
+                    self.trace_sema_read_observed();
+                    output
+                }
+            }
+        });
+
+        quote! {
+            pub trait SemaEngine {
+                fn on_start(&mut self) -> Result<(), ActorStartFailure> {
+                    Ok(())
+                }
+
+                fn on_stop(&mut self) -> Result<(), ActorStopFailure> {
+                    Ok(())
+                }
+
+                fn trace_sema_activation(&self, _object_name: SemaObjectName) {}
+
+                #write_trace
+
+                #read_trace
+
+                #apply_inner
+
+                #observe_inner
+
+                #apply
+
+                #observe
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
 struct TraceObjectNameEnumTokens<'schema, 'context> {
     enum_name: &'static str,
     rendered_prefix: &'static str,
@@ -4028,247 +4428,31 @@ impl RustWriter {
         }
 
         if emits_signal_engine {
-            self.line("pub trait SignalEngine {");
-            if !emits_concrete_signal_engine {
-                self.line("    type NexusInput;");
-                self.line("    type NexusOutput;");
-                self.blank();
-            }
-            self.line("    fn on_start(&mut self) -> Result<(), ActorStartFailure> {");
-            self.line("        Ok(())");
-            self.line("    }");
-            self.line("    fn on_stop(&mut self) -> Result<(), ActorStopFailure> {");
-            self.line("        Ok(())");
-            self.line("    }");
-            self.blank();
-            self.line("    fn trace_signal_activation(&self, _object_name: SignalObjectName) {}");
-            self.line("    fn trace_signal_admitted(&self) {");
-            self.line("        self.trace_signal_activation(SignalObjectName::Admitted);");
-            self.line("    }");
-            self.line("    fn trace_signal_rejected(&self) {");
-            self.line("        self.trace_signal_activation(SignalObjectName::Rejected);");
-            self.line("    }");
-            self.line("    fn trace_signal_triaged(&self) {");
-            self.line("        self.trace_signal_activation(SignalObjectName::Triaged);");
-            self.line("    }");
-            self.line("    fn trace_signal_replied(&self) {");
-            self.line("        self.trace_signal_activation(SignalObjectName::Replied);");
-            self.line("    }");
-            self.blank();
-            if emits_concrete_signal_engine {
-                self.line(
-                    "    fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work>;",
-                );
-                self.line(
-                    "    fn reply_inner(&self, output: nexus::Nexus<nexus::Action>) -> signal::Signal<signal::Output>;",
-                );
-            } else {
-                self.line(
-                    "    fn triage_inner(&self, input: signal::Signal<signal::Input>) -> Self::NexusInput;",
-                );
-                self.line(
-                    "    fn reply_inner(&self, output: Self::NexusOutput) -> signal::Signal<signal::Output>;",
-                );
-            }
-            self.blank();
-            if emits_concrete_signal_engine {
-                self.line("    fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work> {");
-            } else {
-                self.line(
-                    "    fn triage(&self, input: signal::Signal<signal::Input>) -> Self::NexusInput {",
-                );
-            }
-            self.line("        let output = self.triage_inner(input);");
-            self.line("        self.trace_signal_triaged();");
-            self.line("        output");
-            self.line("    }");
-            self.blank();
-            if emits_concrete_signal_engine {
-                self.line("    fn reply(&self, output: nexus::Nexus<nexus::Action>) -> signal::Signal<signal::Output> {");
-            } else {
-                self.line(
-                    "    fn reply(&self, output: Self::NexusOutput) -> signal::Signal<signal::Output> {",
-                );
-            }
-            self.line("        let signal_output = self.reply_inner(output);");
-            self.line("        self.trace_signal_replied();");
-            self.line("        signal_output");
-            self.line("    }");
-            self.line("}");
+            self.emit_item_tokens(
+                SignalEngineTraitTokens::new(emits_concrete_signal_engine).into_token_stream(),
+            );
             self.blank();
         }
         if emits_nexus_engine {
-            self.line("pub trait NexusEngine {");
-            self.line("    fn on_start(&mut self) -> Result<(), ActorStartFailure> {");
-            self.line("        Ok(())");
-            self.line("    }");
-            self.line("    fn on_stop(&mut self) -> Result<(), ActorStopFailure> {");
-            self.line("        Ok(())");
-            self.line("    }");
-            self.blank();
-            self.line("    fn trace_nexus_activation(&self, _object_name: NexusObjectName) {}");
-            self.line("    fn trace_nexus_entered(&self) {");
-            self.line("        self.trace_nexus_activation(NexusObjectName::Entered);");
-            self.line("    }");
-            self.line("    fn trace_nexus_decided(&self) {");
-            self.line("        self.trace_nexus_activation(NexusObjectName::Decided);");
-            self.line("    }");
-            self.blank();
-            if let Some(shape) = nexus_runner_shape.as_ref() {
-                self.line("    fn continuation_limit(&self) -> triad_runtime::ContinuationLimit {");
-                self.line("        triad_runtime::ContinuationLimit::default()");
-                self.line("    }");
-                self.blank();
-                if let (Some(input_type), Some(output_type)) = (
-                    shape.sema_write_input_type.as_deref(),
-                    shape.sema_write_output_type.as_deref(),
-                ) {
-                    self.line(format!(
-                        "    fn apply_sema_write(&mut self, origin_route: OriginRoute, input: {input_type}) -> {output_type};"
-                    ));
-                }
-                if let (Some(input_type), Some(output_type)) = (
-                    shape.sema_read_input_type.as_deref(),
-                    shape.sema_read_output_type.as_deref(),
-                ) {
-                    self.line(format!(
-                        "    fn observe_sema_read(&self, origin_route: OriginRoute, input: {input_type}) -> {output_type};"
-                    ));
-                }
-                if let (Some(input_type), Some(output_type)) = (
-                    shape.effect_command_type.as_deref(),
-                    shape.effect_result_type.as_deref(),
-                ) {
-                    self.line(format!(
-                        "    fn run_effect(&mut self, input: {input_type}) -> {output_type};"
-                    ));
-                }
-                self.line(format!(
-                    "    fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> {};",
-                    shape.reply_type
-                ));
-                self.blank();
-            }
-            self.line("    fn decide(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>;");
-            self.blank();
-            self.line("    fn execute(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>");
-            if nexus_runner_shape.is_some() {
-                self.line("    where");
-                self.line("        Self: Sized,");
-            }
-            self.line("    {");
-            self.line("        self.trace_nexus_entered();");
-            if nexus_runner_shape.is_some() {
-                self.line("        let origin_route = input.origin_route();");
-                self.line("        let first_work = input.into_root();");
-                self.line(
-                    "        let runner = triad_runtime::Runner::new(self.continuation_limit());",
-                );
-                self.line(
-                    "        let mut runner_adapter = NexusRunnerAdapter::new(self, origin_route);",
-                );
-                self.line("        let reply = runner.drive(&mut runner_adapter, first_work);");
-                self.line("        let output = NexusAction::reply_to_signal(reply).with_origin_route(origin_route);");
-            } else {
-                self.line("        let output = self.decide(input);");
-            }
-            self.line("        self.trace_nexus_decided();");
-            self.line("        output");
-            self.line("    }");
-            self.line("}");
+            self.emit_item_tokens(
+                NexusEngineTraitTokens::new(nexus_runner_shape.as_ref()).into_token_stream(),
+            );
             self.blank();
             if let Some(shape) = nexus_runner_shape.as_ref() {
                 self.emit_nexus_runner_adapter(shape);
             }
         }
         if emits_sema_engine {
-            self.line("pub trait SemaEngine {");
-            self.line("    fn on_start(&mut self) -> Result<(), ActorStartFailure> {");
-            self.line("        Ok(())");
-            self.line("    }");
-            self.line("    fn on_stop(&mut self) -> Result<(), ActorStopFailure> {");
-            self.line("        Ok(())");
-            self.line("    }");
-            self.blank();
-            self.line("    fn trace_sema_activation(&self, _object_name: SemaObjectName) {}");
-            if emits_sema_apply {
-                self.line("    fn trace_sema_write_applied(&self) {");
-                self.line("        self.trace_sema_activation(SemaObjectName::WriteApplied);");
-                self.line("    }");
-            }
-            if emits_sema_observe {
-                self.line("    fn trace_sema_read_observed(&self) {");
-                self.line("        self.trace_sema_activation(SemaObjectName::ReadObserved);");
-                self.line("    }");
-            }
-            self.blank();
-            if emits_sema_apply {
-                self.line("    fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;");
-            }
-            if emits_sema_observe {
-                self.line("    fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;");
-            }
-            self.blank();
-            if emits_sema_apply {
-                self.line("    fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput> {");
-                self.line("        let output = self.apply_inner(input);");
-                self.line("        self.trace_sema_write_applied();");
-                self.line("        output");
-                self.line("    }");
-                if emits_sema_observe {
-                    self.blank();
-                }
-            }
-            if emits_sema_observe {
-                self.line("    fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput> {");
-                self.line("        let output = self.observe_inner(input);");
-                self.line("        self.trace_sema_read_observed();");
-                self.line("        output");
-                self.line("    }");
-            }
-            self.line("}");
+            self.emit_item_tokens(
+                SemaEngineTraitTokens::new(emits_sema_apply, emits_sema_observe)
+                    .into_token_stream(),
+            );
             self.blank();
         }
     }
 
     fn emit_actor_lifecycle_support(&mut self) {
-        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
-        self.line("pub enum ActorStartFailure {");
-        self.line("    ResourceBusy(String),");
-        self.line("    ConfigurationInvalid(String),");
-        self.line("}");
-        self.blank();
-        self.line("impl std::fmt::Display for ActorStartFailure {");
-        self.line(
-            "    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
-        );
-        self.line("        match self {");
-        self.line("            Self::ResourceBusy(message) => write!(formatter, \"actor resource busy: {message}\"),");
-        self.line("            Self::ConfigurationInvalid(message) => write!(formatter, \"actor configuration invalid: {message}\"),");
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line("impl std::error::Error for ActorStartFailure {}");
-        self.blank();
-        self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
-        self.line("pub enum ActorStopFailure {");
-        self.line("    ResourceLocked(String),");
-        self.line("    ChildStillRunning(String),");
-        self.line("}");
-        self.blank();
-        self.line("impl std::fmt::Display for ActorStopFailure {");
-        self.line(
-            "    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
-        );
-        self.line("        match self {");
-        self.line("            Self::ResourceLocked(message) => write!(formatter, \"actor resource locked: {message}\"),");
-        self.line("            Self::ChildStillRunning(message) => write!(formatter, \"actor child still running: {message}\"),");
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line("impl std::error::Error for ActorStopFailure {}");
+        self.emit_item_tokens(ActorLifecycleSupportTokens.into_token_stream());
         self.blank();
     }
 

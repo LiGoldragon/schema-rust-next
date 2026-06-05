@@ -24,6 +24,21 @@ fn assert_generated_fixture(file_name: &str, generated: &str) {
     assert_eq!(generated, expected);
 }
 
+fn assert_code_contains(code: &str, expected: &str) {
+    let compact_code = code
+        .chars()
+        .filter(|character| !character.is_whitespace() && *character != ',')
+        .collect::<String>();
+    let compact_expected = expected
+        .chars()
+        .filter(|character| !character.is_whitespace() && *character != ',')
+        .collect::<String>();
+    assert!(
+        compact_code.contains(&compact_expected),
+        "generated code must contain {expected:?}"
+    );
+}
+
 #[allow(dead_code)]
 mod generated {
     include!("fixtures/spirit_generated.rs");
@@ -394,12 +409,14 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
             .as_str()
             .contains("ReadInput(SemaReadInputRoute)")
     );
-    assert!(generated.code.as_str().contains(
-        "fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work>;"
-    ));
-    assert!(generated.code.as_str().contains(
-        "fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work> {"
-    ));
+    assert_code_contains(
+        generated.code.as_str(),
+        "fn triage_inner(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work>;",
+    );
+    assert_code_contains(
+        generated.code.as_str(),
+        "fn triage(&self, input: signal::Signal<signal::Input>) -> nexus::Nexus<nexus::Work> {",
+    );
     assert!(
         generated
             .code
@@ -416,9 +433,10 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
             .as_str()
             .contains("pub enum NexusActionRoute")
     );
-    assert!(generated.code.as_str().contains(
-        "fn decide(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>;"
-    ));
+    assert_code_contains(
+        generated.code.as_str(),
+        "fn decide(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>;",
+    );
     assert!(
         generated
             .code
@@ -438,12 +456,14 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
             .as_str()
             .contains("pub enum SemaReadInputRoute")
     );
-    assert!(generated.code.as_str().contains(
-        "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;"
-    ));
-    assert!(generated.code.as_str().contains(
-        "fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;"
-    ));
+    assert_code_contains(
+        generated.code.as_str(),
+        "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;",
+    );
+    assert_code_contains(
+        generated.code.as_str(),
+        "fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;",
+    );
     assert!(
         generated
             .code
@@ -566,21 +586,28 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
     assert!(code.contains("for NexusRunnerAdapter<'engine, Engine>"));
     assert!(code.contains("triad_runtime::NexusAction::into_next_step(action)"));
     assert!(code.contains("fn continuation_limit(&self) -> triad_runtime::ContinuationLimit"));
-    assert!(code.contains(
-        "fn apply_sema_write(&mut self, origin_route: OriginRoute, input: CommandSemaWrite) -> SemaWriteCompleted;"
-    ));
-    assert!(
-        code.contains("fn observe_sema_read(&self, origin_route: OriginRoute, input: CommandSemaRead) -> SemaReadCompleted;")
+    assert_code_contains(
+        code,
+        "fn apply_sema_write(&mut self, origin_route: OriginRoute, input: CommandSemaWrite) -> SemaWriteCompleted;",
     );
-    assert!(code.contains("fn run_effect(&mut self, input: CommandEffect) -> EffectCompleted;"));
-    assert!(code.contains(
-        "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ReplyToSignal;"
-    ));
+    assert_code_contains(
+        code,
+        "fn observe_sema_read(&self, origin_route: OriginRoute, input: CommandSemaRead) -> SemaReadCompleted;",
+    );
+    assert_code_contains(
+        code,
+        "fn run_effect(&mut self, input: CommandEffect) -> EffectCompleted;",
+    );
+    assert_code_contains(
+        code,
+        "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ReplyToSignal;",
+    );
     assert!(code.contains("let runner = triad_runtime::Runner::new(self.continuation_limit());"));
     assert!(code.contains("let reply = runner.drive(&mut runner_adapter, first_work);"));
-    assert!(code.contains(
-        "let output = NexusAction::reply_to_signal(reply).with_origin_route(origin_route);"
-    ));
+    assert_code_contains(
+        code,
+        "let output = NexusAction::reply_to_signal(reply).with_origin_route(origin_route);",
+    );
     assert!(!code.contains("NexusAction::CommandEffect(effect) => panic!"));
 }
 
@@ -754,12 +781,14 @@ fn sema_runtime_target_accepts_plane_local_root_names() {
     assert!(code.contains("WriteApplied,"));
     assert!(code.contains("ReadObserved,"));
     assert!(code.contains("pub trait SemaEngine"));
-    assert!(code.contains(
-        "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;"
-    ));
-    assert!(code.contains(
-        "fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;"
-    ));
+    assert_code_contains(
+        code,
+        "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;",
+    );
+    assert_code_contains(
+        code,
+        "fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;",
+    );
 
     assert!(!code.contains("pub trait SignalEngine"));
     assert!(!code.contains("pub trait NexusEngine"));
@@ -776,12 +805,14 @@ fn runtime_target_emits_read_only_sema_engine_when_read_roots_exist() {
     assert!(code.contains("pub trait SemaEngine"));
     assert!(code.contains("ReadObserved,"));
     assert!(code.contains("SemaObjectName::ReadObserved"));
-    assert!(code.contains(
-        "fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;"
-    ));
-    assert!(code.contains(
-        "fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput> {"
-    ));
+    assert_code_contains(
+        code,
+        "fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;",
+    );
+    assert_code_contains(
+        code,
+        "fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput> {",
+    );
 
     assert!(!code.contains("WriteApplied,"));
     assert!(!code.contains("SemaObjectName::WriteApplied"));
@@ -798,12 +829,14 @@ fn runtime_target_emits_write_only_sema_engine_when_write_roots_exist() {
     assert!(code.contains("pub trait SemaEngine"));
     assert!(code.contains("WriteApplied,"));
     assert!(code.contains("SemaObjectName::WriteApplied"));
-    assert!(code.contains(
-        "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;"
-    ));
-    assert!(code.contains(
-        "fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput> {"
-    ));
+    assert_code_contains(
+        code,
+        "fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;",
+    );
+    assert_code_contains(
+        code,
+        "fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput> {",
+    );
 
     assert!(!code.contains("ReadObserved,"));
     assert!(!code.contains("SemaObjectName::ReadObserved"));

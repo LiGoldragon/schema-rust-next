@@ -32,6 +32,10 @@ beside that typed source/schema pipeline.
   against the Rust-native lowering direction, not a competing accepted design.
   New support surfaces should emit tokens first, then pretty-print into
   source-visible files.
+  Current tokenized runtime slices include signal-frame streaming support,
+  trace object-name support, Nexus runner next-step projection and adapter
+  emission, actor lifecycle support, and the generated Signal/Nexus/SEMA
+  engine traits.
 - `RustModule` is the data model between semantic schema data and rendered
   Rust text. It carries scalar aliases, cross-crate imports, generated Rust
   declarations, root enums, and support metadata before anything is rendered.

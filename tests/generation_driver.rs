@@ -4,6 +4,18 @@ mod support;
 
 use support::FixtureSchemaDirectory;
 
+fn source_contains_signature(source: &str, signature: &str) -> bool {
+    let compact_source = source
+        .chars()
+        .filter(|character| !character.is_whitespace() && *character != ',')
+        .collect::<String>();
+    let compact_signature = signature
+        .chars()
+        .filter(|character| !character.is_whitespace() && *character != ',')
+        .collect::<String>();
+    compact_source.contains(&compact_signature)
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DriverFixture {
     contract: FixtureSchemaDirectory,
@@ -88,7 +100,8 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
         "nexus runtime target must not re-implement role traits for imported SEMA roots:\n{nexus}"
     );
     assert!(
-        nexus.contains(
+        source_contains_signature(
+            nexus,
             "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ContractOutput;"
         ),
         "nexus runtime target should ask the component for a typed exhaustion reply:\n{nexus}"
