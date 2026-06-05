@@ -105,7 +105,7 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
 }
 
 #[test]
-fn generated_package_carries_source_asschema_and_rust_artifacts() {
+fn generated_package_carries_source_and_rust_artifacts() {
     let generated = DriverFixture::new().generated_runtime();
     let module = generated
         .modules()
@@ -118,16 +118,17 @@ fn generated_package_carries_source_asschema_and_rust_artifacts() {
         DriverFixture::new().runtime.path().join("nexus.schema")
     );
     assert_eq!(
-        module.asschema_artifact().path(),
-        DriverFixture::new().runtime.path().join("nexus.asschema")
+        module.source_artifact().content(),
+        "{\n  ContractInput driver-contract:lib:Input\n  ContractOutput driver-contract:lib:Output\n  SemaReadInput driver-runtime:sema:SemaReadInput\n  SemaReadOutput driver-runtime:sema:SemaReadOutput\n  SemaWriteInput driver-runtime:sema:SemaWriteInput\n  SemaWriteOutput driver-runtime:sema:SemaWriteOutput\n}\n[(SignalArrived ContractInput)]\n[(CommandSemaRead SemaReadInput) (CommandSemaWrite SemaWriteInput) (ReplyToSignal ContractOutput)]\n{\n  NexusWork [(SignalArrived ContractInput) (SemaReadCompleted SemaReadOutput) (SemaWriteCompleted SemaWriteOutput)]\n  NexusAction [(CommandSemaRead SemaReadInput) (CommandSemaWrite SemaWriteInput) (ReplyToSignal ContractOutput)]\n  DecisionReceipt { integer Integer }\n}"
     );
     assert_eq!(module.rust_file().path, "src/schema/nexus.rs");
     assert!(
         module
-            .asschema_artifact()
-            .content()
-            .contains("driver-runtime:nexus"),
-        "asschema artifact should carry the lowered module identity"
+            .rust_file()
+            .code
+            .as_str()
+            .contains("pub trait NexusEngine"),
+        "driver should emit Rust from the typed schema source value"
     );
 }
 

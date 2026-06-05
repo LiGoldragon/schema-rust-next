@@ -95,6 +95,14 @@ component-runtime compatibility plan explicitly until their schemas split.
 Runtime schemas import contract roots through Cargo-exposed dependency schema
 directories, not hard-coded workspace paths.*
 
+*The shared generation driver consumes `SchemaSource` as the component build
+boundary. It validates the typed source object's canonical `.schema`
+projection, emits Rust from that source value, and freshness-checks generated
+Rust files. It does not materialize or freshness-check `.asschema` files as
+normal component outputs. Asschema remains an explicit compatibility artifact
+API and an internal projection until the Rust module model lowers directly
+from source nouns.*
+
 *The emitter should move toward a generated component-runner surface for the
 triad engine. A daemon `main` should eventually be a tiny call into generated
 or macro-created startup code; the schema-emitted substrate defines the

@@ -2,8 +2,9 @@ use std::path::Path;
 
 use schema_next::{
     AliasDeclaration, Asschema, AsschemaArtifact, Declaration, EnumDeclaration, EnumVariant,
-    FieldDeclaration, Name, NewtypeDeclaration, ResolvedImport, SchemaError, StructDeclaration,
-    TypeDeclaration, TypeReference, Visibility,
+    FieldDeclaration, ImportResolver, Name, NewtypeDeclaration, ResolvedImport, SchemaEngine,
+    SchemaError, SchemaIdentity, SchemaSource, StructDeclaration, TypeDeclaration, TypeReference,
+    Visibility,
 };
 
 pub mod build;
@@ -56,6 +57,20 @@ impl RustEmitter {
         }
     }
 
+    pub fn emit_file_from_schema_source(
+        &self,
+        source: &SchemaSource,
+        identity: SchemaIdentity,
+        engine: &SchemaEngine,
+        resolver: &ImportResolver,
+    ) -> Result<GeneratedFile, SchemaError> {
+        let module = self.emit_module_from_schema_source(source, identity, engine, resolver)?;
+        Ok(GeneratedFile {
+            path: module.file_path().to_owned(),
+            code: module.render(),
+        })
+    }
+
     pub fn emit_file_from_artifact(&self, artifact: &AsschemaArtifact) -> GeneratedFile {
         self.emit_file(artifact.asschema())
     }
@@ -82,6 +97,17 @@ impl RustEmitter {
 
     pub fn emit_module(&self, asschema: &Asschema) -> RustModule {
         RustModule::from_asschema(asschema, self.generator_name, self.options.clone())
+    }
+
+    pub fn emit_module_from_schema_source(
+        &self,
+        source: &SchemaSource,
+        identity: SchemaIdentity,
+        engine: &SchemaEngine,
+        resolver: &ImportResolver,
+    ) -> Result<RustModule, SchemaError> {
+        let asschema = engine.lower_schema_source_with_resolver(source, identity, resolver)?;
+        Ok(self.emit_module(&asschema))
     }
 }
 

@@ -5,8 +5,7 @@ use std::{
 };
 
 use schema_next::{
-    AsschemaArtifact, ImportResolver, Name, SchemaEngine, SchemaError, SchemaPackage,
-    SchemaSourceArtifact,
+    ImportResolver, Name, SchemaEngine, SchemaError, SchemaPackage, SchemaSourceArtifact,
 };
 
 use crate::{GeneratedFile, RustEmissionOptions, RustEmissionTarget, RustEmitter};
@@ -363,7 +362,6 @@ impl GeneratedPackage {
 pub struct GeneratedModule {
     module: Name,
     source_artifact: GeneratedArtifact,
-    asschema_artifact: GeneratedArtifact,
     rust_file: GeneratedFile,
 }
 
@@ -374,10 +372,6 @@ impl GeneratedModule {
 
     pub fn source_artifact(&self) -> &GeneratedArtifact {
         &self.source_artifact
-    }
-
-    pub fn asschema_artifact(&self) -> &GeneratedArtifact {
-        &self.asschema_artifact
     }
 
     pub fn rust_file(&self) -> &GeneratedFile {
@@ -391,21 +385,21 @@ impl GeneratedModule {
         resolver: &ImportResolver,
     ) -> Result<Self, BuildError> {
         let source = package.load_module(emission.module().clone())?;
+        let schema_source = source.to_schema_source()?;
         let source_artifact = SourceArtifactRoundTrip::new(
             source.path().to_path_buf(),
-            SchemaSourceArtifact::new(source.to_schema_source()?),
+            SchemaSourceArtifact::new(schema_source.clone()),
         )
         .validate()?;
-        let asschema = source.lower_with_resolver(engine, resolver)?;
-        let asschema_artifact = AsschemaArtifact::new(asschema.clone()).to_nota_source();
-        let rust_file = RustEmitter::new(emission.options().clone()).emit_file(&asschema);
+        let rust_file = RustEmitter::new(emission.options().clone()).emit_file_from_schema_source(
+            &schema_source,
+            source.identity().clone(),
+            engine,
+            resolver,
+        )?;
         Ok(Self {
             module: emission.module().clone(),
             source_artifact,
-            asschema_artifact: GeneratedArtifact::new(
-                source.path().with_extension("asschema"),
-                asschema_artifact,
-            ),
             rust_file,
         })
     }
@@ -415,7 +409,6 @@ impl GeneratedModule {
         crate_root: &Path,
         check: &FreshnessCheck,
     ) -> Result<(), BuildError> {
-        self.asschema_artifact.check_with(check)?;
         self.rust_artifact(crate_root).check_with(check)?;
         Ok(())
     }

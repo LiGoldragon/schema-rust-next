@@ -1,9 +1,11 @@
 # Architecture
 
 `schema-rust-next` emits Rust interface source from typed schema data. Its
-current compatibility input is `schema-next::Asschema`; the target input is the
-schema-in-Rust value produced when authored `.schema` deserializes into Rust
-datatypes that fully define the schema and serialize through rkyv.
+source-facing input is `schema-next::SchemaSource`, the schema-in-Rust value
+produced when authored `.schema` deserializes into Rust datatypes that fully
+define the schema and serialize through rkyv. The current module builder still
+uses `schema-next::Asschema` as an internal compatibility projection until the
+Rust module data model lowers directly from source nouns.
 
 ## Interfaces
 
@@ -24,20 +26,24 @@ datatypes that fully define the schema and serialize through rkyv.
   dependency schema directories. `build::ModuleEmission` selects the
   Rust-emission target for each schema module.
 
-## Compatibility Input Contract
+## Source Input And Compatibility Projection
 
-The current compatibility input contract is assembled schema. `Asschema` has
-already resolved all macros and sugar, and the emitter does not read authored
-macro calls, sigils, or structural macro captures. The target input after the
-schema-source migration is typed schema source data decoded through structural
-macro node codecs: authored `.schema` deserializes into schema-defining Rust
-datatypes, those datatypes are rkyv-serializable, and this emitter lowers that
-schema-in-Rust value into Rust interface code. The active test path still gets
-`Asschema` as typed data from `schema-next` lowering real `.schema` fixtures,
-then proves the emitter can consume the same value after an asschema NOTA
-artifact file read and an asschema rkyv artifact file read.
-That keeps Rust emission attached to live typed data while the compatibility
-endpoint remains.
+The public source-facing contract is typed schema source data decoded through
+structural macro node codecs: authored `.schema` deserializes into
+schema-defining Rust datatypes, those datatypes are rkyv-serializable, and this
+emitter lowers that schema-in-Rust value into Rust interface code.
+`RustEmitter::emit_file_from_schema_source` and
+`emit_module_from_schema_source` are the build-driver path. Internally they
+ask `SchemaEngine` for the current compatibility `Asschema` projection, then
+render the existing Rust module model. That keeps component build scripts on
+the right source boundary while the deeper module model migration proceeds.
+
+`Asschema` remains a compatibility input and artifact surface. It has already
+resolved all macros and sugar, and the emitter does not read authored macro
+calls, sigils, or structural macro captures from it. Tests still prove the
+emitter can consume Asschema after an asschema NOTA artifact file read and an
+asschema rkyv artifact file read, but the shared generation driver no longer
+materializes `.asschema` files as normal generated component artifacts.
 `RustEmitter::emit_file_from_artifact`, `emit_file_from_nota_path`, and
 `emit_file_from_binary_path` are the explicit artifact handoff methods; the
 plain `emit_file(&Asschema)` path remains for callers that already hold the
@@ -127,9 +133,11 @@ data and must not grow a second parser for the authored form.
 - Driver freshness is source-visible and committed. Authored `.schema` input
   is parsed into `SchemaSourceArtifact` and round-tripped through generated
   schema text as an internal codec witness, but it is not treated as generated
-  output. Generated assembled `.asschema` artifacts and Rust files are checked
-  against the working tree; a component-specific update environment variable
-  rewrites them when the schema intentionally changes.
+  output. Generated Rust files are checked against the working tree; a
+  component-specific update environment variable rewrites them when the schema
+  intentionally changes. `.asschema` remains available through explicit
+  compatibility artifact APIs, but the shared component driver does not write
+  or freshness-check `.asschema` files.
 - Signal, Nexus, and SEMA roots are emitted from the same schema shape:
   imports/exports, input, output, and namespace. Emission may attach different
   support traits per plane, but the generated Rust mirrors the same authored
