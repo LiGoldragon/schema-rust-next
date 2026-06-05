@@ -1690,6 +1690,252 @@ impl ToTokens for SemaEngineTraitTokens {
     }
 }
 
+struct RuntimeCopyNewtypeTokens<'context> {
+    name: &'static str,
+    context: &'context RustRenderContext,
+}
+
+impl<'context> RuntimeCopyNewtypeTokens<'context> {
+    fn new(name: &'static str, context: &'context RustRenderContext) -> Self {
+        Self { name, context }
+    }
+}
+
+impl ToTokens for RuntimeCopyNewtypeTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = RustIdentifier::new(self.name);
+        let attributes = self.context.derive_attributes(true, false);
+        quote! {
+            #( #attributes )*
+            pub struct #name(pub Integer);
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct MessageRootTokens<'schema, 'context> {
+    root_enums: &'schema [RustEnum],
+    context: &'context RustRenderContext,
+}
+
+impl<'schema, 'context> MessageRootTokens<'schema, 'context> {
+    fn new(root_enums: &'schema [RustEnum], context: &'context RustRenderContext) -> Self {
+        Self {
+            root_enums,
+            context,
+        }
+    }
+}
+
+impl ToTokens for MessageRootTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let attributes = self.context.derive_attributes(true, false);
+        let variants = self.root_enums.iter().map(|root_enum| {
+            let name = RustIdentifier::new(root_enum.name().as_str());
+            quote! { #name, }
+        });
+        quote! {
+            #( #attributes )*
+            pub enum MessageRoot {
+                #( #variants )*
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct SignalMailLifecycleSupportTokens<'schema> {
+    root_enums: &'schema [RustEnum],
+}
+
+impl<'schema> SignalMailLifecycleSupportTokens<'schema> {
+    fn new(root_enums: &'schema [RustEnum]) -> Self {
+        Self { root_enums }
+    }
+}
+
+impl ToTokens for SignalMailLifecycleSupportTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let root_impls = self.root_enums.iter().map(|root_enum| {
+            let root_name = RustIdentifier::new(root_enum.name().as_str());
+            quote! {
+                impl #root_name {
+                    pub fn with_origin_route(self, origin_route: OriginRoute) -> Signal<Self> {
+                        Signal::new(origin_route, self)
+                    }
+                }
+
+                impl signal::Signal<#root_name> {
+                    pub fn message_sent(&self, identifier: MessageIdentifier) -> MessageSent {
+                        MessageSent {
+                            identifier,
+                            origin_route: self.origin_route(),
+                            root: MessageRoot::#root_name,
+                            short_header: self.root().short_header(),
+                        }
+                    }
+                }
+            }
+        });
+
+        quote! {
+            #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+            pub struct MessageSent {
+                pub identifier: MessageIdentifier,
+                pub origin_route: OriginRoute,
+                pub root: MessageRoot,
+                pub short_header: Integer,
+            }
+
+            #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+            pub struct MessageProcessed<Reply> {
+                pub identifier: MessageIdentifier,
+                pub origin_route: OriginRoute,
+                pub reply: Reply,
+            }
+
+            pub trait MessageSentHook {
+                type Error;
+
+                fn message_sent(&mut self, event: MessageSent) -> Result<(), Self::Error>;
+            }
+
+            pub trait MessageProcessedHook<Reply> {
+                type Error;
+
+                fn message_processed(
+                    &mut self,
+                    event: MessageProcessed<Reply>,
+                ) -> Result<(), Self::Error>;
+            }
+
+            impl MessageSent {
+                pub fn origin_route(&self) -> OriginRoute {
+                    self.origin_route
+                }
+
+                pub fn push_to<Hook>(&self, hook: &mut Hook) -> Result<(), Hook::Error>
+                where
+                    Hook: MessageSentHook,
+                {
+                    hook.message_sent(self.clone())
+                }
+            }
+
+            impl<Reply> MessageProcessed<Reply> {
+                pub fn new(
+                    identifier: MessageIdentifier,
+                    origin_route: OriginRoute,
+                    reply: Reply,
+                ) -> Self {
+                    Self {
+                        identifier,
+                        origin_route,
+                        reply,
+                    }
+                }
+
+                pub fn identifier(&self) -> MessageIdentifier {
+                    self.identifier
+                }
+
+                pub fn origin_route(&self) -> OriginRoute {
+                    self.origin_route
+                }
+
+                pub fn into_reply(self) -> Reply {
+                    self.reply
+                }
+
+                pub fn push_to<Hook>(&self, hook: &mut Hook) -> Result<(), Hook::Error>
+                where
+                    Hook: MessageProcessedHook<Reply>,
+                    Reply: Clone,
+                {
+                    hook.message_processed(self.clone())
+                }
+            }
+
+            #( #root_impls )*
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct SchemaPlaneSupportTokens;
+
+impl ToTokens for SchemaPlaneSupportTokens {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        quote! {
+            pub mod schema {
+                #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+                pub enum Plane<SignalRoot, NexusRoot, SemaRoot> {
+                    Signal(super::Signal<SignalRoot>),
+                    Nexus(super::Nexus<NexusRoot>),
+                    Sema(super::Sema<SemaRoot>),
+                }
+
+                impl<SignalRoot, NexusRoot, SemaRoot> Plane<SignalRoot, NexusRoot, SemaRoot> {
+                    pub fn origin_route(&self) -> super::OriginRoute {
+                        match self {
+                            Self::Signal(message) => message.origin_route(),
+                            Self::Nexus(message) => message.origin_route(),
+                            Self::Sema(message) => message.origin_route(),
+                        }
+                    }
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct PlaneEnvelopeTokens<'name> {
+    name: &'name str,
+}
+
+impl<'name> PlaneEnvelopeTokens<'name> {
+    fn new(name: &'name str) -> Self {
+        Self { name }
+    }
+}
+
+impl ToTokens for PlaneEnvelopeTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = RustIdentifier::new(self.name);
+        quote! {
+            #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+            pub struct #name<Root> {
+                pub origin_route: OriginRoute,
+                pub root: Root,
+            }
+
+            impl<Root> #name<Root> {
+                pub fn new(origin_route: OriginRoute, root: Root) -> Self {
+                    Self { origin_route, root }
+                }
+
+                pub fn origin_route(&self) -> OriginRoute {
+                    self.origin_route
+                }
+
+                pub fn root(&self) -> &Root {
+                    &self.root
+                }
+
+                pub fn into_root(self) -> Root {
+                    self.root
+                }
+
+                pub fn map_root<NextRoot>(self, map: impl FnOnce(Root) -> NextRoot) -> #name<NextRoot> {
+                    #name::new(self.origin_route, map(self.root))
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
 struct TraceObjectNameEnumTokens<'schema, 'context> {
     enum_name: &'static str,
     rendered_prefix: &'static str,
@@ -3286,16 +3532,19 @@ impl RustWriter {
     }
 
     fn emit_mail_event_support(&mut self, root_enums: &[RustEnum]) {
+        let context = self.render_context();
         if self.runtime_planes().emits_signal() {
-            self.line(self.copy_data_type_derive());
-            self.line("pub struct MessageIdentifier(pub Integer);");
+            self.emit_item_tokens(
+                RuntimeCopyNewtypeTokens::new("MessageIdentifier", &context).into_token_stream(),
+            );
             if self.nota_surface.emits_nota() {
                 self.emit_nota_copy_inherent_bridge("MessageIdentifier");
             }
             self.blank();
         }
-        self.line(self.copy_data_type_derive());
-        self.line("pub struct OriginRoute(pub Integer);");
+        self.emit_item_tokens(
+            RuntimeCopyNewtypeTokens::new("OriginRoute", &context).into_token_stream(),
+        );
         if self.nota_surface.emits_nota() {
             self.emit_nota_copy_inherent_bridge("OriginRoute");
         }
@@ -3328,163 +3577,23 @@ impl RustWriter {
     }
 
     fn emit_signal_message_root_support(&mut self, root_enums: &[RustEnum]) {
-        self.line(self.copy_data_type_derive());
-        self.line("pub enum MessageRoot {");
-        for root_enum in root_enums {
-            self.line(format!("    {},", root_enum.name()));
-        }
-        self.line("}");
+        let context = self.render_context();
+        self.emit_item_tokens(MessageRootTokens::new(root_enums, &context).into_token_stream());
     }
 
     fn emit_signal_mail_lifecycle_support(&mut self, root_enums: &[RustEnum]) {
-        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
-        self.line("pub struct MessageSent {");
-        self.line("    pub identifier: MessageIdentifier,");
-        self.line("    pub origin_route: OriginRoute,");
-        self.line("    pub root: MessageRoot,");
-        self.line("    pub short_header: Integer,");
-        self.line("}");
+        self.emit_item_tokens(
+            SignalMailLifecycleSupportTokens::new(root_enums).into_token_stream(),
+        );
         self.blank();
-        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
-        self.line("pub struct MessageProcessed<Reply> {");
-        self.line("    pub identifier: MessageIdentifier,");
-        self.line("    pub origin_route: OriginRoute,");
-        self.line("    pub reply: Reply,");
-        self.line("}");
-        self.blank();
-        self.line("pub trait MessageSentHook {");
-        self.line("    type Error;");
-        self.blank();
-        self.line("    fn message_sent(&mut self, event: MessageSent) -> Result<(), Self::Error>;");
-        self.line("}");
-        self.blank();
-        self.line("pub trait MessageProcessedHook<Reply> {");
-        self.line("    type Error;");
-        self.blank();
-        self.line("    fn message_processed(&mut self, event: MessageProcessed<Reply>) -> Result<(), Self::Error>;");
-        self.line("}");
-        self.blank();
-        self.line("impl MessageSent {");
-        self.line("    pub fn origin_route(&self) -> OriginRoute {");
-        self.line("        self.origin_route");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn push_to<Hook>(&self, hook: &mut Hook) -> Result<(), Hook::Error>");
-        self.line("    where");
-        self.line("        Hook: MessageSentHook,");
-        self.line("    {");
-        self.line("        hook.message_sent(self.clone())");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        self.line("impl<Reply> MessageProcessed<Reply> {");
-        self.line("    pub fn new(identifier: MessageIdentifier, origin_route: OriginRoute, reply: Reply) -> Self {");
-        self.line("        Self { identifier, origin_route, reply }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn identifier(&self) -> MessageIdentifier {");
-        self.line("        self.identifier");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn origin_route(&self) -> OriginRoute {");
-        self.line("        self.origin_route");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn into_reply(self) -> Reply {");
-        self.line("        self.reply");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn push_to<Hook>(&self, hook: &mut Hook) -> Result<(), Hook::Error>");
-        self.line("    where");
-        self.line("        Hook: MessageProcessedHook<Reply>,");
-        self.line("        Reply: Clone,");
-        self.line("    {");
-        self.line("        hook.message_processed(self.clone())");
-        self.line("    }");
-        self.line("}");
-        self.blank();
-        for root_enum in root_enums {
-            self.line(format!("impl {} {{", root_enum.name()));
-            self.line(
-                "    pub fn with_origin_route(self, origin_route: OriginRoute) -> Signal<Self> {",
-            );
-            self.line("        Signal::new(origin_route, self)");
-            self.line("    }");
-            self.blank();
-            self.line("}");
-            self.blank();
-            self.line(format!("impl signal::Signal<{}> {{", root_enum.name()));
-            self.line(
-                "    pub fn message_sent(&self, identifier: MessageIdentifier) -> MessageSent {",
-            );
-            self.line("        MessageSent {");
-            self.line("            identifier,");
-            self.line("            origin_route: self.origin_route(),");
-            self.line(format!(
-                "            root: MessageRoot::{},",
-                root_enum.name()
-            ));
-            self.line("            short_header: self.root().short_header(),");
-            self.line("        }");
-            self.line("    }");
-            self.line("}");
-            self.blank();
-        }
     }
 
     fn emit_schema_plane_support(&mut self) {
-        self.line("pub mod schema {");
-        self.line("    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
-        self.line("    pub enum Plane<SignalRoot, NexusRoot, SemaRoot> {");
-        self.line("        Signal(super::Signal<SignalRoot>),");
-        self.line("        Nexus(super::Nexus<NexusRoot>),");
-        self.line("        Sema(super::Sema<SemaRoot>),");
-        self.line("    }");
-        self.blank();
-        self.line(
-            "    impl<SignalRoot, NexusRoot, SemaRoot> Plane<SignalRoot, NexusRoot, SemaRoot> {",
-        );
-        self.line("        pub fn origin_route(&self) -> super::OriginRoute {");
-        self.line("            match self {");
-        self.line("                Self::Signal(message) => message.origin_route(),");
-        self.line("                Self::Nexus(message) => message.origin_route(),");
-        self.line("                Self::Sema(message) => message.origin_route(),");
-        self.line("            }");
-        self.line("        }");
-        self.line("    }");
-        self.line("}");
+        self.emit_item_tokens(SchemaPlaneSupportTokens.into_token_stream());
     }
 
     fn emit_plane_envelope(&mut self, name: &str) {
-        self.line("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]");
-        self.line(format!("pub struct {name}<Root> {{"));
-        self.line("    pub origin_route: OriginRoute,");
-        self.line("    pub root: Root,");
-        self.line("}");
-        self.blank();
-        self.line(format!("impl<Root> {name}<Root> {{"));
-        self.line("    pub fn new(origin_route: OriginRoute, root: Root) -> Self {");
-        self.line("        Self { origin_route, root }");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn origin_route(&self) -> OriginRoute {");
-        self.line("        self.origin_route");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn root(&self) -> &Root {");
-        self.line("        &self.root");
-        self.line("    }");
-        self.blank();
-        self.line("    pub fn into_root(self) -> Root {");
-        self.line("        self.root");
-        self.line("    }");
-        self.blank();
-        self.line(format!("    pub fn map_root<NextRoot>(self, map: impl FnOnce(Root) -> NextRoot) -> {name}<NextRoot> {{"));
-        self.line(format!(
-            "        {name}::new(self.origin_route, map(self.root))"
-        ));
-        self.line("    }");
-        self.line("}");
+        self.emit_item_tokens(PlaneEnvelopeTokens::new(name).into_token_stream());
     }
 
     fn emit_plane_namespaces(&mut self, declarations: &[RustDeclaration], root_enums: &[RustEnum]) {
