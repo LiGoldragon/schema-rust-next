@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use schema_next::{Asschema, ImportResolver, MacroContext, SchemaEngine, SchemaIdentity};
+use schema_next::{ImportResolver, MacroContext, Schema, SchemaEngine, SchemaIdentity};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FixtureSchema {
@@ -24,13 +24,13 @@ impl FixtureSchema {
         std::fs::read_to_string(self.path()).expect("read schema fixture")
     }
 
-    pub fn lower(&self, identity: &str) -> Asschema {
+    pub fn lower(&self, identity: &str) -> Schema {
         SchemaEngine::default()
             .lower_source(&self.read(), SchemaIdentity::new(identity, "0.1.0"))
             .expect("schema fixture lowers")
     }
 
-    pub fn lower_with_context(&self, identity: &str, context: &mut MacroContext) -> Asschema {
+    pub fn lower_with_context(&self, identity: &str, context: &mut MacroContext) -> Schema {
         SchemaEngine::default()
             .lower_source_with_context(
                 &self.read(),
@@ -45,7 +45,7 @@ impl FixtureSchema {
         identity: &str,
         context: &mut MacroContext,
         resolver: &ImportResolver,
-    ) -> Asschema {
+    ) -> Schema {
         SchemaEngine::default()
             .lower_source_with_resolver(
                 &self.read(),

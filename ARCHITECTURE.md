@@ -3,15 +3,15 @@
 `schema-rust-next` emits Rust interface source from typed schema data. Its
 source-facing input is `schema-next::SchemaSource`, the schema-in-Rust value
 produced when authored `.schema` deserializes into Rust datatypes that fully
-define the schema and serialize through rkyv. The current module builder still
-uses `schema-next::Asschema` as an internal compatibility projection until the
-Rust module data model lowers directly from source nouns.
+define the schema and serialize through rkyv. Its semantic emission input is
+`schema-next::Schema`; there is no older assembled-schema artifact or path API
+beside that typed source/schema pipeline.
 
 ## Interfaces
 
 - `RustEmitter` is the code-generation engine.
-- `RustModule` is the data model between assembled schema and rendered Rust
-  text. It carries scalar aliases, cross-crate imports, generated Rust
+- `RustModule` is the data model between semantic schema data and rendered
+  Rust text. It carries scalar aliases, cross-crate imports, generated Rust
   declarations, root enums, and support metadata before anything is rendered.
 - `RustCode` is the generated source text.
 - `GeneratedFile` names a generated path plus source text.
@@ -26,50 +26,41 @@ Rust module data model lowers directly from source nouns.
   dependency schema directories. `build::ModuleEmission` selects the
   Rust-emission target for each schema module.
 
-## Source Input And Compatibility Projection
+## Source Input And Semantic Schema
 
 The public source-facing contract is typed schema source data decoded through
 structural macro node codecs: authored `.schema` deserializes into
 schema-defining Rust datatypes, those datatypes are rkyv-serializable, and this
 emitter lowers that schema-in-Rust value into Rust interface code.
 `RustEmitter::emit_file_from_schema_source` and
-`emit_module_from_schema_source` are the build-driver path. Internally they
-ask `SchemaEngine` for the current compatibility `Asschema` projection, then
-render the existing Rust module model. That keeps component build scripts on
-the right source boundary while the deeper module model migration proceeds.
+`emit_module_from_schema_source` are the build-driver path. They ask
+`SchemaEngine` to lower source into `Schema`, then render `RustModule`.
+Callers that already hold the semantic value use
+`emit_file_from_schema`, `emit_code_from_schema`, or
+`emit_module_from_schema`. No generated component path reads or writes a
+separate assembled-schema text file.
 
-`Asschema` remains a compatibility input and artifact surface. It has already
-resolved all macros and sugar, and the emitter does not read authored macro
-calls, sigils, or structural macro captures from it. Tests still prove the
-emitter can consume Asschema after an asschema NOTA artifact file read and an
-asschema rkyv artifact file read, but the shared generation driver no longer
-materializes `.asschema` files as normal generated component artifacts.
-`RustEmitter::emit_file_from_artifact`, `emit_file_from_nota_path`, and
-`emit_file_from_binary_path` are the explicit artifact handoff methods; the
-plain `emit_file(&Asschema)` path remains for callers that already hold the
-typed value in-process.
-All of those paths now converge through `RustEmitter::emit_module(&Asschema)`.
 The rendered source is `RustModule::render()`, so tests can inspect the module
-data shape before comparing strings.
-Namespace entries arrive as visibility-tagged declarations: `(Public Name
-Value)` or `(Private Name Value)`. The emitter must project that boundary into
-Rust instead of flattening every type into the same public surface.
+data shape before comparing strings. Namespace entries arrive as
+visibility-tagged declarations: `(Public Name Value)` or `(Private Name
+Value)`. The emitter must project that boundary into Rust instead of
+flattening every type into the same public surface.
 
 The active fixtures use the current enum-body signature shape: square brackets
 contain one vector element type, so unit variants are bare symbols and
 data-carrying variants are parenthesized records such as `(Record Entry)`.
-Until the migration lands, this emitter only sees the resulting `Asschema`
-data and must not grow a second parser for the authored form.
+This emitter sees the typed source/schema data from `schema-next` and must not
+grow a second parser for the authored form.
 
 ## Constraints
 
 - No dependency on the old signal macro.
 - No `macro_rules!` or proc-macro surface in `src/`.
 - No authored-schema macro syntax is accepted as an emitter input. Tests lower
-  real `.schema` fixtures into typed `Asschema` values before comparing
+  real `.schema` fixtures into typed `Schema` values before comparing
   generated Rust; no assembled-schema text fixture is accepted.
-- Public asschema declarations emit public Rust types and fields. Private
-  asschema declarations emit `pub(crate)` types and fields, preserving inline
+- Public schema declarations emit public Rust types and fields. Private schema
+  declarations emit `pub(crate)` types and fields, preserving inline
   PascalCase schema declarations as module-local implementation nouns.
 - `TypeDeclaration::Alias` and `TypeDeclaration::Newtype` are distinct.
   Bare source bindings such as `Topic String`, `Topics (Vec Topic)`, or
@@ -135,9 +126,8 @@ data and must not grow a second parser for the authored form.
   schema text plus rkyv archive bytes as internal codec witnesses, but it is
   not treated as generated output. Generated Rust files are checked against the
   working tree; a component-specific update environment variable rewrites them
-  when the schema intentionally changes. `.asschema` remains available through
-  explicit compatibility artifact APIs, but the shared component driver does
-  not write or freshness-check `.asschema` files.
+  when the schema intentionally changes. The shared component driver does not
+  write or freshness-check any intermediate schema artifact.
 - Signal, Nexus, and SEMA roots are emitted from the same schema shape:
   imports/exports, input, output, and namespace. Emission may attach different
   support traits per plane, but the generated Rust mirrors the same authored
@@ -264,7 +254,7 @@ data and must not grow a second parser for the authored form.
   floor (`Integer`) rather than bespoke primitive widths. This keeps the runtime
   mail support closer to schema-authored nouns while the core mail schema is
   still emitted by the support surface.
-- Scalar references are explicit asschema data. `TypeReference::String`,
+- Scalar references are explicit schema data. `TypeReference::String`,
   `TypeReference::Integer`, `TypeReference::Boolean`, and `TypeReference::Path`
   emit the scalar aliases (`String = std::string::String`, `Integer = u64`,
   `Boolean = bool`). Binary `rkyv` support is emitted for every consumer; NOTA

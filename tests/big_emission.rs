@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use schema_next::{
-    Asschema, AsschemaArtifact, Declaration, EnumDeclaration, ImportResolver, MacroContext,
-    SchemaEngine, SchemaIdentity, TypeDeclaration,
+    Declaration, EnumDeclaration, ImportResolver, MacroContext, Schema, SchemaEngine,
+    SchemaIdentity, SchemaSourceArtifact, TypeDeclaration,
 };
 use schema_rust_next::RustEmitter;
 
@@ -53,11 +53,11 @@ impl<'fixture> BigRustFixture<'fixture> {
         }
     }
 
-    fn lower(&self) -> (Asschema, MacroContext) {
+    fn lower(&self) -> (Schema, MacroContext) {
         let source = std::fs::read_to_string(&self.source_path).expect("read schema fixture");
         let engine = SchemaEngine::default();
         let mut context = MacroContext::default();
-        let asschema = match &self.resolver {
+        let schema = match &self.resolver {
             Some(resolver) => engine
                 .lower_source_with_resolver(
                     &source,
@@ -74,100 +74,100 @@ impl<'fixture> BigRustFixture<'fixture> {
                 )
                 .expect("schema lowers"),
         };
-        (asschema, context)
+        (schema, context)
     }
 
     fn generate_rust(&self) -> String {
-        let (asschema, _) = self.lower();
-        RustEmitter::default().emit(&asschema).as_str().to_owned()
+        let (schema, _) = self.lower();
+        RustEmitter::default()
+            .emit_code_from_schema(&schema)
+            .as_str()
+            .to_owned()
     }
 
-    fn generate_rust_after_asschema_artifact_files(&self) -> String {
-        let (asschema, _) = self.lower();
-        let artifact = AsschemaArtifact::new(asschema);
-        let paths = BigAsschemaArtifactPaths::new(self.name);
-
-        artifact
-            .write_nota_file(paths.nota_path())
-            .expect("write asschema NOTA artifact");
-        artifact
-            .write_binary_file(paths.binary_path())
-            .expect("write asschema rkyv artifact");
-
-        let from_nota = RustEmitter::default()
-            .emit_file_from_nota_path(paths.nota_path())
-            .expect("emit Rust from asschema NOTA artifact")
-            .code
-            .as_str()
-            .to_owned();
-        let from_binary = RustEmitter::default()
-            .emit_file_from_binary_path(paths.binary_path())
-            .expect("emit Rust from asschema rkyv artifact")
-            .code
-            .as_str()
-            .to_owned();
-
+    fn generate_rust_after_schema_source_artifact_round_trip(&self) -> String {
+        let source = std::fs::read_to_string(&self.source_path).expect("read schema fixture");
+        let artifact = SchemaSourceArtifact::from_schema_text(&source)
+            .expect("schema source decodes into typed artifact");
+        let source_text = artifact.to_schema_text();
+        let from_text = SchemaSourceArtifact::from_schema_text(&source_text)
+            .expect("canonical schema source text decodes");
+        let source_binary = from_text
+            .to_binary_bytes()
+            .expect("schema source artifact serializes through rkyv");
+        let from_binary = SchemaSourceArtifact::from_binary_bytes(&source_binary)
+            .expect("schema source archive decodes");
         assert_eq!(
-            from_nota, from_binary,
-            "NOTA and rkyv asschema artifacts must emit the same Rust for {}",
+            from_text, from_binary,
+            "text and rkyv schema source artifacts must recover the same typed source for {}",
             self.name
         );
-        paths.remove();
-        from_nota
+
+        RustEmitter::default()
+            .emit_file_from_schema_source(
+                from_binary.source(),
+                SchemaIdentity::new(self.identity, "0.1.0"),
+                &SchemaEngine::default(),
+                &self.resolver.clone().unwrap_or_default(),
+            )
+            .expect("emit Rust from schema source artifact")
+            .code
+            .as_str()
+            .to_owned()
     }
 
-    fn assert_lowers_to_typed_asschema_data(&self) {
-        let (asschema, _) = self.lower();
-        self.assert_asschema_data_shape(&asschema);
+    fn assert_lowers_to_typed_schema_data(&self) {
+        let (schema, _) = self.lower();
+        self.assert_schema_data_shape(&schema);
     }
 
-    fn assert_asschema_data_shape(&self, asschema: &Asschema) {
-        assert_eq!(asschema.identity().component().as_str(), self.identity);
-        assert_eq!(asschema.identity().version(), "0.1.0");
+    fn assert_schema_data_shape(&self, schema: &Schema) {
+        assert_eq!(schema.identity().component().as_str(), self.identity);
+        assert_eq!(schema.identity().version(), "0.1.0");
         assert!(
-            !asschema.namespace().is_empty(),
+            !schema.namespace().is_empty(),
             "{} must lower into typed namespace data",
             self.name
         );
         assert!(
-            !asschema.input().variants.is_empty(),
+            !schema.input().variants.is_empty(),
             "{} must lower typed input variants",
             self.name
         );
         assert!(
-            !asschema.output().variants.is_empty(),
+            !schema.output().variants.is_empty(),
             "{} must lower typed output variants",
             self.name
         );
         assert!(
-            asschema.root_named("Input").is_some(),
+            schema.root_named("Input").is_some(),
             "{} must expose Input as a direct root enum",
             self.name
         );
         assert!(
-            asschema.root_named("Output").is_some(),
+            schema.root_named("Output").is_some(),
             "{} must expose Output as a direct root enum",
             self.name
         );
 
         match self.name {
             "spirit-reactive-large" => {
-                Self::assert_has_type(asschema.namespace(), "Entry");
-                Self::assert_has_type(asschema.namespace(), "RecordSet");
-                Self::assert_has_variant(asschema.input(), "Record");
-                Self::assert_has_variant(asschema.output(), "Recorded");
+                Self::assert_has_type(schema.namespace(), "Entry");
+                Self::assert_has_type(schema.namespace(), "RecordSet");
+                Self::assert_has_variant(schema.input(), "Record");
+                Self::assert_has_variant(schema.output(), "Recorded");
             }
             "triad-reactive-large" => {
-                Self::assert_has_type(asschema.namespace(), "SignalRequest");
-                Self::assert_has_type(asschema.namespace(), "NexusRequest");
-                Self::assert_has_type(asschema.namespace(), "SemaRequest");
-                Self::assert_has_variant(asschema.input(), "SignalIn");
-                Self::assert_has_variant(asschema.output(), "SignalOut");
+                Self::assert_has_type(schema.namespace(), "SignalRequest");
+                Self::assert_has_type(schema.namespace(), "NexusRequest");
+                Self::assert_has_type(schema.namespace(), "SemaRequest");
+                Self::assert_has_variant(schema.input(), "SignalIn");
+                Self::assert_has_variant(schema.output(), "SignalOut");
             }
             "imported-mail-consumer" => {
-                assert!(!asschema.imports().is_empty());
-                assert!(!asschema.resolved_imports().is_empty());
-                Self::assert_has_variant(asschema.output(), "Marked");
+                assert!(!schema.imports().is_empty());
+                assert!(!schema.resolved_imports().is_empty());
+                Self::assert_has_variant(schema.output(), "Marked");
             }
             _ => panic!("unhandled big fixture {}", self.name),
         }
@@ -209,54 +209,20 @@ impl<'fixture> BigRustFixture<'fixture> {
         );
     }
 
-    fn assert_emission_uses_live_asschema_artifact(&self) {
+    fn assert_emission_uses_schema_source_artifact(&self) {
         assert_eq!(
-            self.generate_rust_after_asschema_artifact_files(),
+            self.generate_rust_after_schema_source_artifact_round_trip(),
             self.generate_rust(),
-            "emission for {} must be driven by readable assembled schema data",
+            "emission for {} must be driven by readable schema source artifacts",
             self.name
         );
     }
 }
 
-struct BigAsschemaArtifactPaths {
-    directory: PathBuf,
-    nota_path: PathBuf,
-    binary_path: PathBuf,
-}
-
-impl BigAsschemaArtifactPaths {
-    fn new(name: &str) -> Self {
-        let directory = std::env::temp_dir().join(format!(
-            "schema-rust-next-asschema-artifact-{}-{name}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&directory);
-        std::fs::create_dir_all(&directory).expect("create asschema artifact directory");
-        Self {
-            nota_path: directory.join("lib.asschema"),
-            binary_path: directory.join("lib.asschema.rkyv"),
-            directory,
-        }
-    }
-
-    fn nota_path(&self) -> &Path {
-        &self.nota_path
-    }
-
-    fn binary_path(&self) -> &Path {
-        &self.binary_path
-    }
-
-    fn remove(&self) {
-        let _ = std::fs::remove_dir_all(&self.directory);
-    }
-}
-
 #[test]
-fn large_spirit_schema_lowers_to_typed_asschema_data() {
+fn large_spirit_schema_lowers_to_typed_schema_data() {
     BigRustFixture::local("spirit-reactive-large", "example:spirit-reactive-large")
-        .assert_lowers_to_typed_asschema_data();
+        .assert_lowers_to_typed_schema_data();
 }
 
 #[test]
@@ -266,9 +232,9 @@ fn large_spirit_schema_emits_checked_rust_snapshot() {
 }
 
 #[test]
-fn large_triad_schema_lowers_to_typed_asschema_data() {
+fn large_triad_schema_lowers_to_typed_schema_data() {
     BigRustFixture::local("triad-reactive-large", "example:triad-reactive-large")
-        .assert_lowers_to_typed_asschema_data();
+        .assert_lowers_to_typed_schema_data();
 }
 
 #[test]
@@ -278,9 +244,9 @@ fn large_triad_schema_emits_checked_rust_snapshot() {
 }
 
 #[test]
-fn large_imported_schema_lowers_to_typed_asschema_data() {
+fn large_imported_schema_lowers_to_typed_schema_data() {
     BigRustFixture::imported("imported-mail-consumer", "example:imported-mail-consumer")
-        .assert_lowers_to_typed_asschema_data();
+        .assert_lowers_to_typed_schema_data();
 }
 
 #[test]
@@ -290,13 +256,13 @@ fn large_imported_schema_emits_checked_cross_crate_rust_snapshot() {
 }
 
 #[test]
-fn rust_emission_is_stable_after_live_asschema_artifact_files() {
+fn rust_emission_is_stable_after_schema_source_artifact_round_trip() {
     BigRustFixture::local("spirit-reactive-large", "example:spirit-reactive-large")
-        .assert_emission_uses_live_asschema_artifact();
+        .assert_emission_uses_schema_source_artifact();
     BigRustFixture::local("triad-reactive-large", "example:triad-reactive-large")
-        .assert_emission_uses_live_asschema_artifact();
+        .assert_emission_uses_schema_source_artifact();
     BigRustFixture::imported("imported-mail-consumer", "example:imported-mail-consumer")
-        .assert_emission_uses_live_asschema_artifact();
+        .assert_emission_uses_schema_source_artifact();
 }
 
 #[test]

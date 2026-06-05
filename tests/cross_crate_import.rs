@@ -12,7 +12,7 @@ fn emit_consumer() -> String {
         ImportResolver::new().with_dependency("marker-core", marker_core.path(), "0.1.0");
     let engine = SchemaEngine::default();
     let source = import_consumer.schema("lib.schema").read();
-    let asschema = engine
+    let schema = engine
         .lower_source_with_resolver(
             &source,
             SchemaIdentity::new("import-consumer:lib", "0.1.0"),
@@ -20,7 +20,10 @@ fn emit_consumer() -> String {
             &resolver,
         )
         .expect("consumer schema resolves its imports");
-    RustEmitter::default().emit(&asschema).as_str().to_owned()
+    RustEmitter::default()
+        .emit_code_from_schema(&schema)
+        .as_str()
+        .to_owned()
 }
 
 #[test]

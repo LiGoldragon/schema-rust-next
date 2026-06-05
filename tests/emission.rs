@@ -40,8 +40,8 @@ mod runner_generated {
 
 #[test]
 fn emits_rust_source_as_a_separate_artifact() {
-    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
-    let generated = RustEmitter::default().emit_file(&asschema);
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let generated = RustEmitter::default().emit_file_from_schema(&schema);
 
     assert_eq!(generated.path, "src/schema/lib.rs");
     assert!(generated.code.as_str().contains("pub enum Input"));
@@ -103,9 +103,9 @@ fn emits_rust_source_as_a_separate_artifact() {
 
 #[test]
 fn emitter_builds_rust_module_data_before_rendering_text() {
-    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let emitter = RustEmitter::default();
-    let module = emitter.emit_module(&asschema);
+    let module = emitter.emit_module_from_schema(&schema);
 
     assert_eq!(module.file_path(), "src/schema/lib.rs");
     assert_eq!(module.root_enums().len(), 2);
@@ -138,13 +138,13 @@ fn emitter_builds_rust_module_data_before_rendering_text() {
     assert_eq!(entry_struct.fields()[0].name().as_str(), "topics");
     assert_eq!(entry_struct.fields()[1].name().as_str(), "kind");
 
-    assert_eq!(module.render(), emitter.emit(&asschema));
+    assert_eq!(module.render(), emitter.emit_code_from_schema(&schema));
 }
 
 #[test]
 fn generated_objects_expose_named_constructors_and_newtype_payload_accessors() {
-    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
-    let code = RustEmitter::default().emit(&asschema);
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let code = RustEmitter::default().emit_code_from_schema(&schema);
     let source = code.as_str();
 
     assert!(source.contains("pub type Topic = String;"));
@@ -166,12 +166,12 @@ fn emission_can_disable_nota_surface_for_binary_only_consumers() {
     // The emitted source carries only the `rkyv` + signal-frame
     // surface, so the generated module compiles when the consumer
     // does not depend on `nota-next` at all.
-    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated = RustEmitter::new(RustEmissionOptions {
         nota_surface: NotaSurface::Disabled,
         target: RustEmissionTarget::ComponentRuntime,
     })
-    .emit(&asschema);
+    .emit_code_from_schema(&schema);
     let code = generated.as_str();
 
     assert!(code.contains("rkyv::Archive"));
@@ -201,14 +201,14 @@ fn emission_can_gate_nota_surface_behind_text_client_feature() {
     // and `#[cfg_attr(...)]` on derives, so a single emitted module
     // serves both text-facing CLIs (with the feature on) and
     // binary-only daemons (with the feature off).
-    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated = RustEmitter::new(RustEmissionOptions {
         nota_surface: NotaSurface::FeatureGated {
             feature: "nota-text".to_owned(),
         },
         target: RustEmissionTarget::ComponentRuntime,
     })
-    .emit(&asschema);
+    .emit_code_from_schema(&schema);
     let code = generated.as_str();
 
     assert!(code.contains(
@@ -224,7 +224,7 @@ fn emission_can_gate_nota_surface_behind_text_client_feature() {
     // construction — the checked-in `spirit_generated.rs` snapshot
     // is the binding form. Constructed-positional and default-
     // constructed emissions must stay byte-identical.
-    let default_generated = RustEmitter::default().emit(&asschema);
+    let default_generated = RustEmitter::default().emit_code_from_schema(&schema);
     assert_eq!(code, default_generated.as_str());
 }
 
@@ -246,16 +246,16 @@ fn rust_emission_options_default_is_feature_gated_nota_text() {
 
 #[test]
 fn emitted_path_mirrors_schema_module_identity() {
-    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit-next:signal:public");
-    let generated = RustEmitter::default().emit_file(&asschema);
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit-next:signal:public");
+    let generated = RustEmitter::default().emit_file_from_schema(&schema);
 
     assert_eq!(generated.path, "src/schema/signal/public.rs");
 }
 
 #[test]
 fn inline_private_schema_types_emit_crate_local_rust_boundary() {
-    let asschema = FixtureSchema::new("inline-private-type.schema").lower("example:inline");
-    let generated = RustEmitter::default().emit_file(&asschema);
+    let schema = FixtureSchema::new("inline-private-type.schema").lower("example:inline");
+    let generated = RustEmitter::default().emit_file_from_schema(&schema);
     let code = generated.code.as_str();
 
     assert!(code.contains("pub(crate) struct Receipt"));
@@ -266,8 +266,8 @@ fn inline_private_schema_types_emit_crate_local_rust_boundary() {
 
 #[test]
 fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages() {
-    let asschema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
-    let generated = RustEmitter::default().emit_file(&asschema);
+    let schema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
+    let generated = RustEmitter::default().emit_file_from_schema(&schema);
 
     assert!(generated.code.as_str().contains("pub trait SignalEngine"));
     assert!(
@@ -482,11 +482,11 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
 
 #[test]
 fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
-    let asschema = FixtureSchema::new("runner-triad.schema").lower("spirit:lib");
+    let schema = FixtureSchema::new("runner-triad.schema").lower("spirit:lib");
     let generated = RustEmitter::new(
         RustEmissionOptions::binary_only().with_target(RustEmissionTarget::ComponentRuntime),
     )
-    .emit_file(&asschema);
+    .emit_file_from_schema(&schema);
     let code = generated.code.as_str();
 
     assert_generated_fixture("runner_generated.rs", code);
@@ -529,11 +529,11 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
 
 #[test]
 fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
-    let asschema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
+    let schema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
     let generated = RustEmitter::new(
         RustEmissionOptions::binary_only().with_target(RustEmissionTarget::WireContract),
     )
-    .emit_file(&asschema);
+    .emit_file_from_schema(&schema);
     let code = generated.code.as_str();
 
     assert!(code.contains("pub enum Input"));
@@ -562,12 +562,12 @@ fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
 
 #[test]
 fn signal_runtime_target_emits_signal_runtime_without_nexus_or_sema_support() {
-    let asschema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
+    let schema = FixtureSchema::new("plane-triad.schema").lower("spirit:lib");
     let generated = RustEmitter::new(
         RustEmissionOptions::feature_gated_nota("nota-text")
             .with_target(RustEmissionTarget::SignalRuntime),
     )
-    .emit_file(&asschema);
+    .emit_file_from_schema(&schema);
     let code = generated.code.as_str();
 
     assert!(code.contains("pub enum Input"));
@@ -604,11 +604,11 @@ fn signal_runtime_target_emits_signal_runtime_without_nexus_or_sema_support() {
 
 #[test]
 fn nexus_runtime_target_emits_only_nexus_runtime_support_even_when_other_plane_names_exist() {
-    let asschema = FixtureSchema::new("plane-triad.schema").lower("daemon:nexus");
+    let schema = FixtureSchema::new("plane-triad.schema").lower("daemon:nexus");
     let generated = RustEmitter::new(
         RustEmissionOptions::binary_only().with_target(RustEmissionTarget::NexusRuntime),
     )
-    .emit_file(&asschema);
+    .emit_file_from_schema(&schema);
     let code = generated.code.as_str();
 
     assert!(code.contains("pub enum NexusWork"));
@@ -637,11 +637,11 @@ fn nexus_runtime_target_emits_only_nexus_runtime_support_even_when_other_plane_n
 
 #[test]
 fn sema_runtime_target_emits_only_sema_runtime_support_even_when_other_plane_names_exist() {
-    let asschema = FixtureSchema::new("plane-triad.schema").lower("daemon:sema");
+    let schema = FixtureSchema::new("plane-triad.schema").lower("daemon:sema");
     let generated = RustEmitter::new(
         RustEmissionOptions::binary_only().with_target(RustEmissionTarget::SemaRuntime),
     )
-    .emit_file(&asschema);
+    .emit_file_from_schema(&schema);
     let code = generated.code.as_str();
 
     assert!(code.contains("pub enum SemaWriteInput"));
@@ -672,11 +672,11 @@ fn sema_runtime_target_emits_only_sema_runtime_support_even_when_other_plane_nam
 
 #[test]
 fn sema_runtime_target_accepts_plane_local_root_names() {
-    let asschema = FixtureSchema::new("sema-plane-local.schema").lower("daemon:sema");
+    let schema = FixtureSchema::new("sema-plane-local.schema").lower("daemon:sema");
     let generated = RustEmitter::new(
         RustEmissionOptions::binary_only().with_target(RustEmissionTarget::SemaRuntime),
     )
-    .emit_file(&asschema);
+    .emit_file_from_schema(&schema);
     let code = generated.code.as_str();
 
     assert!(code.contains("pub enum WriteInput"));
@@ -709,8 +709,8 @@ fn sema_runtime_target_accepts_plane_local_root_names() {
 
 #[test]
 fn runtime_target_emits_read_only_sema_engine_when_read_roots_exist() {
-    let asschema = FixtureSchema::new("sema-read-only.schema").lower("daemon:sema");
-    let generated = RustEmitter::default().emit_file(&asschema);
+    let schema = FixtureSchema::new("sema-read-only.schema").lower("daemon:sema");
+    let generated = RustEmitter::default().emit_file_from_schema(&schema);
     let code = generated.code.as_str();
 
     assert!(code.contains("pub trait SemaEngine"));
@@ -731,8 +731,8 @@ fn runtime_target_emits_read_only_sema_engine_when_read_roots_exist() {
 
 #[test]
 fn runtime_target_emits_write_only_sema_engine_when_write_roots_exist() {
-    let asschema = FixtureSchema::new("sema-write-only.schema").lower("daemon:sema");
-    let generated = RustEmitter::default().emit_file(&asschema);
+    let schema = FixtureSchema::new("sema-write-only.schema").lower("daemon:sema");
+    let generated = RustEmitter::default().emit_file_from_schema(&schema);
     let code = generated.code.as_str();
 
     assert!(code.contains("pub trait SemaEngine"));
@@ -1032,8 +1032,8 @@ fn generated_upgrade_trait_accepts_previous_schema_objects_observably() {
 
 #[test]
 fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
-    let asschema = FixtureSchema::new("collections.schema").lower("collections:lib");
-    let generated = RustEmitter::default().emit(&asschema);
+    let schema = FixtureSchema::new("collections.schema").lower("collections:lib");
+    let generated = RustEmitter::default().emit_code_from_schema(&schema);
     let code = generated.as_str();
 
     // The generated code imports the shared NOTA codec instead of
@@ -1070,8 +1070,8 @@ fn collection_free_schema_keeps_checked_generated_source_stable() {
     // The regression safety net: a schema that uses no collection still
     // emits exactly the checked-in fixture, proving the collection work
     // is purely additive.
-    let asschema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
-    let generated = RustEmitter::default().emit(&asschema);
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let generated = RustEmitter::default().emit_code_from_schema(&schema);
 
     assert_generated_fixture("spirit_generated.rs", generated.as_str());
 }

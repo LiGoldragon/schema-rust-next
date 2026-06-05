@@ -5,7 +5,7 @@ edition      = "2024"
 rust-version = "1.85"
 license      = "MIT OR Apache-2.0"
 repository   = "https://github.com/LiGoldragon/schema-rust-next"
-description  = "Rust source emitter for schema-next assembled schemas."
+description  = "Rust source emitter for schema-next typed schema data."
 publish      = false
 
 [lib]

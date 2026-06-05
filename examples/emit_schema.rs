@@ -23,12 +23,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let source = fs::read_to_string(schema_path)?;
     let mut context = MacroContext::default();
-    let asschema = SchemaEngine::default().lower_source_with_resolver(
+    let schema = SchemaEngine::default().lower_source_with_resolver(
         &source,
         SchemaIdentity::new(identity, version),
         &mut context,
         &resolver,
     )?;
-    print!("{}", RustEmitter::default().emit(&asschema).as_str());
+    print!(
+        "{}",
+        RustEmitter::default()
+            .emit_code_from_schema(&schema)
+            .as_str()
+    );
     Ok(())
 }

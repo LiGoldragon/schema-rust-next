@@ -1,10 +1,7 @@
-use std::path::Path;
-
 use schema_next::{
-    AliasDeclaration, Asschema, AsschemaArtifact, Declaration, EnumDeclaration, EnumVariant,
-    FieldDeclaration, ImportResolver, Name, NewtypeDeclaration, ResolvedImport, SchemaEngine,
-    SchemaError, SchemaIdentity, SchemaSource, StructDeclaration, TypeDeclaration, TypeReference,
-    Visibility,
+    AliasDeclaration, Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, ImportResolver,
+    Name, NewtypeDeclaration, ResolvedImport, Schema, SchemaEngine, SchemaError, SchemaIdentity,
+    SchemaSource, StructDeclaration, TypeDeclaration, TypeReference, Visibility,
 };
 
 pub mod build;
@@ -49,8 +46,8 @@ impl RustEmitter {
         }
     }
 
-    pub fn emit_file(&self, asschema: &Asschema) -> GeneratedFile {
-        let module = self.emit_module(asschema);
+    pub fn emit_file_from_schema(&self, schema: &Schema) -> GeneratedFile {
+        let module = self.emit_module_from_schema(schema);
         GeneratedFile {
             path: module.file_path().to_owned(),
             code: module.render(),
@@ -71,32 +68,12 @@ impl RustEmitter {
         })
     }
 
-    pub fn emit_file_from_artifact(&self, artifact: &AsschemaArtifact) -> GeneratedFile {
-        self.emit_file(artifact.asschema())
+    pub fn emit_code_from_schema(&self, schema: &Schema) -> RustCode {
+        self.emit_module_from_schema(schema).render()
     }
 
-    pub fn emit_file_from_nota_path(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> Result<GeneratedFile, SchemaError> {
-        let artifact = AsschemaArtifact::read_nota_file(path)?;
-        Ok(self.emit_file_from_artifact(&artifact))
-    }
-
-    pub fn emit_file_from_binary_path(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> Result<GeneratedFile, SchemaError> {
-        let artifact = AsschemaArtifact::read_binary_file(path)?;
-        Ok(self.emit_file_from_artifact(&artifact))
-    }
-
-    pub fn emit(&self, asschema: &Asschema) -> RustCode {
-        self.emit_module(asschema).render()
-    }
-
-    pub fn emit_module(&self, asschema: &Asschema) -> RustModule {
-        RustModule::from_asschema(asschema, self.generator_name, self.options.clone())
+    pub fn emit_module_from_schema(&self, schema: &Schema) -> RustModule {
+        RustModule::from_schema(schema, self.generator_name, self.options.clone())
     }
 
     pub fn emit_module_from_schema_source(
@@ -106,8 +83,8 @@ impl RustEmitter {
         engine: &SchemaEngine,
         resolver: &ImportResolver,
     ) -> Result<RustModule, SchemaError> {
-        let asschema = engine.lower_schema_source_with_resolver(source, identity, resolver)?;
-        Ok(self.emit_module(&asschema))
+        let schema = engine.lower_schema_source_with_resolver(source, identity, resolver)?;
+        Ok(self.emit_module_from_schema(&schema))
     }
 }
 
@@ -124,33 +101,33 @@ pub struct RustModule {
 }
 
 impl RustModule {
-    pub fn from_asschema(
-        asschema: &Asschema,
+    pub fn from_schema(
+        schema: &Schema,
         generator_name: impl Into<String>,
         options: RustEmissionOptions,
     ) -> Self {
-        let declarations = asschema
+        let declarations = schema
             .namespace()
             .iter()
-            .map(RustDeclaration::from_asschema_declaration)
+            .map(RustDeclaration::from_schema_declaration)
             .collect::<Vec<_>>();
-        let root_enums = asschema
+        let root_enums = schema
             .input_and_output()
             .into_iter()
-            .map(RustEnum::from_asschema_enum)
+            .map(RustEnum::from_schema_enum)
             .collect::<Vec<_>>();
         Self {
-            file_path: RustModulePath::new(asschema.identity().component().clone()).to_file_path(),
+            file_path: RustModulePath::new(schema.identity().component().clone()).to_file_path(),
             generator_name: generator_name.into(),
             scalar_aliases: RustScalarAlias::default_aliases(),
-            imports: asschema
+            imports: schema
                 .resolved_imports()
                 .iter()
                 .map(RustImport::from_resolved_import)
                 .collect(),
             declarations,
             root_enums,
-            support: RustSupportModel::from_asschema(asschema),
+            support: RustSupportModel::from_schema(schema),
             options,
         }
     }
@@ -505,11 +482,11 @@ pub struct RustDeclaration {
 }
 
 impl RustDeclaration {
-    fn from_asschema_declaration(declaration: &Declaration) -> Self {
+    fn from_schema_declaration(declaration: &Declaration) -> Self {
         Self {
             visibility: declaration.visibility(),
             name: declaration.name().clone(),
-            value: RustTypeDeclaration::from_asschema_type(declaration.value()),
+            value: RustTypeDeclaration::from_schema_type(declaration.value()),
         }
     }
 
@@ -535,19 +512,19 @@ pub enum RustTypeDeclaration {
 }
 
 impl RustTypeDeclaration {
-    fn from_asschema_type(declaration: &TypeDeclaration) -> Self {
+    fn from_schema_type(declaration: &TypeDeclaration) -> Self {
         match declaration {
             TypeDeclaration::Alias(declaration) => {
-                Self::Alias(RustAlias::from_asschema_alias(declaration))
+                Self::Alias(RustAlias::from_schema_alias(declaration))
             }
             TypeDeclaration::Struct(declaration) => {
-                Self::Struct(RustStruct::from_asschema_struct(declaration))
+                Self::Struct(RustStruct::from_schema_struct(declaration))
             }
             TypeDeclaration::Enum(declaration) => {
-                Self::Enum(RustEnum::from_asschema_enum(declaration))
+                Self::Enum(RustEnum::from_schema_enum(declaration))
             }
             TypeDeclaration::Newtype(declaration) => {
-                Self::Newtype(RustNewtype::from_asschema_newtype(declaration))
+                Self::Newtype(RustNewtype::from_schema_newtype(declaration))
             }
         }
     }
@@ -560,7 +537,7 @@ pub struct RustAlias {
 }
 
 impl RustAlias {
-    fn from_asschema_alias(declaration: &AliasDeclaration) -> Self {
+    fn from_schema_alias(declaration: &AliasDeclaration) -> Self {
         Self {
             name: declaration.name.clone(),
             reference: declaration.reference.clone(),
@@ -583,7 +560,7 @@ pub struct RustNewtype {
 }
 
 impl RustNewtype {
-    fn from_asschema_newtype(declaration: &NewtypeDeclaration) -> Self {
+    fn from_schema_newtype(declaration: &NewtypeDeclaration) -> Self {
         Self {
             name: declaration.name.clone(),
             reference: declaration.reference.clone(),
@@ -606,13 +583,13 @@ pub struct RustStruct {
 }
 
 impl RustStruct {
-    fn from_asschema_struct(declaration: &StructDeclaration) -> Self {
+    fn from_schema_struct(declaration: &StructDeclaration) -> Self {
         Self {
             name: declaration.name.clone(),
             fields: declaration
                 .fields
                 .iter()
-                .map(RustField::from_asschema_field)
+                .map(RustField::from_schema_field)
                 .collect(),
         }
     }
@@ -633,7 +610,7 @@ pub struct RustField {
 }
 
 impl RustField {
-    fn from_asschema_field(field: &FieldDeclaration) -> Self {
+    fn from_schema_field(field: &FieldDeclaration) -> Self {
         Self {
             name: field.name.clone(),
             reference: field.reference.clone(),
@@ -656,13 +633,13 @@ pub struct RustEnum {
 }
 
 impl RustEnum {
-    fn from_asschema_enum(declaration: &EnumDeclaration) -> Self {
+    fn from_schema_enum(declaration: &EnumDeclaration) -> Self {
         Self {
             name: declaration.name.clone(),
             variants: declaration
                 .variants
                 .iter()
-                .map(RustEnumVariant::from_asschema_variant)
+                .map(RustEnumVariant::from_schema_variant)
                 .collect(),
         }
     }
@@ -683,7 +660,7 @@ pub struct RustEnumVariant {
 }
 
 impl RustEnumVariant {
-    fn from_asschema_variant(variant: &EnumVariant) -> Self {
+    fn from_schema_variant(variant: &EnumVariant) -> Self {
         Self {
             name: variant.name.clone(),
             payload: variant.payload.clone(),
@@ -706,10 +683,10 @@ struct RustSupportModel {
 }
 
 impl RustSupportModel {
-    fn from_asschema(asschema: &Asschema) -> Self {
+    fn from_schema(schema: &Schema) -> Self {
         Self {
-            map_key_type_names: CollectionScan::new(asschema).map_key_type_names(),
-            private_type_names: asschema
+            map_key_type_names: CollectionScan::new(schema).map_key_type_names(),
+            private_type_names: schema
                 .namespace()
                 .iter()
                 .filter(|declaration| declaration.is_private())
@@ -763,13 +740,13 @@ impl RustModulePath {
 
 /// Decides which assembled schema type names appear as map keys.
 #[derive(Clone, Copy, Debug)]
-struct CollectionScan<'asschema> {
-    asschema: &'asschema Asschema,
+struct CollectionScan<'schema> {
+    schema: &'schema Schema,
 }
 
-impl<'asschema> CollectionScan<'asschema> {
-    fn new(asschema: &'asschema Asschema) -> Self {
-        Self { asschema }
+impl<'schema> CollectionScan<'schema> {
+    fn new(schema: &'schema Schema) -> Self {
+        Self { schema }
     }
 
     /// The plain type names that appear as a `BTreeMap` key anywhere in
@@ -777,7 +754,7 @@ impl<'asschema> CollectionScan<'asschema> {
     /// collection positions). These types need the ordering derives.
     fn map_key_type_names(&self) -> Vec<String> {
         let mut names = Vec::new();
-        for declaration in self.asschema.namespace() {
+        for declaration in self.schema.namespace() {
             match declaration.value() {
                 TypeDeclaration::Alias(declaration) => {
                     Self::collect_alias_map_keys(declaration, &mut names);
@@ -793,7 +770,7 @@ impl<'asschema> CollectionScan<'asschema> {
                 }
             }
         }
-        for root in self.asschema.input_and_output() {
+        for root in self.schema.input_and_output() {
             Self::collect_enum_map_keys(root, &mut names);
         }
         names
