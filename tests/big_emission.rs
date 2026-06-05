@@ -15,6 +15,12 @@ mod spirit_large_generated {
     include!("fixtures/big-schemas/spirit-reactive-large.generated.rs");
 }
 
+#[allow(dead_code)]
+#[allow(clippy::enum_variant_names)]
+mod triad_large_generated {
+    include!("fixtures/big-schemas/triad-reactive-large.generated.rs");
+}
+
 struct BigRustFixture<'fixture> {
     name: &'fixture str,
     identity: &'fixture str,
@@ -292,6 +298,13 @@ fn generated_big_rust_contains_the_current_schema_stack_surfaces() {
     assert!(triad.contains("pub type PushSemaResult = SemaReply;"));
     assert!(triad.contains("pub struct EntryWritten"));
     assert!(triad.contains("pub enum RuntimeEvent"));
+    assert!(
+        triad.contains(
+            "pub type Frame = signal_frame::StreamingFrame<Input, Output, RuntimeEvent>;"
+        )
+    );
+    assert!(triad.contains("pub fn into_subscription_frame("));
+    assert!(!spirit.contains("pub type Frame = signal_frame::StreamingFrame"));
 
     assert!(
         imported.contains("pub use marker_core::schema::mail::DatabaseMarker as DatabaseMarker;")
@@ -330,6 +343,37 @@ fn compiled_large_spirit_generated_rust_parses_frames_and_emits_mail_events() {
         spirit_large_generated::OriginRoute(7001)
     );
     assert_eq!(event.root, spirit_large_generated::MessageRoot::Input);
+}
+
+#[test]
+fn compiled_reactive_generated_rust_builds_signal_frame_streaming_events() {
+    let event_identifier = signal_frame::StreamEventIdentifier::new(
+        signal_frame::SessionEpoch::new(5),
+        signal_frame::ExchangeLane::Acceptor,
+        signal_frame::LaneSequence::first(),
+    );
+    let event = triad_large_generated::RuntimeEvent::MessageCommitted(9);
+
+    let frame = event.clone().into_subscription_frame(
+        event_identifier,
+        signal_frame::SubscriptionTokenInner::new(22),
+    );
+    let bytes = frame.encode_length_prefixed().expect("encode frame");
+    let decoded = triad_large_generated::Frame::decode_length_prefixed(&bytes)
+        .expect("decode streaming frame");
+
+    match decoded.into_body() {
+        triad_large_generated::FrameBody::SubscriptionEvent {
+            event_identifier: decoded_identifier,
+            token,
+            event: decoded_event,
+        } => {
+            assert_eq!(decoded_identifier, event_identifier);
+            assert_eq!(token, signal_frame::SubscriptionTokenInner::new(22));
+            assert_eq!(decoded_event, event);
+        }
+        _ => panic!("expected subscription event"),
+    }
 }
 
 fn fixture_path(name: &str, extension: &str) -> PathBuf {

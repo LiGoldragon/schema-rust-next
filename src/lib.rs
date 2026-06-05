@@ -3,7 +3,7 @@ use quote::{ToTokens, quote};
 use schema_next::{
     AliasDeclaration, Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, ImportResolver,
     Name, NewtypeDeclaration, ResolvedImport, Schema, SchemaEngine, SchemaError, SchemaIdentity,
-    SchemaSource, StructDeclaration, TypeDeclaration, TypeReference, Visibility,
+    SchemaSource, StreamDeclaration, StructDeclaration, TypeDeclaration, TypeReference, Visibility,
 };
 
 pub mod build;
@@ -190,6 +190,7 @@ pub struct RustModule {
     imports: Vec<RustImport>,
     declarations: Vec<RustDeclaration>,
     root_enums: Vec<RustEnum>,
+    streams: Vec<StreamDeclaration>,
     support: RustSupportModel,
     options: RustEmissionOptions,
 }
@@ -222,6 +223,10 @@ impl RustModule {
 
     pub fn root_enums(&self) -> &[RustEnum] {
         &self.root_enums
+    }
+
+    pub fn streams(&self) -> &[StreamDeclaration] {
+        &self.streams
     }
 
     pub fn declaration_named(&self, name: &str) -> Option<&RustDeclaration> {
@@ -267,7 +272,7 @@ impl RustModule {
 
         writer.emit_short_headers(&self.root_enums);
         writer.blank();
-        writer.emit_signal_frame_support(&self.root_enums);
+        writer.emit_signal_frame_support(&self.root_enums, &self.streams);
         if writer.emits_runtime_support() {
             writer.emit_plane_route_support(&self.declarations);
             writer.emit_trace_support(&self.declarations, &self.root_enums);
@@ -305,6 +310,7 @@ impl LowerToRust<RustModule> for Schema {
                 .collect(),
             declarations,
             root_enums,
+            streams: self.streams().to_vec(),
             support: <Self as LowerToRust<RustSupportModel>>::lower_to_rust(self, context),
             options: context.options(),
         }
@@ -1956,7 +1962,11 @@ impl RustWriter {
         self.line("}");
     }
 
-    fn emit_signal_frame_support(&mut self, root_enums: &[RustEnum]) {
+    fn emit_signal_frame_support(
+        &mut self,
+        root_enums: &[RustEnum],
+        streams: &[StreamDeclaration],
+    ) {
         self.line("const SIGNAL_SHORT_HEADER_BYTE_COUNT: usize = 8;");
         self.blank();
         self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
@@ -1992,6 +2002,10 @@ impl RustWriter {
 
         for root_enum in root_enums {
             self.emit_signal_frame_impl(root_enum);
+            self.blank();
+        }
+        if let Some(event_payload) = self.streaming_event_payload(root_enums, streams) {
+            self.emit_signal_frame_streaming_support(event_payload);
             self.blank();
         }
     }
@@ -2136,6 +2150,95 @@ impl RustWriter {
         );
         self.line("        }");
         self.line("        Ok((route, value))");
+        self.line("    }");
+        self.line("}");
+    }
+
+    fn streaming_event_payload<'schema>(
+        &self,
+        root_enums: &'schema [RustEnum],
+        streams: &'schema [StreamDeclaration],
+    ) -> Option<&'schema TypeReference> {
+        let stream = streams.first()?;
+        let output = self.root_enum_named(root_enums, "Output")?;
+        let output_event_payload = output
+            .variants()
+            .iter()
+            .find(|variant| variant.name().as_str() == "Event")
+            .and_then(RustEnumVariant::payload)?;
+        if &stream.event == output_event_payload {
+            Some(output_event_payload)
+        } else {
+            None
+        }
+    }
+
+    fn emit_signal_frame_streaming_support(&mut self, event_payload: &TypeReference) {
+        let event_type = self.rust_type(event_payload);
+        self.line("impl signal_frame::RequestPayload for Input {}");
+        self.blank();
+        self.line("impl signal_frame::LogVariant for Input {");
+        self.line("    fn log_variant(&self) -> u64 {");
+        self.line("        self.short_header()");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line(format!(
+            "pub type Frame = signal_frame::StreamingFrame<Input, Output, {event_type}>;"
+        ));
+        self.line(format!(
+            "pub type FrameBody = signal_frame::StreamingFrameBody<Input, Output, {event_type}>;"
+        ));
+        self.line("pub type Request = signal_frame::Request<Input>;");
+        self.line("pub type ReplyEnvelope = signal_frame::Reply<Output>;");
+        self.line("pub type RequestBuilder = signal_frame::RequestBuilder<Input>;");
+        self.blank();
+        self.line("impl Input {");
+        self.line(
+            "    pub fn into_frame(self, exchange: signal_frame::ExchangeIdentifier) -> Frame {",
+        );
+        self.line(
+            "        let short_header = signal_frame::ShortHeader::new(self.short_header());",
+        );
+        self.line("        let request = signal_frame::Request::from_payload(self);");
+        self.line("        Frame::with_short_header(");
+        self.line("            short_header,");
+        self.line("            FrameBody::Request { exchange, request },");
+        self.line("        )");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line("impl Output {");
+        self.line("    pub fn into_reply_frame(self, exchange: signal_frame::ExchangeIdentifier) -> Frame {");
+        self.line(
+            "        let short_header = signal_frame::ShortHeader::new(self.short_header());",
+        );
+        self.line(
+            "        let reply = signal_frame::Reply::committed(signal_frame::NonEmpty::single(",
+        );
+        self.line("            signal_frame::SubReply::Ok(self),");
+        self.line("        ));");
+        self.line("        Frame::with_short_header(");
+        self.line("            short_header,");
+        self.line("            FrameBody::Reply { exchange, reply },");
+        self.line("        )");
+        self.line("    }");
+        self.line("}");
+        self.blank();
+        self.line(format!("impl {event_type} {{"));
+        self.line("    pub fn into_subscription_frame(");
+        self.line("        self,");
+        self.line("        event_identifier: signal_frame::StreamEventIdentifier,");
+        self.line("        token: signal_frame::SubscriptionTokenInner,");
+        self.line("    ) -> Frame {");
+        self.line("        Frame::with_short_header(");
+        self.line("            signal_frame::ShortHeader::new(short_header::OUTPUT_EVENT),");
+        self.line("            FrameBody::SubscriptionEvent {");
+        self.line("                event_identifier,");
+        self.line("                token,");
+        self.line("                event: self,");
+        self.line("            },");
+        self.line("        )");
         self.line("    }");
         self.line("}");
     }

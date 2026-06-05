@@ -16,6 +16,14 @@ and output roots become enums; runtime engines implement generated Nexus
 traits with one method per reaction variant on data-bearing objects, not free
 helper functions.
 
+*Streaming wire support is emitted from semantic stream metadata.* A schema
+that declares `Schema::streams()` and whose stream event type matches
+`Output.Event` emits direct `signal-frame` streaming aliases and frame builders:
+`Frame`, `FrameBody`, `Request`, `ReplyEnvelope`, `RequestBuilder`,
+`Input::into_frame`, `Output::into_reply_frame`, and
+`EventPayload::into_subscription_frame`. A bare `Output.Event` name without a
+stream declaration is not enough.
+
 *Cross-crate schema imports preserve type ownership.* A consumer schema that
 imports `crate:module:Type` emits a local Rust alias to the dependency crate's
 generated type instead of re-declaring. The imported crate owns the type

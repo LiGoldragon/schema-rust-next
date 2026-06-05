@@ -14,7 +14,7 @@
   DatabaseDigest Integer
   ActorIdentifier String
   SocketPath String
-  SignalRequest [(RecordIntent RecordIntent) (ObserveIntent ObserveIntent) (SubscribeIntent SubscribeIntent)]
+  SignalRequest [(RecordIntent RecordIntent) (ObserveIntent ObserveIntent) (SubscribeIntent SubscribeIntent opens RuntimeEventStream)]
   SignalReply [(RecordAccepted RecordAccepted) (ObservationReturned ObservationReturned) (SubscriptionStarted SubscriptionStarted)]
   NexusRequest [(PushSignal PushSignal) (PushSemaResult PushSemaResult) ResolveMail ExpireMail]
   NexusReply [(PushedToSema PushedToSema) (MailResolved MailResolved) MailExpired]
@@ -22,7 +22,8 @@
   SemaReply [(EntryWritten EntryWritten) (EntriesRead EntriesRead) (SubscriptionOpened SubscriptionOpened) (SubscriptionClosed SubscriptionClosed)]
   AdminRequest [Drain Pause Resume (Snapshot Snapshot)]
   AdminReply [Drained Paused Resumed (SnapshotReady SnapshotReady)]
-  RuntimeEvent [(MailSent MailSent) (MessageAccepted MessageAccepted) (MessageCommitted MessageCommitted) (MessageFailed MessageFailed)]
+  RuntimeEvent [(MailSent MailSent belongs RuntimeEventStream) (MessageAccepted MessageAccepted belongs RuntimeEventStream) (MessageCommitted MessageCommitted belongs RuntimeEventStream) (MessageFailed MessageFailed belongs RuntimeEventStream)]
+  RuntimeEventStream (Stream { token SubscriptionToken opened SubscriptionStarted event RuntimeEvent close SubscriptionToken })
   Rejected RejectionReason
   RejectionReason [Malformed Unauthorized Conflict Unsupported StaleVersion InternalError]
   RecordIntent { ActorIdentifier * entry Entry }

@@ -174,6 +174,15 @@ grow a second parser for the authored form.
   logic.
 - Generated signal roots emit rkyv-derived data types, NOTA text conversion,
   short-header route triage, and binary signal-frame encode/decode methods.
+- Stream-aware signal schemas additionally emit the direct `signal-frame`
+  streaming surface when semantic `Schema::streams()` is non-empty and the
+  stream event type is the payload of `Output.Event`. The emitted aliases mirror
+  the wire kernel (`Frame = signal_frame::StreamingFrame<Input, Output, Event>`,
+  `FrameBody`, `Request`, `ReplyEnvelope`, `RequestBuilder`) and the generated
+  methods construct real `signal_frame::StreamingFrameBody::Request`,
+  `Reply`, and `SubscriptionEvent` frames. This path reads schema-next stream
+  metadata; it does not infer streaming from names alone and it does not route
+  through the retired `signal_channel!` macro.
 - Bootstrap all-in-one runtime emission emits mail-event nouns.
   `signal::Signal<Root>`, `nexus::Nexus<Root>`, and `sema::Sema<Root>` are the
   automatic envelopes for root objects in each plane; each has an
