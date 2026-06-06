@@ -8,7 +8,10 @@ use schema_next::{
     ImportResolver, Name, SchemaEngine, SchemaError, SchemaPackage, SchemaSourceArtifact,
 };
 
-use crate::{GeneratedFile, RustEmissionOptions, RustEmissionTarget, RustEmitter};
+use crate::{
+    DaemonModule, GeneratedFile, NexusDaemonShape, RustEmissionOptions, RustEmissionTarget,
+    RustEmitter,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GenerationPlan {
@@ -107,6 +110,7 @@ impl GenerationPlan {
 pub struct ModuleEmission {
     module: Name,
     options: RustEmissionOptions,
+    daemon_shape: Option<NexusDaemonShape>,
 }
 
 impl ModuleEmission {
@@ -114,7 +118,25 @@ impl ModuleEmission {
         Self {
             module: Name::new(module),
             options,
+            daemon_shape: None,
         }
+    }
+
+    /// The daemon-module emission (`triad_main!`): off by default, on only when
+    /// a component declares a [`NexusDaemonShape`]. It reads the working signal
+    /// `module`'s schema for the stream declarations that drive the option-B
+    /// publish/subscribe wiring, and emits `src/schema/daemon.rs`.
+    pub fn daemon_module(module: impl Into<String>, daemon_shape: NexusDaemonShape) -> Self {
+        Self {
+            module: Name::new(module),
+            options: RustEmissionOptions::feature_gated_nota("nota-text")
+                .with_target(RustEmissionTarget::SignalRuntime),
+            daemon_shape: Some(daemon_shape),
+        }
+    }
+
+    pub fn daemon_shape(&self) -> Option<&NexusDaemonShape> {
+        self.daemon_shape.as_ref()
     }
 
     pub fn wire_contract() -> Self {
@@ -391,12 +413,23 @@ impl GeneratedModule {
             SchemaSourceArtifact::new(schema_source.clone()),
         )
         .validate()?;
-        let rust_file = RustEmitter::new(emission.options().clone()).emit_file_from_schema_source(
-            &schema_source,
-            source.identity().clone(),
-            engine,
-            resolver,
-        )?;
+        let rust_file = match emission.daemon_shape() {
+            Some(daemon_shape) => {
+                let schema = engine.lower_schema_source_with_resolver(
+                    &schema_source,
+                    source.identity().clone(),
+                    resolver,
+                )?;
+                DaemonModule::new(daemon_shape.clone(), &schema, "schema-rust-next")
+                    .to_generated_file()
+            }
+            None => RustEmitter::new(emission.options().clone()).emit_file_from_schema_source(
+                &schema_source,
+                source.identity().clone(),
+                engine,
+                resolver,
+            )?,
+        };
         Ok(Self {
             module: emission.module().clone(),
             source_artifact,

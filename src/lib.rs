@@ -7,7 +7,11 @@ use schema_next::{
 };
 
 pub mod build;
+pub mod daemon_emit;
 pub mod migration;
+pub use daemon_emit::{
+    DaemonModule, MetaListenerTier, NexusDaemonShape, SocketModeBits, WorkingListenerTier,
+};
 pub use migration::{DefaultRenderer, MigrationEmitter, TypeRenderer};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
