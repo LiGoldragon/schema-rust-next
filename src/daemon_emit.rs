@@ -665,7 +665,7 @@ impl ToTokens for EmittedSubscriptionsTokens {
                     let mut delivered = 0;
                     let mut stale = Vec::new();
                     for (token, frame) in frames {
-                        match state.writers.deliver(token, frame) {
+                        match SubscriptionWriters::<Daemon>::deliver(&mut state.writers, token, frame) {
                             Ok(true) => delivered += 1,
                             Ok(false) => {}
                             Err(_error) => stale.push(token),
