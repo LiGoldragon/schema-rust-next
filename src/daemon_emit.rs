@@ -253,7 +253,9 @@ impl ToTokens for DaemonModuleBody<'_> {
         let hook_trait = ComponentDaemonTraitTokens::new(self.shape, self.emits_stream);
         let command = DaemonCommandTokens;
         let binder = DaemonBinderTokens::new(self.shape);
-        let transport = WorkingTransportTokens;
+        let transport = WorkingTransportTokens {
+            emits_stream: self.emits_stream,
+        };
         let subscriptions = self
             .emits_stream
             .then_some(EmittedSubscriptionsTokens);
@@ -594,10 +596,23 @@ impl ToTokens for DaemonBinderTokens<'_> {
 /// envelope around the schema-emitted signal frame codec. Emitted (not imported
 /// from a hand-written `transport.rs`) so the daemon spine is self-contained.
 /// The section carries no per-component data.
-struct WorkingTransportTokens;
+struct WorkingTransportTokens {
+    emits_stream: bool,
+}
 
 impl ToTokens for WorkingTransportTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        // `try_clone_stream` is only needed by the option-B subscription
+        // publisher (it hands a stream clone to the registry). A daemon with no
+        // declared stream never calls it, so gate it behind `emits_stream` to
+        // keep non-streaming daemons free of dead code.
+        let try_clone_stream = self.emits_stream.then(|| {
+            quote! {
+                fn try_clone_stream(&self) -> Result<UnixStream, FrameError> {
+                    self.stream.try_clone().map_err(FrameError::Io)
+                }
+            }
+        });
         quote! {
             /// The working-tier wire transport over one accepted stream: a
             /// length-prefixed envelope around the schema-emitted signal frame codec.
@@ -624,9 +639,7 @@ impl ToTokens for WorkingTransportTokens {
                     Ok(())
                 }
 
-                fn try_clone_stream(&self) -> Result<UnixStream, FrameError> {
-                    self.stream.try_clone().map_err(FrameError::Io)
-                }
+                #try_clone_stream
             }
         }
         .to_tokens(tokens);
