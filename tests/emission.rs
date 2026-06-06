@@ -39,6 +39,25 @@ fn assert_code_contains(code: &str, expected: &str) {
     );
 }
 
+/// Assert a `pattern => NexusAction::from(result)` projection arm is emitted,
+/// tolerating prettyplease's optional `=> { ... }` block-wrapping of a long
+/// arm body. The pattern and the `NexusAction::from(result)` mapping must
+/// both appear, compacted, in declaration order.
+fn assert_nexus_action_arm(code: &str, pattern: &str, result: &str) {
+    let compact = |text: &str| {
+        text.chars()
+            .filter(|character| {
+                !character.is_whitespace() && *character != ',' && *character != '{' && *character != '}'
+            })
+            .collect::<String>()
+    };
+    let needle = format!("{}=>NexusAction::from({})", compact(pattern), compact(result));
+    assert!(
+        compact(code).contains(&needle),
+        "generated code must contain nexus action arm {pattern} => NexusAction::from({result})"
+    );
+}
+
 #[allow(dead_code)]
 mod generated {
     include!("fixtures/spirit_generated.rs");
@@ -477,39 +496,46 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
             .as_str()
             .contains("pub fn into_nexus_action(self) -> nexus::Nexus<nexus::Action>")
     );
-    assert!(
-        generated.code.as_str().contains(
-            "Input::Record(payload) => NexusAction::from(SemaWriteInput::Record(payload))"
-        )
+    assert_nexus_action_arm(
+        generated.code.as_str(),
+        "Input::Record(payload)",
+        "SemaWriteInput::Record(payload)",
     );
-    assert!(
-        generated.code.as_str().contains(
-            "Input::Observe(payload) => NexusAction::from(SemaReadInput::Observe(payload))"
-        )
+    assert_nexus_action_arm(
+        generated.code.as_str(),
+        "Input::Observe(payload)",
+        "SemaReadInput::Observe(payload)",
     );
-    assert!(
-        generated.code.as_str().contains(
-            "Input::Lookup(payload) => NexusAction::from(SemaReadInput::Lookup(payload))"
-        )
+    assert_nexus_action_arm(
+        generated.code.as_str(),
+        "Input::Lookup(payload)",
+        "SemaReadInput::Lookup(payload)",
     );
-    assert!(
-        generated
-            .code
-            .as_str()
-            .contains("Input::Count(payload) => NexusAction::from(SemaReadInput::Count(payload))")
+    assert_nexus_action_arm(
+        generated.code.as_str(),
+        "Input::Count(payload)",
+        "SemaReadInput::Count(payload)",
     );
-    assert!(generated.code.as_str().contains(
-        "SemaWriteOutput::Recorded(payload) => NexusAction::from(Output::RecordAccepted(payload))"
-    ));
-    assert!(generated.code.as_str().contains(
-        "SemaReadOutput::Observed(payload) => NexusAction::from(Output::RecordsObserved(payload))"
-    ));
-    assert!(generated.code.as_str().contains(
-        "SemaReadOutput::Found(payload) => NexusAction::from(Output::RecordFound(payload))"
-    ));
-    assert!(generated.code.as_str().contains(
-        "SemaReadOutput::Counted(payload) => NexusAction::from(Output::RecordsCounted(payload))"
-    ));
+    assert_nexus_action_arm(
+        generated.code.as_str(),
+        "SemaWriteOutput::Recorded(payload)",
+        "Output::RecordAccepted(payload)",
+    );
+    assert_nexus_action_arm(
+        generated.code.as_str(),
+        "SemaReadOutput::Observed(payload)",
+        "Output::RecordsObserved(payload)",
+    );
+    assert_nexus_action_arm(
+        generated.code.as_str(),
+        "SemaReadOutput::Found(payload)",
+        "Output::RecordFound(payload)",
+    );
+    assert_nexus_action_arm(
+        generated.code.as_str(),
+        "SemaReadOutput::Counted(payload)",
+        "Output::RecordsCounted(payload)",
+    );
     assert!(
         generated
             .code

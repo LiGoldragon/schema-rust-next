@@ -22,20 +22,32 @@ beside that typed source/schema pipeline.
   variants, and support metadata. The top-level lowering traits are facades
   over these per-noun projections, not a place where schema meaning is
   reassembled centrally.
-- The Rust declaration renderer uses `proc_macro2::TokenStream` and `quote`
-  through context-carrying token wrappers over Rust-model nouns. Plain
-  `ToTokens` has no context parameter, so generation-wide switches such as the
-  NOTA feature gate and private-type visibility flow through
-  `RustRenderContext` wrappers instead of being copied into every noun.
-- The runtime and plane emitters are on the same migration path. Any remaining
-  runtime code that hand-builds Rust with `format!` and `self.line` is debt
-  against the Rust-native lowering direction, not a competing accepted design.
-  New support surfaces should emit tokens first, then pretty-print into
-  source-visible files.
-  Current tokenized runtime slices include signal-frame streaming support,
-  trace object-name support, Nexus runner next-step projection and adapter
-  emission, actor lifecycle support, and the generated Signal/Nexus/SEMA
-  engine traits.
+- The Rust renderer uses `proc_macro2::TokenStream` and `quote` through
+  context-carrying token wrappers over Rust-model nouns. Plain `ToTokens` has no
+  context parameter, so generation-wide switches such as the NOTA feature gate
+  and private-type visibility flow through `RustRenderContext` wrappers instead
+  of being copied into every noun.
+- The string-to-token migration is complete. Every emitted section — the
+  declaration surface (aliases, newtypes, structs, fields, enums, variants),
+  the NOTA bridges, the enum payload `From` impls and variant constructors, the
+  signal-frame binary codec, the route enums/impls, the short-header module, the
+  cross-plane `into_*` projections, the runtime role-trait impls, the upgrade
+  trait surface, and the runtime/plane/runner support — renders itself through a
+  `ToTokens` wrapper noun (e.g. `RustScalarAliasTokens`, `NewtypeInherentImplTokens`,
+  `NotaInherentBridgeTokens`, `SignalFrameImplTokens`, `RouteEnumTokens`,
+  `RouteImplTokens`, `ShortHeaderModuleTokens`, `EnumVariantConstructorsTokens`).
+  These are routed through one `prettyplease` pass at `emit_item_tokens`. No
+  emitter code builds Rust source with `format!`/`self.line`; the only direct
+  text written is the leading `// @generated` header comment, which cannot pass
+  through `prettyplease` (it drops non-doc comments).
+- Cross-object emission logic is named rather than smeared across a god-struct.
+  `ShortHeader` owns the per-root-per-variant route-triage constant (name +
+  packed value), shared by the `short_header` module and the frame codec so the
+  constant names always agree. `RouteName` owns the `<Name>Route` identifier.
+  `ScreamingName` owns the SCREAMING_SNAKE constant projection. The split-plane
+  Nexus projection builds its match arms through `split_signal_arrived_arms` and
+  `split_output_arms`, which carry the exact-then-fallback variant-matching
+  logic as named arm builders.
 - Runtime plane naming has a three-tier boundary. `Plane` owns only
   plane-intrinsic names such as the module, wrapper, export aliases, engine
   trait, and trace enum names. `RuntimePlaneSet` / `RustEmissionTarget` own
@@ -45,6 +57,10 @@ beside that typed source/schema pipeline.
 - `RustModule` is the data model between semantic schema data and rendered
   Rust text. It carries scalar aliases, cross-crate imports, generated Rust
   declarations, root enums, and support metadata before anything is rendered.
+  `RustModule::render` drives `RustModuleRenderer`, which owns the emission
+  context and the schema-analysis predicates and accumulates the pretty-printed
+  source as each section's `ToTokens` noun renders itself. The renderer builds
+  no Rust as strings.
 - `RustCode` is the generated source text.
 - `GeneratedFile` names a generated path plus source text.
 - `RustModulePath` maps single-colon schema identities to crate-local generated
@@ -103,10 +119,11 @@ grow a second parser for the authored form.
   `TypeDeclaration::Struct` is the named-field map shape.
 - Generated Rust is source-visible under `src/schema/`; consumers include or
   compile that source rather than hiding the interface in `OUT_DIR` or behind a
-  compiler macro expansion. The emitter uses Rust syntax token machinery
-  internally where it owns Rust syntax, then pretty-prints tokens into checked
-  source files. Per Spirit record `0bw0`, the string-based runtime emitter is
-  a migration target, not the desired end state.
+  compiler macro expansion. The emitter builds every section as `proc_macro2`
+  tokens through `quote!` and pretty-prints them into checked source files. The
+  string-based runtime emitter named as a migration target in Spirit record
+  `0bw0` is gone: emission is token-based end to end (see the Interfaces section
+  above).
 - Emission is tested by source fixture comparison and by compiling the fixture
   as Rust code.
 - `RustEmissionTarget::WireContract` emits the external signal or meta-signal

@@ -6,9 +6,7 @@ pub type Boolean = bool;
 pub type Path = std::string::String;
 
 #[cfg(feature = "nota-text")]
-pub use nota_next::{
-    NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
-};
+pub use nota_next::{NotaDecode, NotaDecodeError, NotaEncode, NotaSource};
 
 pub type CommitSequence = Integer;
 
@@ -277,11 +275,9 @@ impl SignalRequest {
     pub fn record_intent(payload: RecordIntent) -> Self {
         Self::RecordIntent(payload)
     }
-
     pub fn observe_intent(payload: ObserveIntent) -> Self {
         Self::ObserveIntent(payload)
     }
-
     pub fn subscribe_intent(payload: SubscribeIntent) -> Self {
         Self::SubscribeIntent(payload)
     }
@@ -291,11 +287,9 @@ impl SignalReply {
     pub fn record_accepted(payload: RecordAccepted) -> Self {
         Self::RecordAccepted(payload)
     }
-
     pub fn observation_returned(payload: ObservationReturned) -> Self {
         Self::ObservationReturned(payload)
     }
-
     pub fn subscription_started(payload: SubscriptionStarted) -> Self {
         Self::SubscriptionStarted(payload)
     }
@@ -305,7 +299,6 @@ impl NexusRequest {
     pub fn push_signal(payload: PushSignal) -> Self {
         Self::PushSignal(payload)
     }
-
     pub fn push_sema_result(payload: PushSemaResult) -> Self {
         Self::PushSemaResult(payload)
     }
@@ -315,7 +308,6 @@ impl NexusReply {
     pub fn pushed_to_sema(payload: PushedToSema) -> Self {
         Self::PushedToSema(payload)
     }
-
     pub fn mail_resolved(payload: MailResolved) -> Self {
         Self::MailResolved(payload)
     }
@@ -325,15 +317,12 @@ impl SemaRequest {
     pub fn write_entry(payload: WriteEntry) -> Self {
         Self::WriteEntry(payload)
     }
-
     pub fn read_entries(payload: ReadEntries) -> Self {
         Self::ReadEntries(payload)
     }
-
     pub fn open_subscription(payload: OpenSubscription) -> Self {
         Self::OpenSubscription(payload)
     }
-
     pub fn close_subscription(payload: CloseSubscription) -> Self {
         Self::CloseSubscription(payload)
     }
@@ -343,15 +332,12 @@ impl SemaReply {
     pub fn entry_written(payload: EntryWritten) -> Self {
         Self::EntryWritten(payload)
     }
-
     pub fn entries_read(payload: EntriesRead) -> Self {
         Self::EntriesRead(payload)
     }
-
     pub fn subscription_opened(payload: SubscriptionOpened) -> Self {
         Self::SubscriptionOpened(payload)
     }
-
     pub fn subscription_closed(payload: SubscriptionClosed) -> Self {
         Self::SubscriptionClosed(payload)
     }
@@ -373,15 +359,12 @@ impl RuntimeEvent {
     pub fn mail_sent(payload: MailSent) -> Self {
         Self::MailSent(payload)
     }
-
     pub fn message_accepted(payload: MessageAccepted) -> Self {
         Self::MessageAccepted(payload)
     }
-
     pub fn message_committed(payload: MessageCommitted) -> Self {
         Self::MessageCommitted(payload)
     }
-
     pub fn message_failed(payload: MessageFailed) -> Self {
         Self::MessageFailed(payload)
     }
@@ -391,15 +374,12 @@ impl Input {
     pub fn signal_in(payload: SignalRequest) -> Self {
         Self::SignalIn(payload)
     }
-
     pub fn nexus_in(payload: NexusRequest) -> Self {
         Self::NexusIn(payload)
     }
-
     pub fn sema_in(payload: SemaRequest) -> Self {
         Self::SemaIn(payload)
     }
-
     pub fn admin(payload: AdminRequest) -> Self {
         Self::Admin(payload)
     }
@@ -409,23 +389,18 @@ impl Output {
     pub fn signal_out(payload: SignalReply) -> Self {
         Self::SignalOut(payload)
     }
-
     pub fn nexus_out(payload: NexusReply) -> Self {
         Self::NexusOut(payload)
     }
-
     pub fn sema_out(payload: SemaReply) -> Self {
         Self::SemaOut(payload)
     }
-
     pub fn admin_out(payload: AdminReply) -> Self {
         Self::AdminOut(payload)
     }
-
     pub fn event(payload: RuntimeEvent) -> Self {
         Self::Event(payload)
     }
-
     pub fn rejected(payload: Rejected) -> Self {
         Self::Rejected(payload)
     }
@@ -532,7 +507,6 @@ impl SignalRequest {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -543,7 +517,6 @@ impl SignalReply {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -554,7 +527,6 @@ impl NexusRequest {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -565,7 +537,6 @@ impl NexusReply {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -576,7 +547,6 @@ impl SemaRequest {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -587,7 +557,6 @@ impl SemaReply {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -598,7 +567,6 @@ impl AdminRequest {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -609,7 +577,6 @@ impl AdminReply {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -620,7 +587,6 @@ impl RuntimeEvent {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -631,7 +597,6 @@ impl RejectionReason {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -642,7 +607,6 @@ impl RecordIntent {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -653,7 +617,6 @@ impl RecordAccepted {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -664,7 +627,6 @@ impl EntryWritten {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -675,7 +637,6 @@ impl EntriesRead {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -686,7 +647,6 @@ impl SubscriptionOpened {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -697,7 +657,6 @@ impl SubscriptionClosed {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -708,7 +667,6 @@ impl SnapshotReady {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -719,7 +677,6 @@ impl Entry {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -730,7 +687,6 @@ impl Kind {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -741,7 +697,6 @@ impl Magnitude {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -752,7 +707,6 @@ impl Query {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -763,7 +717,6 @@ impl RecordSet {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -774,7 +727,6 @@ impl Input {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -783,12 +735,10 @@ impl Input {
 #[cfg(feature = "nota-text")]
 impl std::str::FromStr for Input {
     type Err = NotaDecodeError;
-
     fn from_str(source: &str) -> Result<Self, Self::Err> {
         NotaSource::new(source).parse::<Self>()
     }
 }
-
 #[cfg(feature = "nota-text")]
 impl std::fmt::Display for Input {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -801,7 +751,6 @@ impl Output {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -810,12 +759,10 @@ impl Output {
 #[cfg(feature = "nota-text")]
 impl std::str::FromStr for Output {
     type Err = NotaDecodeError;
-
     fn from_str(source: &str) -> Result<Self, Self::Err> {
         NotaSource::new(source).parse::<Self>()
     }
 }
-
 #[cfg(feature = "nota-text")]
 impl std::fmt::Display for Output {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -838,7 +785,6 @@ pub mod short_header {
 }
 
 const SIGNAL_SHORT_HEADER_BYTE_COUNT: usize = 8;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SignalFrameError {
     ArchiveEncode,
@@ -847,23 +793,39 @@ pub enum SignalFrameError {
     UnknownHeader { root_enum: &'static str, header: u64 },
     HeaderMismatch { expected: u64, found: u64 },
 }
-
 impl std::fmt::Display for SignalFrameError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ArchiveEncode => formatter.write_str("failed to encode rkyv archive"),
             Self::ArchiveDecode => formatter.write_str("failed to decode rkyv archive"),
-            Self::FrameTooShort { found } => write!(formatter, "signal frame too short: {found} bytes"),
-            Self::UnknownHeader { root_enum, header } => write!(formatter, "unknown {root_enum} short header 0x{header:016X}"),
-            Self::HeaderMismatch { expected, found } => write!(formatter, "decoded payload header mismatch: expected 0x{expected:016X}, found 0x{found:016X}"),
+            Self::FrameTooShort { found } => {
+                write!(formatter, "signal frame too short: {found} bytes")
+            }
+            Self::UnknownHeader { root_enum, header } => {
+                write!(formatter, "unknown {root_enum} short header 0x{header:016X}")
+            }
+            Self::HeaderMismatch { expected, found } => {
+                write!(
+                    formatter,
+                    "decoded payload header mismatch: expected 0x{expected:016X}, found 0x{found:016X}"
+                )
+            }
         }
     }
 }
-
 impl std::error::Error for SignalFrameError {}
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum InputRoute {
     SignalIn,
     NexusIn,
@@ -873,7 +835,16 @@ pub enum InputRoute {
 }
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum OutputRoute {
     SignalOut,
     NexusOut,
@@ -893,7 +864,6 @@ impl Input {
             Self::Heartbeat => InputRoute::Heartbeat,
         }
     }
-
     pub fn short_header(&self) -> u64 {
         match self {
             Self::SignalIn(_) => short_header::INPUT_SIGNAL_IN,
@@ -903,7 +873,6 @@ impl Input {
             Self::Heartbeat => short_header::INPUT_HEARTBEAT,
         }
     }
-
     pub fn route_from_short_header(header: u64) -> Result<InputRoute, SignalFrameError> {
         match header {
             short_header::INPUT_SIGNAL_IN => Ok(InputRoute::SignalIn),
@@ -911,32 +880,47 @@ impl Input {
             short_header::INPUT_SEMA_IN => Ok(InputRoute::SemaIn),
             short_header::INPUT_ADMIN => Ok(InputRoute::Admin),
             short_header::INPUT_HEARTBEAT => Ok(InputRoute::Heartbeat),
-            _ => Err(SignalFrameError::UnknownHeader { root_enum: "Input", header }),
+            _ => {
+                Err(SignalFrameError::UnknownHeader {
+                    root_enum: "Input",
+                    header,
+                })
+            }
         }
     }
-
     pub fn encode_signal_frame(&self) -> Result<Vec<u8>, SignalFrameError> {
         let archive = rkyv::to_bytes::<rkyv::rancor::Error>(self)
             .map_err(|_| SignalFrameError::ArchiveEncode)?;
-        let mut frame = Vec::with_capacity(SIGNAL_SHORT_HEADER_BYTE_COUNT + archive.len());
+        let mut frame = Vec::with_capacity(
+            SIGNAL_SHORT_HEADER_BYTE_COUNT + archive.len(),
+        );
         frame.extend_from_slice(&self.short_header().to_le_bytes());
         frame.extend_from_slice(&archive);
         Ok(frame)
     }
-
-    pub fn decode_signal_frame(frame: &[u8]) -> Result<(InputRoute, Self), SignalFrameError> {
+    pub fn decode_signal_frame(
+        frame: &[u8],
+    ) -> Result<(InputRoute, Self), SignalFrameError> {
         if frame.len() < SIGNAL_SHORT_HEADER_BYTE_COUNT {
-            return Err(SignalFrameError::FrameTooShort { found: frame.len() });
+            return Err(SignalFrameError::FrameTooShort {
+                found: frame.len(),
+            });
         }
         let mut header_bytes = [0_u8; SIGNAL_SHORT_HEADER_BYTE_COUNT];
         header_bytes.copy_from_slice(&frame[..SIGNAL_SHORT_HEADER_BYTE_COUNT]);
         let header = u64::from_le_bytes(header_bytes);
         let route = Self::route_from_short_header(header)?;
-        let value = rkyv::from_bytes::<Self, rkyv::rancor::Error>(&frame[SIGNAL_SHORT_HEADER_BYTE_COUNT..])
+        let value = rkyv::from_bytes::<
+            Self,
+            rkyv::rancor::Error,
+        >(&frame[SIGNAL_SHORT_HEADER_BYTE_COUNT..])
             .map_err(|_| SignalFrameError::ArchiveDecode)?;
         let expected = value.short_header();
         if expected != header {
-            return Err(SignalFrameError::HeaderMismatch { expected, found: header });
+            return Err(SignalFrameError::HeaderMismatch {
+                expected,
+                found: header,
+            });
         }
         Ok((route, value))
     }
@@ -953,7 +937,6 @@ impl Output {
             Self::Rejected(_) => OutputRoute::Rejected,
         }
     }
-
     pub fn short_header(&self) -> u64 {
         match self {
             Self::SignalOut(_) => short_header::OUTPUT_SIGNAL_OUT,
@@ -964,8 +947,9 @@ impl Output {
             Self::Rejected(_) => short_header::OUTPUT_REJECTED,
         }
     }
-
-    pub fn route_from_short_header(header: u64) -> Result<OutputRoute, SignalFrameError> {
+    pub fn route_from_short_header(
+        header: u64,
+    ) -> Result<OutputRoute, SignalFrameError> {
         match header {
             short_header::OUTPUT_SIGNAL_OUT => Ok(OutputRoute::SignalOut),
             short_header::OUTPUT_NEXUS_OUT => Ok(OutputRoute::NexusOut),
@@ -973,32 +957,47 @@ impl Output {
             short_header::OUTPUT_ADMIN_OUT => Ok(OutputRoute::AdminOut),
             short_header::OUTPUT_EVENT => Ok(OutputRoute::Event),
             short_header::OUTPUT_REJECTED => Ok(OutputRoute::Rejected),
-            _ => Err(SignalFrameError::UnknownHeader { root_enum: "Output", header }),
+            _ => {
+                Err(SignalFrameError::UnknownHeader {
+                    root_enum: "Output",
+                    header,
+                })
+            }
         }
     }
-
     pub fn encode_signal_frame(&self) -> Result<Vec<u8>, SignalFrameError> {
         let archive = rkyv::to_bytes::<rkyv::rancor::Error>(self)
             .map_err(|_| SignalFrameError::ArchiveEncode)?;
-        let mut frame = Vec::with_capacity(SIGNAL_SHORT_HEADER_BYTE_COUNT + archive.len());
+        let mut frame = Vec::with_capacity(
+            SIGNAL_SHORT_HEADER_BYTE_COUNT + archive.len(),
+        );
         frame.extend_from_slice(&self.short_header().to_le_bytes());
         frame.extend_from_slice(&archive);
         Ok(frame)
     }
-
-    pub fn decode_signal_frame(frame: &[u8]) -> Result<(OutputRoute, Self), SignalFrameError> {
+    pub fn decode_signal_frame(
+        frame: &[u8],
+    ) -> Result<(OutputRoute, Self), SignalFrameError> {
         if frame.len() < SIGNAL_SHORT_HEADER_BYTE_COUNT {
-            return Err(SignalFrameError::FrameTooShort { found: frame.len() });
+            return Err(SignalFrameError::FrameTooShort {
+                found: frame.len(),
+            });
         }
         let mut header_bytes = [0_u8; SIGNAL_SHORT_HEADER_BYTE_COUNT];
         header_bytes.copy_from_slice(&frame[..SIGNAL_SHORT_HEADER_BYTE_COUNT]);
         let header = u64::from_le_bytes(header_bytes);
         let route = Self::route_from_short_header(header)?;
-        let value = rkyv::from_bytes::<Self, rkyv::rancor::Error>(&frame[SIGNAL_SHORT_HEADER_BYTE_COUNT..])
+        let value = rkyv::from_bytes::<
+            Self,
+            rkyv::rancor::Error,
+        >(&frame[SIGNAL_SHORT_HEADER_BYTE_COUNT..])
             .map_err(|_| SignalFrameError::ArchiveDecode)?;
         let expected = value.short_header();
         if expected != header {
-            return Err(SignalFrameError::HeaderMismatch { expected, found: header });
+            return Err(SignalFrameError::HeaderMismatch {
+                expected,
+                found: header,
+            });
         }
         Ok((route, value))
     }
@@ -1163,7 +1162,6 @@ impl MessageIdentifier {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(self) -> String {
         <Self as NotaEncode>::to_nota(&self)
     }
@@ -1186,7 +1184,6 @@ impl OriginRoute {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(self) -> String {
         <Self as NotaEncode>::to_nota(&self)
     }
@@ -1416,14 +1413,14 @@ pub mod signal {
 
 pub trait UpgradeFrom<Previous>: Sized {
     type Error;
-
     fn upgrade_from(previous: Previous) -> Result<Self, Self::Error>;
 }
-
 pub trait AcceptPrevious<Previous>: UpgradeFrom<Previous> {
     fn accept_previous(previous: Previous) -> Result<Self, Self::Error> {
         Self::upgrade_from(previous)
     }
 }
-
-impl<Current, Previous> AcceptPrevious<Previous> for Current where Current: UpgradeFrom<Previous> {}
+impl<Current, Previous> AcceptPrevious<Previous> for Current
+where
+    Current: UpgradeFrom<Previous>,
+{}

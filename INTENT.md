@@ -58,19 +58,27 @@ policy; the deserialized schema structure owns the lowering calls recursively
 instead of handing the whole tree to a centralized adapter.
 
 *Generated Rust syntax is built as Rust tokens, then written as visible source.*
-The emitter should use Rust's macro/codegen substrate (`proc_macro2` and
-`quote`) for syntax construction rather than treating Rust as ad hoc formatted
-strings. The source-visible boundary still stands: generated modules are
-pretty-printed into `src/schema/*.rs` and freshness-checked by the build
-driver rather than hidden behind compiler macro expansion.
-The remaining runtime emitter code that still builds Rust with
-`format!`/`self.line` is migration debt, not an accepted design. New runtime
-support should be token-first, and existing runtime/plane/runner emission
-should move toward Rust-native token lowering as it is touched. (Spirit record
-`0bw0`, High certainty.)
-Per Spirit record `o7a3` (High certainty), runtime emission must move to
-`quote!` typed tokens now; hand-formatted runtime emission is migration debt
-to pay down before downstream components copy the generated base.
+The emitter uses Rust's macro/codegen substrate (`proc_macro2` and `quote`) for
+syntax construction rather than treating Rust as ad hoc formatted strings. The
+source-visible boundary still stands: generated modules are pretty-printed into
+`src/schema/*.rs` and freshness-checked by the build driver rather than hidden
+behind compiler macro expansion.
+The string-emission migration is complete: every emitted section — the
+declaration surface AND the runtime/plane/runner/codec/projection support AND
+the upgrade-migration modules (`migration.rs`) — renders itself through a
+`ToTokens` wrapper noun routed through a single `prettyplease` pass. There is
+no `self.line`/`format!`-built Rust source left in either emitter. The former
+`RustWriter` string god-struct is gone, replaced by `RustModuleRenderer`: a
+render driver that owns the emission context and the schema-analysis predicates
+(which sections emit) but builds no Rust as strings. The only direct text it
+writes is the leading `// @generated` header comment, which cannot pass through
+`prettyplease` because `prettyplease` drops non-doc comments. (Closes the
+migration debt named in Spirit records `0bw0` and `o7a3`, both High certainty.)
+Per Spirit records `4np2` (VeryHigh), `de8i` / `e6v5` (High), and `vez8`
+(Maximum): the hand-rolled string emitter is replaced ENTIRELY; lowering is
+methods / `ToTokens` on the schema and Rust-model nouns; and cross-object logic
+is named (e.g. `ShortHeader`, `RouteName`, the `split_*_arms` projection
+builders) rather than smeared across a god-struct.
 
 *Context stays contextual while nouns own intrinsic shape.* Intrinsic properties
 such as declaration visibility and field names belong on the Rust-model nouns.
