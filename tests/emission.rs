@@ -627,10 +627,22 @@ fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
     assert!(code.contains("rkyv::Archive"));
     assert!(code.contains("pub mod short_header"));
 
-    assert!(!code.contains("pub enum InputRoute"));
-    assert!(!code.contains("pub fn encode_signal_frame"));
-    assert!(!code.contains("pub fn decode_signal_frame"));
-    assert!(!code.contains("pub enum SignalFrameError"));
+    // A separately-generated wire contract IS the wire framing: peers and
+    // the owning daemon import it and call the basic frame codec on it, so
+    // the contract carries route enums, the codec, and the frame error
+    // even though it emits no daemon-side runtime planes.
+    assert!(code.contains("pub enum InputRoute"));
+    assert!(code.contains("pub enum OutputRoute"));
+    assert!(code.contains("pub fn encode_signal_frame"));
+    assert!(code.contains("pub fn decode_signal_frame"));
+    assert!(code.contains("pub enum SignalFrameError"));
+
+    // The streaming / observable surface stays gated behind a declared
+    // stream, so a non-streaming wire contract carries none of it.
+    assert!(!code.contains("pub type Frame ="));
+    assert!(!code.contains("into_subscription_frame"));
+    assert!(!code.contains("impl signal_frame::RequestPayload for Input"));
+
     assert!(!code.contains("pub trait SignalEngine"));
     assert!(!code.contains("pub trait NexusEngine"));
     assert!(!code.contains("pub trait SemaEngine"));
@@ -646,6 +658,51 @@ fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
     assert!(!code.contains("impl triad_runtime::SemaWriteInput"));
     assert!(!code.contains("impl triad_runtime::NexusAction for NexusAction"));
     assert!(!code.contains("pub trait UpgradeFrom<Previous>"));
+}
+
+/// Regression for the gb95 over-reach. gb95 correctly stopped the
+/// internal `NexusRuntime` / `SemaRuntime` planes from receiving wire
+/// frame code, but it gated ALL frame-codec emission behind
+/// `emits_signal()`, which is false for `WireContract` — stripping the
+/// codec from freshly-generated wire contracts. The split gate restores
+/// the basic codec for every wire-facing target while keeping the
+/// streaming / observable surface gated behind a declared stream.
+#[test]
+fn frame_codec_reaches_wire_contract_targets_but_not_internal_planes() {
+    let schema = FixtureSchema::new("plane-triad.schema");
+
+    let wire_contract = RustEmitter::new(
+        RustEmissionOptions::binary_only().with_target(RustEmissionTarget::WireContract),
+    )
+    .emit_file_from_schema(&schema.lower("spirit:lib"));
+    let wire_code = wire_contract.code.as_str();
+
+    // (1) The wire contract carries the basic frame codec + route enums.
+    assert!(wire_code.contains("pub enum InputRoute"));
+    assert!(wire_code.contains("pub enum OutputRoute"));
+    assert!(wire_code.contains("pub fn encode_signal_frame"));
+    assert!(wire_code.contains("pub fn decode_signal_frame"));
+    assert!(wire_code.contains("pub enum SignalFrameError"));
+
+    // (2) No declared stream, so no streaming / observable surface.
+    assert!(!wire_code.contains("pub type Frame ="));
+    assert!(!wire_code.contains("into_subscription_frame"));
+    assert!(!wire_code.contains("impl signal_frame::RequestPayload for Input"));
+    assert!(!wire_code.contains("impl signal_frame::LogVariant for Input"));
+
+    // The internal Nexus plane is not wire-facing: it carries NEITHER the
+    // frame codec NOR the streaming surface.
+    let nexus_runtime = RustEmitter::new(
+        RustEmissionOptions::binary_only().with_target(RustEmissionTarget::NexusRuntime),
+    )
+    .emit_file_from_schema(&schema.lower("daemon:nexus"));
+    let nexus_code = nexus_runtime.code.as_str();
+
+    assert!(!nexus_code.contains("pub fn encode_signal_frame"));
+    assert!(!nexus_code.contains("pub fn decode_signal_frame"));
+    assert!(!nexus_code.contains("pub enum SignalFrameError"));
+    assert!(!nexus_code.contains("pub type Frame ="));
+    assert!(!nexus_code.contains("into_subscription_frame"));
 }
 
 #[test]

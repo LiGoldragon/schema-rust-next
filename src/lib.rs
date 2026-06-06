@@ -274,8 +274,16 @@ impl RustModule {
             writer.emit_short_headers(&self.root_enums);
             writer.blank();
         }
+        if writer.emits_wire_frame() {
+            writer.emit_signal_frame_codec(&self.root_enums);
+        }
         if writer.emits_signal() {
-            writer.emit_signal_frame_support(&self.root_enums, &self.streams);
+            if let Some(event_payload) =
+                writer.streaming_event_payload(&self.root_enums, &self.streams)
+            {
+                writer.emit_signal_frame_streaming_support(event_payload);
+                writer.blank();
+            }
         }
         if writer.emits_runtime_support() {
             writer.emit_plane_route_support(&self.declarations);
@@ -422,6 +430,23 @@ pub enum RustEmissionTarget {
 impl RustEmissionTarget {
     fn emits_runtime_support(self) -> bool {
         self.runtime_planes().emits_any()
+    }
+
+    /// Whether this target faces the wire and therefore needs the basic
+    /// signal-frame codec (route enums, `short_header`,
+    /// `encode_signal_frame` / `decode_signal_frame`, `SignalFrameError`).
+    ///
+    /// A separately-generated `WireContract` crate IS the wire framing —
+    /// peers and the owning daemon import it and call the codec on it — so
+    /// it carries the codec even though it emits no daemon-side runtime
+    /// planes. `SignalRuntime` and `ComponentRuntime` (bootstrap) also face
+    /// the wire. The `NexusRuntime` / `SemaRuntime` internal planes never
+    /// touch the wire and must not receive frame codec code.
+    fn emits_wire_frame(self) -> bool {
+        match self {
+            Self::WireContract | Self::SignalRuntime | Self::ComponentRuntime => true,
+            Self::NexusRuntime | Self::SemaRuntime => false,
+        }
     }
 
     fn runtime_planes(self) -> RuntimePlaneSet {
@@ -2799,8 +2824,12 @@ impl RustWriter {
         self.runtime_planes().emits_signal()
     }
 
+    fn emits_wire_frame(&self) -> bool {
+        self.target.emits_wire_frame()
+    }
+
     fn emits_short_headers(&self) -> bool {
-        matches!(self.target, RustEmissionTarget::WireContract) || self.emits_signal()
+        self.emits_wire_frame()
     }
 
     fn runtime_planes(&self) -> RuntimePlaneSet {
@@ -3247,11 +3276,22 @@ impl RustWriter {
         self.line("}");
     }
 
-    fn emit_signal_frame_support(
-        &mut self,
-        root_enums: &[RustEnum],
-        streams: &[StreamDeclaration],
-    ) {
+    /// Emit the basic signal-frame codec: the short-header byte count,
+    /// the [`SignalFrameError`] type, the per-root route enums, and the
+    /// per-root frame impls (`route` / `short_header` /
+    /// `route_from_short_header` / `encode_signal_frame` /
+    /// `decode_signal_frame`).
+    ///
+    /// This is the wire framing every wire-facing target needs — a
+    /// separately-generated `WireContract` crate IS the framing that peers
+    /// and the owning daemon import and call the codec on. It is gated by
+    /// [`RustWriter::emits_wire_frame`] in [`RustModule::render`], so it
+    /// reaches `WireContract`, `SignalRuntime`, and `ComponentRuntime` but
+    /// never the internal `NexusRuntime` / `SemaRuntime` planes. The
+    /// streaming / observable surface is gated separately by
+    /// [`RustWriter::emits_signal`] plus a declared stream — see
+    /// [`RustWriter::emit_signal_frame_streaming_support`].
+    fn emit_signal_frame_codec(&mut self, root_enums: &[RustEnum]) {
         self.line("const SIGNAL_SHORT_HEADER_BYTE_COUNT: usize = 8;");
         self.blank();
         self.line("#[derive(Clone, Debug, PartialEq, Eq)]");
@@ -3287,10 +3327,6 @@ impl RustWriter {
 
         for root_enum in root_enums {
             self.emit_signal_frame_impl(root_enum);
-            self.blank();
-        }
-        if let Some(event_payload) = self.streaming_event_payload(root_enums, streams) {
-            self.emit_signal_frame_streaming_support(event_payload);
             self.blank();
         }
     }
