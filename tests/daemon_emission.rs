@@ -55,7 +55,7 @@ fn daemon_module_emits_the_component_daemon_hook_trait() {
     );
     assert_code_contains(
         code,
-        "fn handle_working_input(engine: &Self::Engine, input: Input) -> Result<Output, Self::Error>;",
+        "fn handle_working_input(engine: &Self::Engine, input: Input, connection: &triad_runtime::ConnectionContext) -> Result<Output, Self::Error>;",
     );
 }
 
@@ -85,6 +85,17 @@ fn single_listener_daemon_emits_the_single_listener_spine() {
     assert_code_contains(code, "impl<Daemon: ComponentDaemon> DaemonRuntime for GeneratedDaemonRuntime<Daemon>");
     assert_code_contains(code, "fn handle_stream(&mut self, stream: UnixStream)");
     assert_code_contains(code, "self.handle_working_stream(stream)");
+    // The spine reads the accepted stream's peer credentials before moving the
+    // stream into the transport, then threads them into the working-input hook so
+    // the component can mint an origin from the operating-system trust boundary.
+    assert_code_contains(
+        code,
+        "let connection = ConnectionContext::from_stream(&stream).map_err(FrameError::Io)?;",
+    );
+    assert_code_contains(
+        code,
+        "Daemon::handle_working_input(&self.engine, input, &connection)?",
+    );
     // The single-listener daemon has no meta tier and no listener-tier enum.
     assert_code_excludes(code, "MultiListenerDaemon");
     assert_code_excludes(code, "pub enum ListenerTier");

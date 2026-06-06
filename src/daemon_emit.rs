@@ -260,18 +260,18 @@ impl ToTokens for DaemonImportsTokens<'_> {
         let runtime_imports = if self.shape.is_multi_listener() {
             quote! {
                 use triad_runtime::{
-                    ArgumentError, ComponentArgument, ComponentCommand, DaemonConfiguration,
-                    ExitReport, FrameBody, FrameError, LengthPrefixedCodec, ListenerError,
-                    ListenerSocket, MultiListenerDaemon, MultiListenerDaemonError,
+                    ArgumentError, ComponentArgument, ComponentCommand, ConnectionContext,
+                    DaemonConfiguration, ExitReport, FrameBody, FrameError, LengthPrefixedCodec,
+                    ListenerError, ListenerSocket, MultiListenerDaemon, MultiListenerDaemonError,
                     MultiListenerRuntime, RequestErrorLog, SocketMode,
                 };
             }
         } else {
             quote! {
                 use triad_runtime::{
-                    ArgumentError, ComponentArgument, ComponentCommand, DaemonConfiguration,
-                    DaemonRuntime, ExitReport, FrameBody, FrameError, LengthPrefixedCodec,
-                    ListenerError, RequestErrorLog, SingleListenerDaemon,
+                    ArgumentError, ComponentArgument, ComponentCommand, ConnectionContext,
+                    DaemonConfiguration, DaemonRuntime, ExitReport, FrameBody, FrameError,
+                    LengthPrefixedCodec, ListenerError, RequestErrorLog, SingleListenerDaemon,
                     SingleListenerDaemonError,
                 };
             }
@@ -403,7 +403,13 @@ impl ToTokens for ComponentDaemonTraitTokens<'_> {
 
                 /// Run one decoded working `Input` through the engine and return the
                 /// `Output` root to encode back to the caller.
-                fn handle_working_input(engine: &Self::Engine, input: Input) -> Result<Output, Self::Error>;
+                ///
+                /// `connection` carries the accepted stream's kernel-vouched peer
+                /// credentials (uid / gid / pid via `SO_PEERCRED`), so the component can
+                /// mint an origin from the operating-system trust boundary rather than
+                /// trusting a payload claim. Components that do not classify by origin
+                /// take it as `_connection`.
+                fn handle_working_input(engine: &Self::Engine, input: Input, connection: &triad_runtime::ConnectionContext) -> Result<Output, Self::Error>;
                 #meta_hook
                 #streaming_hooks
             }
@@ -834,12 +840,13 @@ impl ToTokens for GeneratedDaemonRuntimeTokens<'_> {
                 }
 
                 fn handle_working_stream(&self, stream: UnixStream) -> Result<(), Daemon::Error> {
+                    let connection = ConnectionContext::from_stream(&stream).map_err(FrameError::Io)?;
                     let mut transport = WorkingTransport::new(stream);
                     #subscription_writer
                     let frame = transport.read_frame()?;
                     let (_route, input) = Input::decode_signal_frame(&frame)?;
                     #subscription_filter
-                    let output = Daemon::handle_working_input(&self.engine, input)?;
+                    let output = Daemon::handle_working_input(&self.engine, input, &connection)?;
                     transport.write_frame(output.encode_signal_frame()?)?;
                     #subscription_publish
                     Ok(())
