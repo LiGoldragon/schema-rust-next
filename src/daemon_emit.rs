@@ -77,22 +77,64 @@ impl NexusDaemonShape {
     }
 }
 
-/// The peer-callable working listener tier: the signal contract module whose
-/// emitted `Input` / `Output` roots the decode -> execute -> encode spine drives.
+/// The peer-callable working listener tier: the contract whose emitted
+/// `Input` / `Output` roots the decode -> execute -> encode spine drives. The
+/// contract is either emitted locally into this crate's `src/schema` (the
+/// common case — spirit, message emit their own `crate::schema::signal`), or
+/// consumed from a dependency crate (cloud's triad keeps the working contract
+/// in `signal-cloud`, imported as `signal_cloud::schema::lib`).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkingListenerTier {
-    contract_module: String,
+    contract: WorkingContractPath,
 }
 
 impl WorkingListenerTier {
+    /// A contract emitted locally into `crate::schema::<module>`.
     pub fn new(contract_module: impl Into<String>) -> Self {
         Self {
-            contract_module: contract_module.into(),
+            contract: WorkingContractPath::Local(contract_module.into()),
         }
     }
 
-    pub fn contract_module(&self) -> &str {
-        &self.contract_module
+    /// A contract consumed from a dependency crate, named by the full Rust path
+    /// to the module holding the `Input` / `Output` roots, e.g.
+    /// `signal_cloud::schema::lib`.
+    pub fn dependency(contract_path: impl Into<String>) -> Self {
+        Self {
+            contract: WorkingContractPath::Dependency(contract_path.into()),
+        }
+    }
+
+    /// The path tokens the emitted daemon imports the contract roots from —
+    /// `crate::schema::<module>` for a local contract, the verbatim crate path
+    /// for a dependency contract.
+    pub fn contract_import_path(&self) -> TokenStream {
+        self.contract.import_path()
+    }
+}
+
+/// Where the working contract's `Input` / `Output` roots are imported from.
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum WorkingContractPath {
+    /// A locally emitted contract module: `crate::schema::<module>`.
+    Local(String),
+    /// A dependency-crate contract path, e.g. `signal_cloud::schema::lib`.
+    Dependency(String),
+}
+
+impl WorkingContractPath {
+    fn import_path(&self) -> TokenStream {
+        match self {
+            Self::Local(module) => {
+                let module = syn::Ident::new(module, Span::call_site());
+                quote!(crate::schema::#module)
+            }
+            Self::Dependency(path) => {
+                let path: syn::Path = syn::parse_str(path)
+                    .expect("dependency working-contract path is a valid Rust path");
+                quote!(#path)
+            }
+        }
     }
 }
 
@@ -253,10 +295,7 @@ impl<'shape> DaemonImportsTokens<'shape> {
 
 impl ToTokens for DaemonImportsTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let working = syn::Ident::new(
-            self.shape.working_tier().contract_module(),
-            Span::call_site(),
-        );
+        let working = self.shape.working_tier().contract_import_path();
         let runtime_imports = if self.shape.is_multi_listener() {
             quote! {
                 use triad_runtime::{
@@ -290,7 +329,7 @@ impl ToTokens for DaemonImportsTokens<'_> {
             use thiserror::Error;
             #runtime_imports
 
-            use crate::schema::#working::{Input, Output, SignalFrameError};
+            use #working::{Input, Output, SignalFrameError};
             #streaming_imports
         }
         .to_tokens(tokens);
