@@ -1891,7 +1891,8 @@ impl ToTokens for NexusRunnerAdapterTokens<'_> {
                         self.engine,
                         self.origin_route,
                         write,
-                    );
+                    )
+                    .await;
                     NexusWork::sema_write_completed(output)
                 }
             } else {
@@ -1907,7 +1908,8 @@ impl ToTokens for NexusRunnerAdapterTokens<'_> {
                         self.engine,
                         self.origin_route,
                         read,
-                    );
+                    )
+                    .await;
                     NexusWork::sema_read_completed(output)
                 }
             } else {
@@ -1918,7 +1920,7 @@ impl ToTokens for NexusRunnerAdapterTokens<'_> {
         let run_effect_body = if let Some(output_type) = self.shape.effect_result_type.as_deref() {
             let output_type = RustTypeTokens::new(output_type);
             quote! {
-                let output: #output_type = NexusEngine::run_effect(self.engine, effect);
+                let output: #output_type = NexusEngine::run_effect(self.engine, effect).await;
                 NexusWork::effect_completed(output)
             }
         } else {
@@ -1965,15 +1967,24 @@ impl ToTokens for NexusRunnerAdapterTokens<'_> {
                     triad_runtime::NexusAction::into_next_step(action)
                 }
 
-                fn apply_sema_write(&mut self, write: Self::SemaWrite) -> Self::Work {
+                async fn apply_sema_write(
+                    &mut self,
+                    write: Self::SemaWrite,
+                ) -> Self::Work {
                     #apply_sema_write_body
                 }
 
-                fn observe_sema_read(&self, read: Self::SemaRead) -> Self::Work {
+                async fn observe_sema_read(
+                    &mut self,
+                    read: Self::SemaRead,
+                ) -> Self::Work {
                     #observe_sema_read_body
                 }
 
-                fn run_effect(&mut self, effect: Self::Effect) -> Self::Work {
+                async fn run_effect(
+                    &mut self,
+                    effect: Self::Effect,
+                ) -> Self::Work {
                     #run_effect_body
                 }
 
@@ -2121,7 +2132,7 @@ impl ToTokens for SignalEngineTraitTokens {
         };
 
         quote! {
-            pub trait #engine_trait {
+            pub trait #engine_trait: Send {
                 #associated_nexus_types
 
                 fn on_start(&mut self) -> Result<(), ActorStartFailure> {
@@ -2203,7 +2214,7 @@ impl ToTokens for NexusEngineTraitTokens<'_> {
                             &mut self,
                             origin_route: OriginRoute,
                             input: #input_type,
-                        ) -> #output_type;
+                        ) -> impl std::future::Future<Output = #output_type> + Send + '_;
                     }
                 }
                 _ => quote! {},
@@ -2217,10 +2228,10 @@ impl ToTokens for NexusEngineTraitTokens<'_> {
                     let output_type = RustTypeTokens::new(output_type);
                     quote! {
                         fn observe_sema_read(
-                            &self,
+                            &mut self,
                             origin_route: OriginRoute,
                             input: #input_type,
-                        ) -> #output_type;
+                        ) -> impl std::future::Future<Output = #output_type> + Send + '_;
                     }
                 }
                 _ => quote! {},
@@ -2233,7 +2244,10 @@ impl ToTokens for NexusEngineTraitTokens<'_> {
                     let input_type = RustTypeTokens::new(input_type);
                     let output_type = RustTypeTokens::new(output_type);
                     quote! {
-                        fn run_effect(&mut self, input: #input_type) -> #output_type;
+                        fn run_effect(
+                            &mut self,
+                            input: #input_type,
+                        ) -> impl std::future::Future<Output = #output_type> + Send + '_;
                     }
                 }
                 _ => quote! {},
@@ -2268,7 +2282,7 @@ impl ToTokens for NexusEngineTraitTokens<'_> {
                 let first_work = input.into_root();
                 let runner = triad_runtime::Runner::new(self.continuation_limit());
                 let mut runner_adapter = NexusRunnerAdapter::new(self, origin_route);
-                let reply = runner.drive(&mut runner_adapter, first_work);
+                let reply = runner.drive(&mut runner_adapter, first_work).await;
                 let output = NexusAction::reply_to_signal(reply).with_origin_route(origin_route);
             }
         } else {
@@ -2278,7 +2292,7 @@ impl ToTokens for NexusEngineTraitTokens<'_> {
         };
 
         quote! {
-            pub trait #engine_trait {
+            pub trait #engine_trait: Send {
                 fn on_start(&mut self) -> Result<(), ActorStartFailure> {
                     Ok(())
                 }
@@ -2307,13 +2321,15 @@ impl ToTokens for NexusEngineTraitTokens<'_> {
                 fn execute(
                     &mut self,
                     input: nexus::Nexus<nexus::Work>,
-                ) -> nexus::Nexus<nexus::Action>
+                ) -> impl std::future::Future<Output = nexus::Nexus<nexus::Action>> + Send + '_
                 #sized_where
                 {
-                    self.trace_nexus_entered();
-                    #execute_body
-                    self.trace_nexus_decided();
-                    output
+                    async move {
+                        self.trace_nexus_entered();
+                        #execute_body
+                        self.trace_nexus_decided();
+                        output
+                    }
                 }
             }
         }
@@ -2395,7 +2411,7 @@ impl ToTokens for SemaEngineTraitTokens {
         });
 
         quote! {
-            pub trait #engine_trait {
+            pub trait #engine_trait: Send {
                 fn on_start(&mut self) -> Result<(), ActorStartFailure> {
                     Ok(())
                 }

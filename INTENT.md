@@ -35,6 +35,13 @@ generated listener-identity enum. The retired synchronous
 compatibility paths. Declared-stream daemon emission remains intentionally
 rejected until subscriptions return as a typed actor-native tier.
 
+*Nexus runtime emission is actor-native at the engine boundary.* Generated
+`NexusEngine::execute` returns an awaitable future, generated SEMA/effect
+runner hooks are awaitable, and the generated adapter awaits
+`triad_runtime::Runner::drive`. Component crates do not isolate generated
+Nexus execution with blocking pools; slow storage and external effects belong
+behind async generated hooks.
+
 *Cross-crate schema imports preserve type ownership.* A consumer schema that
 imports `crate:module:Type` emits a local Rust alias to the dependency crate's
 generated type instead of re-declaring. The imported crate owns the type

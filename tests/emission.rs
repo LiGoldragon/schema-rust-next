@@ -618,25 +618,33 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
     assert!(code.contains("fn continuation_limit(&self) -> triad_runtime::ContinuationLimit"));
     assert_code_contains(
         code,
-        "fn apply_sema_write(&mut self, origin_route: OriginRoute, input: CommandSemaWrite) -> SemaWriteCompleted;",
+        "fn apply_sema_write(&mut self, origin_route: OriginRoute, input: CommandSemaWrite) -> impl std::future::Future<Output = SemaWriteCompleted> + Send + '_;",
     );
     assert_code_contains(
         code,
-        "fn observe_sema_read(&self, origin_route: OriginRoute, input: CommandSemaRead) -> SemaReadCompleted;",
+        "fn observe_sema_read(&mut self, origin_route: OriginRoute, input: CommandSemaRead) -> impl std::future::Future<Output = SemaReadCompleted> + Send + '_;",
     );
     assert_code_contains(
         code,
-        "fn run_effect(&mut self, input: CommandEffect) -> EffectCompleted;",
+        "fn run_effect(&mut self, input: CommandEffect) -> impl std::future::Future<Output = EffectCompleted> + Send + '_;",
     );
     assert_code_contains(
         code,
         "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ReplyToSignal;",
     );
     assert!(code.contains("let runner = triad_runtime::Runner::new(self.continuation_limit());"));
-    assert!(code.contains("let reply = runner.drive(&mut runner_adapter, first_work);"));
+    assert!(code.contains("let reply = runner.drive(&mut runner_adapter, first_work).await;"));
     assert_code_contains(
         code,
         "let output = NexusAction::reply_to_signal(reply).with_origin_route(origin_route);",
+    );
+    assert_code_contains(
+        code,
+        "fn execute(&mut self, input: nexus::Nexus<nexus::Work>) -> impl std::future::Future<Output = nexus::Nexus<nexus::Action>> + Send + '_",
+    );
+    assert_code_contains(
+        code,
+        "async fn run_effect(&mut self, effect: Self::Effect) -> Self::Work",
     );
     assert!(!code.contains("NexusAction::CommandEffect(effect) => panic!"));
 }

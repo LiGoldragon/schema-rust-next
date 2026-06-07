@@ -163,7 +163,11 @@ grow a second parser for the authored form.
   associated Nexus input/output types so the Signal schema does not import
   daemon-internal Nexus vocabulary.
 - `RustEmissionTarget::NexusRuntime` emits daemon-side Nexus support only:
-  Nexus envelope, Nexus route/trace vocabulary, and `NexusEngine`.
+  Nexus envelope, Nexus route/trace vocabulary, and `NexusEngine`. Generated
+  `NexusEngine::execute` returns a future, generated SEMA/effect hooks return
+  futures, and the generated runner adapter awaits
+  `triad_runtime::Runner::drive`; components do not wrap generated Nexus
+  execution in blocking pools.
 - `RustEmissionTarget::SemaRuntime` emits daemon-side SEMA support only: SEMA
   envelope, SEMA route/trace vocabulary, and `SemaEngine`. SEMA write and read
   halves emit independently, so a read-only SEMA schema still gets

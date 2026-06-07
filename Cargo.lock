@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "schema-rust-next"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "nota-next",
  "prettyplease",
@@ -632,8 +632,8 @@ dependencies = [
 
 [[package]]
 name = "triad-runtime"
-version = "0.5.0"
-source = "git+https://github.com/LiGoldragon/triad-runtime.git?branch=main#0b1746d47b4f569413e41772eae3aefe6981385b"
+version = "0.6.0"
+source = "git+https://github.com/LiGoldragon/triad-runtime.git?branch=main#069ba8ed31e1f52219fbb6837d57820a1e611f95"
 dependencies = [
  "kameo",
  "rustix",
