@@ -27,7 +27,7 @@
 //! non-doc comments through a parse/unparse round-trip.
 
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use schema_next::{
     AddField, AddVariant, ChangeFieldType, DefaultValue, FieldMigration, Name, SchemaEdit,
     TypeReference, UpgradeObject,

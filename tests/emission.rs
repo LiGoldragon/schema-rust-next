@@ -47,11 +47,18 @@ fn assert_nexus_action_arm(code: &str, pattern: &str, result: &str) {
     let compact = |text: &str| {
         text.chars()
             .filter(|character| {
-                !character.is_whitespace() && *character != ',' && *character != '{' && *character != '}'
+                !character.is_whitespace()
+                    && *character != ','
+                    && *character != '{'
+                    && *character != '}'
             })
             .collect::<String>()
     };
-    let needle = format!("{}=>NexusAction::from({})", compact(pattern), compact(result));
+    let needle = format!(
+        "{}=>NexusAction::from({})",
+        compact(pattern),
+        compact(result)
+    );
     assert!(
         compact(code).contains(&needle),
         "generated code must contain nexus action arm {pattern} => NexusAction::from({result})"

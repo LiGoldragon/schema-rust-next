@@ -24,6 +24,14 @@ that declares `Schema::streams()` and whose stream event type matches
 `EventPayload::into_subscription_frame`. A bare `Output.Event` name without a
 stream declaration is not enough.
 
+*Daemon emission is actor-native at the listener boundary.* The generated
+daemon module emits a single working-socket actor listener over
+`triad_runtime::ActorSingleListenerDaemon`, `ActorConnectionRuntime`, and async
+length-prefixed frame IO. The retired synchronous `{Single,Multi}ListenerDaemon`
+and raw `UnixStream` daemon surfaces are not compatibility paths. Meta listener
+and declared-stream daemon emission are intentionally rejected until they return
+as typed actor-native tiers.
+
 *Cross-crate schema imports preserve type ownership.* A consumer schema that
 imports `crate:module:Type` emits a local Rust alias to the dependency crate's
 generated type instead of re-declaring. The imported crate owns the type

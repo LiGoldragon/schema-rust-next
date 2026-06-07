@@ -1,8 +1,8 @@
 [package]
 name         = "schema-rust-next"
-version      = "0.1.15"
+version      = "0.2.0"
 edition      = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license      = "MIT OR Apache-2.0"
 repository   = "https://github.com/LiGoldragon/schema-rust-next"
 description  = "Rust source emitter for schema-next typed schema data."

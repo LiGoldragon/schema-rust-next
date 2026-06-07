@@ -73,7 +73,22 @@ beside that typed source/schema pipeline.
 - `build::GenerationPlan` names the crate package, target modules, and
   dependency schema directories. `build::ModuleEmission` selects the
   Rust-emission target for each schema module.
-- `daemon_emit::DaemonModule` is the `triad_main!` emitter (designer report 542): a per-component, source-visible `src/schema/daemon.rs`. It is OFF by default and turns ON only when a component declares a `daemon_emit::NexusDaemonShape` carrying the OS process name, working/meta listener tiers, and meta socket mode (the data NOT derivable from the wire contract). `ModuleEmission::daemon_module` reads the working signal module for stream declarations and emits the uniform daemon skeleton: the `ComponentDaemon` hook trait (the 1488 escape hatches), `DaemonCommand` argv parsing, the `GeneratedDaemonRuntime` decode->execute->encode spine, the `{Single,Multi}ListenerDaemon` selection, `DaemonError`, and the `ExitReport`-based `DaemonEntry::run_to_exit_code`. Streaming follows option B: a declared stream emits the daemon-side `EmittedSubscriptions` registry + publish wiring (reusing `triad_runtime` subscription primitives). Each emitted section renders itself as a `ToTokens` noun through `RustModuleRenderer`, matching the rest of the crate — the daemon emitter builds no Rust as strings.
+- `daemon_emit::DaemonModule` is the `triad_main!` emitter (designer report
+  542): a per-component, source-visible `src/schema/daemon.rs`. It is OFF by
+  default and turns ON only when a component declares a
+  `daemon_emit::NexusDaemonShape` carrying the OS process name and working
+  listener tier. The actor-native slice emits the uniform daemon skeleton:
+  the `ComponentDaemon` hook trait (the 1488 escape hatches),
+  `DaemonCommand` argv parsing, the `GeneratedDaemonRuntime`
+  async decode->execute->encode spine, `ActorConnectionRuntime` over
+  `triad_runtime::ActorSingleListenerDaemon`, `DaemonError`, and the
+  `ExitReport`-based `DaemonEntry::run_to_exit_code`. The old synchronous
+  `{Single,Multi}ListenerDaemon` selection and raw `UnixStream` meta hook are
+  gone from daemon emission. If a shape asks for a meta listener tier or the
+  schema declares streams, the emitter emits an explicit compile error until
+  those concerns return as typed actor-native tiers. Each emitted section
+  renders itself as a `ToTokens` noun through `RustModuleRenderer`, matching
+  the rest of the crate — the daemon emitter builds no Rust as strings.
 
 ## Source Input And Semantic Schema
 

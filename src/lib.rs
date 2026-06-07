@@ -281,13 +281,12 @@ impl RustModule {
         if writer.emits_wire_frame() {
             writer.emit_signal_frame_codec(&self.root_enums);
         }
-        if writer.emits_signal() {
-            if let Some(event_payload) =
+        if writer.emits_signal()
+            && let Some(event_payload) =
                 writer.streaming_event_payload(&self.root_enums, &self.streams)
-            {
-                writer.emit_signal_frame_streaming_support(event_payload);
-                writer.blank();
-            }
+        {
+            writer.emit_signal_frame_streaming_support(event_payload);
+            writer.blank();
         }
         if writer.emits_runtime_support() {
             writer.emit_plane_route_support(&self.declarations);
@@ -1317,37 +1316,35 @@ impl ToTokens for SignalFrameImplTokens<'_> {
             .iter()
             .map(|variant| RouteMatchArm::new(variant, &route_name));
 
-        let short_header_arms = self.root_enum.variants().iter().enumerate().map(
-            |(variant_index, variant)| {
-                let constant = ShortHeader::new(
-                    self.root_enum.name(),
-                    variant.name(),
-                    0,
-                    variant_index,
-                )
-                .constant_identifier();
-                let variant_ident = RustIdentifier::new(variant.name().as_str()).ident();
-                if variant.payload().is_some() {
-                    quote! { Self::#variant_ident(_) => short_header::#constant, }
-                } else {
-                    quote! { Self::#variant_ident => short_header::#constant, }
-                }
-            },
-        );
+        let short_header_arms =
+            self.root_enum
+                .variants()
+                .iter()
+                .enumerate()
+                .map(|(variant_index, variant)| {
+                    let constant =
+                        ShortHeader::new(self.root_enum.name(), variant.name(), 0, variant_index)
+                            .constant_identifier();
+                    let variant_ident = RustIdentifier::new(variant.name().as_str()).ident();
+                    if variant.payload().is_some() {
+                        quote! { Self::#variant_ident(_) => short_header::#constant, }
+                    } else {
+                        quote! { Self::#variant_ident => short_header::#constant, }
+                    }
+                });
 
-        let route_from_header_arms = self.root_enum.variants().iter().enumerate().map(
-            |(variant_index, variant)| {
-                let constant = ShortHeader::new(
-                    self.root_enum.name(),
-                    variant.name(),
-                    0,
-                    variant_index,
-                )
-                .constant_identifier();
-                let variant_ident = RustIdentifier::new(variant.name().as_str()).ident();
-                quote! { short_header::#constant => Ok(#route_name::#variant_ident), }
-            },
-        );
+        let route_from_header_arms =
+            self.root_enum
+                .variants()
+                .iter()
+                .enumerate()
+                .map(|(variant_index, variant)| {
+                    let constant =
+                        ShortHeader::new(self.root_enum.name(), variant.name(), 0, variant_index)
+                            .constant_identifier();
+                    let variant_ident = RustIdentifier::new(variant.name().as_str()).ident();
+                    quote! { short_header::#constant => Ok(#route_name::#variant_ident), }
+                });
 
         quote! {
             impl #name {
@@ -1473,8 +1470,11 @@ impl<'enums> ShortHeaderModuleTokens<'enums> {
 
 impl ToTokens for ShortHeaderModuleTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let constants = self.root_enums.iter().enumerate().flat_map(
-            |(root_index, root_enum)| {
+        let constants = self
+            .root_enums
+            .iter()
+            .enumerate()
+            .flat_map(|(root_index, root_enum)| {
                 root_enum
                     .variants()
                     .iter()
@@ -1490,8 +1490,7 @@ impl ToTokens for ShortHeaderModuleTokens<'_> {
                         let value = header.value_literal();
                         quote! { pub const #constant: u64 = #value; }
                     })
-            },
-        );
+            });
         quote! {
             pub mod short_header {
                 #(#constants)*
@@ -1965,10 +1964,27 @@ impl ToTokens for NexusRunnerAdapterTokens<'_> {
     }
 }
 
-struct ActorLifecycleSupportTokens;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RuntimeSupportSection {
+    ActorLifecycle,
+    SchemaPlane,
+}
+
+struct ActorLifecycleSupportTokens {
+    section: RuntimeSupportSection,
+}
+
+impl ActorLifecycleSupportTokens {
+    fn new() -> Self {
+        Self {
+            section: RuntimeSupportSection::ActorLifecycle,
+        }
+    }
+}
 
 impl ToTokens for ActorLifecycleSupportTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        debug_assert_eq!(self.section, RuntimeSupportSection::ActorLifecycle);
         quote! {
             #[derive(Clone, Debug, PartialEq, Eq)]
             pub enum ActorStartFailure {
@@ -2554,10 +2570,21 @@ impl ToTokens for SignalMailLifecycleSupportTokens<'_> {
     }
 }
 
-struct SchemaPlaneSupportTokens;
+struct SchemaPlaneSupportTokens {
+    section: RuntimeSupportSection,
+}
+
+impl SchemaPlaneSupportTokens {
+    fn new() -> Self {
+        Self {
+            section: RuntimeSupportSection::SchemaPlane,
+        }
+    }
+}
 
 impl ToTokens for SchemaPlaneSupportTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        debug_assert_eq!(self.section, RuntimeSupportSection::SchemaPlane);
         quote! {
             pub mod schema {
                 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -4233,7 +4260,7 @@ impl RustModuleRenderer {
     }
 
     fn emit_schema_plane_support(&mut self) {
-        self.emit_item_tokens(SchemaPlaneSupportTokens.into_token_stream());
+        self.emit_item_tokens(SchemaPlaneSupportTokens::new().into_token_stream());
     }
 
     fn emit_plane_envelope(&mut self, name: &str) {
@@ -4580,10 +4607,16 @@ impl RustModuleRenderer {
 
     fn emit_split_nexus_work_projection(&mut self, projection: &SplitSemaProjection<'_>) {
         let signal_arrived_arms = self.split_signal_arrived_arms(projection);
-        let sema_write_arms =
-            self.split_output_arms(projection.sema_write_output, projection.signal_output, "SemaWriteOutput");
-        let sema_read_arms =
-            self.split_output_arms(projection.sema_read_output, projection.signal_output, "SemaReadOutput");
+        let sema_write_arms = self.split_output_arms(
+            projection.sema_write_output,
+            projection.signal_output,
+            "SemaWriteOutput",
+        );
+        let sema_read_arms = self.split_output_arms(
+            projection.sema_read_output,
+            projection.signal_output,
+            "SemaReadOutput",
+        );
         self.emit_item_tokens(quote! {
             impl nexus::Nexus<nexus::Work> {
                 pub fn into_nexus_action(self) -> nexus::Nexus<nexus::Action> {
@@ -4611,10 +4644,7 @@ impl RustModuleRenderer {
     /// `SignalArrived` leg: each signal input variant routes to a SEMA write
     /// or read input target, preferring an exact name match before a unique
     /// payload-type fallback.
-    fn split_signal_arrived_arms(
-        &self,
-        projection: &SplitSemaProjection<'_>,
-    ) -> Vec<TokenStream> {
+    fn split_signal_arrived_arms(&self, projection: &SplitSemaProjection<'_>) -> Vec<TokenStream> {
         let mut arms = Vec::new();
         for variant in projection.signal_input.variants() {
             let source = RustIdentifier::new(variant.name().as_str());
@@ -5218,7 +5248,7 @@ impl RustModuleRenderer {
     }
 
     fn emit_actor_lifecycle_support(&mut self) {
-        self.emit_item_tokens(ActorLifecycleSupportTokens.into_token_stream());
+        self.emit_item_tokens(ActorLifecycleSupportTokens::new().into_token_stream());
         self.blank();
     }
 

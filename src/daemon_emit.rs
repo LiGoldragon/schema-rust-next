@@ -4,18 +4,16 @@
 //! literal macro, schema-rust-next emits a per-component, source-visible
 //! `src/schema/daemon.rs` carrying the uniform daemon skeleton (the
 //! `ComponentDaemon` hook trait, `DaemonCommand` argv parsing, the generated
-//! runtime struct + its decode -> execute -> encode `handle_stream` spine, the
-//! single/multi listener selection, and the `ExitReport`-based exit body). The
-//! component hand-writes only `impl ComponentDaemon` (the `1488` escape
-//! hatches: `Configuration` / `Engine` / `Error` / `PROCESS_NAME` + the
-//! required `build_runtime`, plus the typed working-input handler and the
-//! residual streaming/meta hooks) and a schema-side [`NexusDaemonShape`].
+//! runtime struct + its async decode -> execute -> encode connection spine, and
+//! the `ExitReport`-based exit body). The component hand-writes only `impl
+//! ComponentDaemon` (the `1488` escape hatches: `Configuration` / `Engine` /
+//! `Error` / `PROCESS_NAME` + the required `build_runtime`, plus the typed
+//! working-input handler) and a schema-side [`NexusDaemonShape`].
 //!
-//! Streaming follows option B: when the schema declares a stream, the emitter
-//! generates the daemon-side subscription registry + publish wiring from the
-//! stream metadata (reusing `triad_runtime`'s `SubscriptionRegistry` +
-//! `SubscriptionEventPublisher`), so a declared stream becomes emitted daemon
-//! plumbing rather than a hand-written subscription hub.
+//! The actor-native slice intentionally emits only the single working listener
+//! with no stream declarations. Meta and stream support must come back as typed
+//! actor-native tiers; this emitter no longer carries the retired synchronous
+//! multi-listener or subscription mutex compatibility path.
 //!
 //! Rust syntax is built as `proc_macro2` token streams through `quote!` and
 //! pretty-printed once at the boundary, matching the token-first discipline of
@@ -171,13 +169,6 @@ impl SocketModeBits {
     pub fn bits(self) -> u32 {
         self.bits
     }
-
-    /// The `0o600`-form octal literal token the emitted `SocketMode::new`
-    /// default uses. Kept as the octal text the source review expects, not
-    /// the decimal a plain integer literal would print.
-    fn octal_literal(self) -> syn::LitInt {
-        syn::LitInt::new(&format!("0o{:o}", self.bits), Span::call_site())
-    }
 }
 
 /// Renders the full `src/schema/daemon.rs` source for a component from its
@@ -249,26 +240,39 @@ impl<'shape> DaemonModuleBody<'shape> {
 
 impl ToTokens for DaemonModuleBody<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let imports = DaemonImportsTokens::new(self.shape, self.emits_stream);
-        let hook_trait = ComponentDaemonTraitTokens::new(self.shape, self.emits_stream);
-        let command = DaemonCommandTokens;
-        let binder = DaemonBinderTokens::new(self.shape);
-        let transport = WorkingTransportTokens {
-            emits_stream: self.emits_stream,
-        };
-        let subscriptions = self
-            .emits_stream
-            .then_some(EmittedSubscriptionsTokens);
-        let runtime = GeneratedDaemonRuntimeTokens::new(self.shape, self.emits_stream);
-        let error = DaemonErrorTokens::new(self.shape);
-        let exit = DaemonEntryTokens;
+        if self.shape.is_multi_listener() {
+            quote! {
+                compile_error!(
+                    "actor-native daemon emission does not yet support the meta listener tier"
+                );
+            }
+            .to_tokens(tokens);
+            return;
+        }
+        if self.emits_stream {
+            quote! {
+                compile_error!(
+                    "actor-native daemon emission does not yet support declared streams"
+                );
+            }
+            .to_tokens(tokens);
+            return;
+        }
+
+        let imports = DaemonImportsTokens::new(self.shape);
+        let hook_trait = ComponentDaemonTraitTokens::new();
+        let command = DaemonCommandTokens::new();
+        let binder = DaemonBinderTokens::new();
+        let transport = WorkingTransportTokens::new();
+        let runtime = GeneratedDaemonRuntimeTokens::new();
+        let error = DaemonErrorTokens::new();
+        let exit = DaemonEntryTokens::new();
         quote! {
             #imports
             #hook_trait
             #command
             #binder
             #transport
-            #subscriptions
             #runtime
             #error
             #exit
@@ -277,134 +281,66 @@ impl ToTokens for DaemonModuleBody<'_> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DaemonSection {
+    ComponentDaemonTrait,
+    Command,
+    Binder,
+    WorkingTransport,
+    GeneratedRuntime,
+    Error,
+    Entry,
+}
+
 /// The `use` preamble: the always-present `std`/`thiserror` imports, the
-/// single- vs multi-listener `triad_runtime` set, the working contract
-/// `Input`/`Output`/`SignalFrameError`, and the streaming imports when the
-/// schema declares a stream.
+/// actor-native `triad_runtime` set, and the working contract
+/// `Input`/`Output`/`SignalFrameError`.
 struct DaemonImportsTokens<'shape> {
     shape: &'shape NexusDaemonShape,
-    emits_stream: bool,
 }
 
 impl<'shape> DaemonImportsTokens<'shape> {
-    fn new(shape: &'shape NexusDaemonShape, emits_stream: bool) -> Self {
-        Self {
-            shape,
-            emits_stream,
-        }
+    fn new(shape: &'shape NexusDaemonShape) -> Self {
+        Self { shape }
     }
 }
 
 impl ToTokens for DaemonImportsTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let working = self.shape.working_tier().contract_import_path();
-        let runtime_imports = if self.shape.is_multi_listener() {
-            quote! {
-                use triad_runtime::{
-                    ArgumentError, ComponentArgument, ComponentCommand, ConnectionContext,
-                    DaemonConfiguration, ExitReport, FrameBody, FrameError, LengthPrefixedCodec,
-                    ListenerError, ListenerSocket, MultiListenerDaemon, MultiListenerDaemonError,
-                    MultiListenerRuntime, RequestErrorLog, SocketMode,
-                };
-            }
-        } else {
-            quote! {
-                use triad_runtime::{
-                    ArgumentError, ComponentArgument, ComponentCommand, ConnectionContext,
-                    DaemonConfiguration, DaemonRuntime, ExitReport, FrameBody, FrameError,
-                    LengthPrefixedCodec, ListenerError, RequestErrorLog, SingleListenerDaemon,
-                    SingleListenerDaemonError,
-                };
-            }
-        };
-        let streaming_imports = self.emits_stream.then(|| {
-            quote! {
-                use triad_runtime::{
-                    SubscriptionEventPublisher, SubscriptionRegistry, SubscriptionToken,
-                };
-                use signal_frame::SubscriptionTokenInner;
-            }
-        });
         quote! {
-            use std::os::unix::net::UnixStream;
-
             use thiserror::Error;
-            #runtime_imports
+            use tokio::io::AsyncWriteExt;
+            use triad_runtime::{
+                AcceptedConnection, ActorConnectionRuntime, ActorListenerError,
+                ActorSingleListenerDaemon, ActorSingleListenerDaemonError, ArgumentError,
+                ComponentArgument, ComponentCommand, DaemonConfiguration, ExitReport, FrameBody,
+                FrameError, LengthPrefixedCodec, RequestErrorLog,
+            };
 
             use #working::{Input, Output, SignalFrameError};
-            #streaming_imports
         }
         .to_tokens(tokens);
     }
 }
 
 /// The `ComponentDaemon` hook trait — the only daemon code the component
-/// hand-writes (record 1488 escape hatches). Owns whether the meta tier and
-/// the streaming hooks are emitted.
-struct ComponentDaemonTraitTokens<'shape> {
-    shape: &'shape NexusDaemonShape,
-    emits_stream: bool,
+/// hand-writes (record 1488 escape hatches).
+struct ComponentDaemonTraitTokens {
+    section: DaemonSection,
 }
 
-impl<'shape> ComponentDaemonTraitTokens<'shape> {
-    fn new(shape: &'shape NexusDaemonShape, emits_stream: bool) -> Self {
+impl ComponentDaemonTraitTokens {
+    fn new() -> Self {
         Self {
-            shape,
-            emits_stream,
+            section: DaemonSection::ComponentDaemonTrait,
         }
     }
 }
 
-impl ToTokens for ComponentDaemonTraitTokens<'_> {
+impl ToTokens for ComponentDaemonTraitTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let streaming_associated_types = self.emits_stream.then(|| {
-            quote! {
-                type SubscriptionToken: SubscriptionToken;
-                type SubscriptionFilter: Clone;
-                /// The stream event payload. The rkyv `Archive` + high-level
-                /// `Serialize` bounds are what the emitted publisher needs to
-                /// encode the subscription-event frame; they mirror
-                /// `signal_frame`'s own `StreamingFrame::encode` bounds so the
-                /// event rides the wire.
-                type StreamEvent: Clone
-                    + rkyv::Archive
-                    + for<'archive> rkyv::Serialize<
-                        rkyv::api::high::HighSerializer<
-                            rkyv::util::AlignedVec,
-                            rkyv::ser::allocator::ArenaHandle<'archive>,
-                            rkyv::rancor::Error,
-                        >,
-                    >;
-            }
-        });
-        let meta_hook = self.shape.meta_tier().is_some().then(|| {
-            quote! {
-                /// Serve one owner-only meta stream end to end (read, handle, write).
-                /// The meta wire codec is component-owned, so this is a full escape hatch.
-                fn handle_meta_stream(engine: &Self::Engine, stream: UnixStream) -> Result<(), Self::Error>;
-            }
-        });
-        let streaming_hooks = self.emits_stream.then(|| {
-            quote! {
-                /// The subscription filter an `Input` opens, if any. `None` means the
-                /// input does not open a stream.
-                fn subscription_filter(input: &Input) -> Option<Self::SubscriptionFilter>;
-
-                /// The stream token an `Output` carries when it acknowledges a new
-                /// subscription, if any.
-                fn subscription_token(output: &Output) -> Option<Self::SubscriptionToken>;
-
-                /// The stream event a committed `Output` publishes, if any.
-                fn published_event(engine: &Self::Engine, output: &Output) -> Result<Option<Self::StreamEvent>, Self::Error>;
-
-                /// Whether a stream event matches a registered subscription filter.
-                fn event_matches_filter(filter: &Self::SubscriptionFilter, event: &Self::StreamEvent) -> bool;
-
-                /// The short header constant for stream subscription-event frames, so
-                /// the emitted publisher stamps the same header the contract codec uses.
-                fn subscription_event_short_header() -> u64;
-            }
-        });
+        debug_assert_eq!(self.section, DaemonSection::ComponentDaemonTrait);
         quote! {
             /// The component hook surface for the emitted daemon — the only daemon
             /// code the component hand-writes (record 1488 escape hatches).
@@ -412,16 +348,12 @@ impl ToTokens for ComponentDaemonTraitTokens<'_> {
             /// The component declares its `Configuration` / `Engine` / `Error` types
             /// and `PROCESS_NAME`, and provides the REQUIRED `build_runtime` (the
             /// emitter cannot know how to open the component's Store/Engine) plus the
-            /// typed working-input handler. Streaming hooks are residual: when the
-            /// schema declares a stream the registry/publish plumbing is emitted, and
-            /// the component supplies only filter + event policy. The meta tier is the
-            /// owner-only escape hatch — the component owns its full read/handle/write.
+            /// typed working-input handler.
             pub trait ComponentDaemon: Sized + 'static {
                 type Configuration: DaemonConfiguration;
                 type ConfigurationError: std::error::Error;
-                type Engine;
-                type Error: std::fmt::Display + From<FrameError> + From<SignalFrameError> + From<ListenerError>;
-                #streaming_associated_types
+                type Engine: Send + Sync + 'static;
+                type Error: std::fmt::Display + From<FrameError> + From<SignalFrameError> + Send + Sync + 'static;
 
                 const PROCESS_NAME: &'static str;
 
@@ -432,12 +364,12 @@ impl ToTokens for ComponentDaemonTraitTokens<'_> {
                 fn build_runtime(configuration: &Self::Configuration) -> Result<Self::Engine, Self::Error>;
 
                 /// Lifecycle: called once before the listener serves, once after it stops.
-                fn start(engine: &mut Self::Engine) -> Result<(), Self::Error> {
+                fn start(engine: &Self::Engine) -> Result<(), Self::Error> {
                     let _ = engine;
                     Ok(())
                 }
 
-                fn stop(engine: &mut Self::Engine) -> Result<(), Self::Error> {
+                fn stop(engine: &Self::Engine) -> Result<(), Self::Error> {
                     let _ = engine;
                     Ok(())
                 }
@@ -451,8 +383,6 @@ impl ToTokens for ComponentDaemonTraitTokens<'_> {
                 /// trusting a payload claim. Components that do not classify by origin
                 /// take it as `_connection`.
                 fn handle_working_input(engine: &Self::Engine, input: Input, connection: &triad_runtime::ConnectionContext) -> Result<Output, Self::Error>;
-                #meta_hook
-                #streaming_hooks
             }
         }
         .to_tokens(tokens);
@@ -462,10 +392,21 @@ impl ToTokens for ComponentDaemonTraitTokens<'_> {
 /// `DaemonCommand`: argv -> binary `Configuration` -> the bound daemon. The
 /// single-argument rule: exactly one argument, a signal-encoded (rkyv)
 /// configuration file. The section carries no per-component data.
-struct DaemonCommandTokens;
+struct DaemonCommandTokens {
+    section: DaemonSection,
+}
+
+impl DaemonCommandTokens {
+    fn new() -> Self {
+        Self {
+            section: DaemonSection::Command,
+        }
+    }
+}
 
 impl ToTokens for DaemonCommandTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        debug_assert_eq!(self.section, DaemonSection::Command);
         quote! {
             /// argv -> binary `Configuration` -> the bound daemon. The single-argument
             /// rule: exactly one argument, a signal-encoded (rkyv) configuration file.
@@ -505,7 +446,14 @@ impl ToTokens for DaemonCommandTokens {
                 }
 
                 pub fn run(&self) -> Result<(), DaemonError<Daemon>> {
-                    Daemon::bind(self.configuration()?)?.run().map_err(DaemonError::from)
+                    tokio::runtime::Runtime::new()
+                        .map_err(DaemonError::Runtime)?
+                        .block_on(async {
+                            Daemon::bind(self.configuration()?)?
+                                .run()
+                                .await
+                                .map_err(DaemonError::from)
+                        })
                 }
             }
         }
@@ -513,77 +461,41 @@ impl ToTokens for DaemonCommandTokens {
     }
 }
 
-/// The `DaemonBinder` default-method trait: builds the engine and selects the
-/// listener tiers (single vs multi from the schema shape), returning a runner
-/// the `DaemonCommand` drives. Owns the daemon shape (multi vs single, and the
-/// meta socket mode for the multi bind body).
-struct DaemonBinderTokens<'shape> {
-    shape: &'shape NexusDaemonShape,
+/// The `DaemonBinder` default-method trait: builds the engine and returns the
+/// actor-native listener shell the `DaemonCommand` drives.
+struct DaemonBinderTokens {
+    section: DaemonSection,
 }
 
-impl<'shape> DaemonBinderTokens<'shape> {
-    fn new(shape: &'shape NexusDaemonShape) -> Self {
-        Self { shape }
+impl DaemonBinderTokens {
+    fn new() -> Self {
+        Self {
+            section: DaemonSection::Binder,
+        }
     }
 }
 
-impl ToTokens for DaemonBinderTokens<'_> {
+impl ToTokens for DaemonBinderTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let bind_method = if self.shape.is_multi_listener() {
-            let socket_mode = self
-                .shape
-                .meta_tier()
-                .expect("multi-listener daemon has a meta tier")
-                .socket_mode()
-                .octal_literal();
-            quote! {
-                fn bind(
-                    configuration: Self::Configuration,
-                ) -> Result<MultiListenerDaemon<GeneratedDaemonRuntime<Self>>, DaemonError<Self>> {
-                    let engine = Self::build_runtime(&configuration).map_err(DaemonError::Component)?;
-                    let runtime = GeneratedDaemonRuntime::<Self>::new(engine);
-                    let mut sockets = vec![ListenerSocket::new(
-                        ListenerTier::Working,
-                        configuration.socket_path().to_path_buf(),
-                    )];
-                    if let Some(meta_socket_path) = configuration.meta_socket_path() {
-                        let socket_mode = configuration
-                            .meta_socket_mode()
-                            .unwrap_or_else(|| SocketMode::new(#socket_mode));
-                        sockets.push(
-                            ListenerSocket::new(ListenerTier::Meta, meta_socket_path.to_path_buf())
-                                .with_socket_mode(socket_mode),
-                        );
-                    }
-                    Ok(MultiListenerDaemon::new(
-                        sockets,
-                        runtime,
-                        RequestErrorLog::new(Self::PROCESS_NAME),
-                    ))
-                }
-            }
-        } else {
-            quote! {
-                fn bind(
-                    configuration: Self::Configuration,
-                ) -> Result<SingleListenerDaemon<GeneratedDaemonRuntime<Self>>, DaemonError<Self>> {
-                    let engine = Self::build_runtime(&configuration).map_err(DaemonError::Component)?;
-                    let runtime = GeneratedDaemonRuntime::<Self>::new(engine);
-                    Ok(SingleListenerDaemon::new(
-                        configuration.socket_path().to_path_buf(),
-                        runtime,
-                        RequestErrorLog::new(Self::PROCESS_NAME),
-                    ))
-                }
-            }
-        };
+        debug_assert_eq!(self.section, DaemonSection::Binder);
         quote! {
             /// The bound daemon constructor on the component trait: builds the engine,
-            /// selects the listener tiers (single vs multi from the schema shape), and
-            /// returns a runner the `DaemonCommand` drives. The component never writes
-            /// this by hand — it is emitted as a default method on `ComponentDaemon`.
+            /// wraps it in the generated actor connection runtime, and returns the
+            /// actor-native listener shell the `DaemonCommand` drives. The component
+            /// never writes this by hand — it is emitted as a default method on
+            /// `ComponentDaemon`.
             pub trait DaemonBinder: ComponentDaemon {
-                #bind_method
+                fn bind(
+                    configuration: Self::Configuration,
+                ) -> Result<ActorSingleListenerDaemon<GeneratedDaemonRuntime<Self>>, DaemonError<Self>> {
+                    let engine = Self::build_runtime(&configuration).map_err(DaemonError::Component)?;
+                    let runtime = GeneratedDaemonRuntime::<Self>::new(engine);
+                    Ok(ActorSingleListenerDaemon::new(
+                        configuration.socket_path().to_path_buf(),
+                        runtime,
+                        RequestErrorLog::new(Self::PROCESS_NAME),
+                    ))
+                }
             }
 
             impl<Daemon: ComponentDaemon> DaemonBinder for Daemon {}
@@ -592,346 +504,123 @@ impl ToTokens for DaemonBinderTokens<'_> {
     }
 }
 
-/// The working-tier wire transport over one accepted stream: a length-prefixed
-/// envelope around the schema-emitted signal frame codec. Emitted (not imported
-/// from a hand-written `transport.rs`) so the daemon spine is self-contained.
-/// The section carries no per-component data.
+/// The working-tier wire transport over one accepted Tokio stream: a
+/// length-prefixed envelope around the schema-emitted signal frame codec.
+/// Emitted (not imported from a hand-written `transport.rs`) so the daemon
+/// spine is self-contained. The section carries no per-component data.
 struct WorkingTransportTokens {
-    emits_stream: bool,
+    section: DaemonSection,
+}
+
+impl WorkingTransportTokens {
+    fn new() -> Self {
+        Self {
+            section: DaemonSection::WorkingTransport,
+        }
+    }
 }
 
 impl ToTokens for WorkingTransportTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        // `try_clone_stream` is only needed by the option-B subscription
-        // publisher (it hands a stream clone to the registry). A daemon with no
-        // declared stream never calls it, so gate it behind `emits_stream` to
-        // keep non-streaming daemons free of dead code.
-        let try_clone_stream = self.emits_stream.then(|| {
-            quote! {
-                fn try_clone_stream(&self) -> Result<UnixStream, FrameError> {
-                    self.stream.try_clone().map_err(FrameError::Io)
-                }
-            }
-        });
+        debug_assert_eq!(self.section, DaemonSection::WorkingTransport);
         quote! {
             /// The working-tier wire transport over one accepted stream: a
             /// length-prefixed envelope around the schema-emitted signal frame codec.
-            struct WorkingTransport {
-                stream: UnixStream,
+            struct WorkingTransport<'connection> {
+                connection: &'connection mut AcceptedConnection,
             }
 
-            impl WorkingTransport {
-                fn new(stream: UnixStream) -> Self {
-                    Self { stream }
+            impl<'connection> WorkingTransport<'connection> {
+                fn new(connection: &'connection mut AcceptedConnection) -> Self {
+                    Self { connection }
                 }
 
-                fn read_frame(&mut self) -> Result<Vec<u8>, FrameError> {
+                fn context(&self) -> &triad_runtime::ConnectionContext {
+                    self.connection.context()
+                }
+
+                async fn read_frame(&mut self) -> Result<Vec<u8>, FrameError> {
                     Ok(LengthPrefixedCodec::default()
-                        .read_body(&mut self.stream)?
+                        .read_body_async(self.connection.stream_mut())
+                        .await?
                         .into_bytes())
                 }
 
-                fn write_frame(&mut self, frame: Vec<u8>) -> Result<(), FrameError> {
-                    use std::io::Write;
+                async fn write_frame(&mut self, frame: Vec<u8>) -> Result<(), FrameError> {
                     LengthPrefixedCodec::default()
-                        .write_body(&mut self.stream, &FrameBody::new(frame))?;
-                    self.stream.flush()?;
+                        .write_body_async(
+                            self.connection.stream_mut(),
+                            &FrameBody::new(frame),
+                        )
+                        .await?;
+                    self.connection.stream_mut().flush().await?;
                     Ok(())
                 }
-
-                #try_clone_stream
             }
         }
         .to_tokens(tokens);
     }
 }
 
-/// The emitted option-B subscription plumbing: the `EmittedSubscriptions`
-/// registry + `SubscriptionState` + publish wiring, reusing `triad_runtime`'s
-/// subscription primitives. The section carries no per-component data (the
-/// generic `Daemon` parameter threads the component types through).
-struct EmittedSubscriptionsTokens;
-
-impl ToTokens for EmittedSubscriptionsTokens {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        quote! {
-            /// The emitted option-B subscription plumbing. It reuses `triad_runtime`'s
-            /// `SubscriptionRegistry` + `SubscriptionEventPublisher` (the runtime owns
-            /// token registries and frame construction) and adds the per-subscriber
-            /// writer map + delivery. This replaces a hand-written `SubscriptionHub`;
-            /// the component supplies only filter + event policy through `ComponentDaemon`.
-            pub struct EmittedSubscriptions<Daemon: ComponentDaemon> {
-                state: std::sync::Mutex<SubscriptionState<Daemon>>,
-            }
-
-            struct SubscriptionState<Daemon: ComponentDaemon> {
-                registry: SubscriptionRegistry<Daemon::SubscriptionToken, Daemon::SubscriptionFilter>,
-                writers: std::collections::HashMap<SubscriptionTokenInner, UnixStream>,
-                publisher: SubscriptionEventPublisher<Input, Output, Daemon::StreamEvent>,
-            }
-
-            impl<Daemon: ComponentDaemon> Default for EmittedSubscriptions<Daemon> {
-                fn default() -> Self {
-                    Self {
-                        state: std::sync::Mutex::new(SubscriptionState {
-                            registry: SubscriptionRegistry::new(),
-                            writers: std::collections::HashMap::new(),
-                            publisher: SubscriptionEventPublisher::acceptor(
-                                signal_frame::ShortHeader::new(Daemon::subscription_event_short_header()),
-                                signal_frame::SessionEpoch::new(1),
-                            ),
-                        }),
-                    }
-                }
-            }
-
-            impl<Daemon: ComponentDaemon> EmittedSubscriptions<Daemon> {
-                fn register(
-                    &self,
-                    token: Daemon::SubscriptionToken,
-                    filter: Daemon::SubscriptionFilter,
-                    writer: UnixStream,
-                ) {
-                    let mut state = self.state.lock().expect("subscription state lock");
-                    state.registry.register_token(token, filter);
-                    state.writers.insert(token.into_inner(), writer);
-                }
-
-                /// Publish a committed stream event to every matching subscriber.
-                ///
-                /// The body reborrows the `MutexGuard` once into the owned state
-                /// (`let state = &mut *guard;`) so the disjoint field borrows below
-                /// (`registry` shared, `publisher` exclusive) split cleanly; going
-                /// through the `MutexGuard` `Deref` directly would conflict because
-                /// deref yields the whole struct. (The rationale is a method doc
-                /// comment, not an inner-statement comment, so it survives the
-                /// `prettyplease` pass without tripping `unused_doc_comments` in the
-                /// consumer crate.)
-                fn publish(&self, event: Daemon::StreamEvent) -> Result<usize, FrameError> {
-                    let mut guard = self.state.lock().expect("subscription state lock");
-                    let state = &mut *guard;
-                    let mut frames = Vec::new();
-                    let publisher = &mut state.publisher;
-                    let registry = &state.registry;
-                    registry.publish_matching(
-                        &event,
-                        |filter, event| Daemon::event_matches_filter(filter, event),
-                        |token, event| {
-                            frames.push((token.into_inner(), publisher.publish(token, event.clone())));
-                        },
-                    );
-                    let mut delivered = 0;
-                    let mut stale = Vec::new();
-                    for (token, frame) in frames {
-                        match SubscriptionWriters::<Daemon>::deliver(&mut state.writers, token, frame) {
-                            Ok(true) => delivered += 1,
-                            Ok(false) => {}
-                            Err(_error) => stale.push(token),
-                        }
-                    }
-                    for token in stale {
-                        state.writers.remove(&token);
-                        state.registry.unregister(Daemon::SubscriptionToken::from_inner(token));
-                    }
-                    Ok(delivered)
-                }
-            }
-
-            /// The per-subscriber writer map. Delivery is a method on the map noun
-            /// so the verb lives on the data it reads and writes.
-            trait SubscriptionWriters<Daemon: ComponentDaemon> {
-                fn deliver(
-                    &mut self,
-                    token: SubscriptionTokenInner,
-                    frame: signal_frame::StreamingFrame<Input, Output, Daemon::StreamEvent>,
-                ) -> Result<bool, FrameError>;
-            }
-
-            impl<Daemon: ComponentDaemon> SubscriptionWriters<Daemon>
-                for std::collections::HashMap<SubscriptionTokenInner, UnixStream>
-            {
-                fn deliver(
-                    &mut self,
-                    token: SubscriptionTokenInner,
-                    frame: signal_frame::StreamingFrame<Input, Output, Daemon::StreamEvent>,
-                ) -> Result<bool, FrameError> {
-                    use std::io::Write;
-                    let Some(writer) = self.get_mut(&token) else {
-                        return Ok(false);
-                    };
-                    let bytes = frame
-                        .encode()
-                        .map_err(|_| FrameError::Io(std::io::Error::other("subscription frame encode")))?;
-                    LengthPrefixedCodec::default().write_body(writer, &FrameBody::new(bytes))?;
-                    writer.flush().map_err(FrameError::Io)?;
-                    Ok(true)
-                }
-            }
-        }
-        .to_tokens(tokens);
-    }
+/// The generated runtime struct that owns the engine. Its
+/// `handle_connection` is the async decode -> execute -> encode spine.
+struct GeneratedDaemonRuntimeTokens {
+    section: DaemonSection,
 }
 
-/// The generated runtime struct that owns the engine and (option B) the emitted
-/// subscription registry. Its `handle_stream` IS the decode -> execute ->
-/// encode spine. Owns the daemon shape (multi vs single) and whether the schema
-/// declared a stream.
-struct GeneratedDaemonRuntimeTokens<'shape> {
-    shape: &'shape NexusDaemonShape,
-    emits_stream: bool,
-}
-
-impl<'shape> GeneratedDaemonRuntimeTokens<'shape> {
-    fn new(shape: &'shape NexusDaemonShape, emits_stream: bool) -> Self {
+impl GeneratedDaemonRuntimeTokens {
+    fn new() -> Self {
         Self {
-            shape,
-            emits_stream,
+            section: DaemonSection::GeneratedRuntime,
         }
     }
 }
 
-impl ToTokens for GeneratedDaemonRuntimeTokens<'_> {
+impl ToTokens for GeneratedDaemonRuntimeTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let subscriptions_field = self
-            .emits_stream
-            .then(|| quote! { subscriptions: EmittedSubscriptions<Daemon>, });
-        let subscriptions_init = self
-            .emits_stream
-            .then(|| quote! { subscriptions: EmittedSubscriptions::default(), });
-        let subscription_writer = self
-            .emits_stream
-            .then(|| quote! { let subscription_writer = transport.try_clone_stream()?; });
-        let subscription_filter = self
-            .emits_stream
-            .then(|| quote! { let subscription_filter = Daemon::subscription_filter(&input); });
-        let subscription_publish = self.emits_stream.then(|| {
-            quote! {
-                if let (Some(filter), Some(token)) =
-                    (subscription_filter, Daemon::subscription_token(&output))
-                {
-                    self.subscriptions.register(token, filter, subscription_writer);
-                }
-                if let Some(event) = Daemon::published_event(&self.engine, &output)? {
-                    self.subscriptions.publish(event)?;
-                }
-            }
-        });
-        let runtime_impl = if self.shape.is_multi_listener() {
-            quote! {
-                impl<Daemon: ComponentDaemon> MultiListenerRuntime for GeneratedDaemonRuntime<Daemon> {
-                    type Listener = ListenerTier;
-                    type StartError = Daemon::Error;
-                    type StopError = Daemon::Error;
-                    type RequestError = Daemon::Error;
-
-                    fn start(&mut self) -> Result<(), Self::StartError> {
-                        Daemon::start(&mut self.engine)
-                    }
-
-                    fn stop(&mut self) -> Result<(), Self::StopError> {
-                        Daemon::stop(&mut self.engine)
-                    }
-
-                    fn handle_stream(
-                        &mut self,
-                        listener: ListenerTier,
-                        stream: UnixStream,
-                    ) -> Result<(), Self::RequestError> {
-                        match listener {
-                            ListenerTier::Working => self.handle_working_stream(stream),
-                            ListenerTier::Meta => Daemon::handle_meta_stream(&self.engine, stream),
-                        }
-                    }
-                }
-            }
-        } else {
-            quote! {
-                impl<Daemon: ComponentDaemon> DaemonRuntime for GeneratedDaemonRuntime<Daemon> {
-                    type StartError = Daemon::Error;
-                    type StopError = Daemon::Error;
-                    type RequestError = Daemon::Error;
-
-                    fn start(&mut self) -> Result<(), Self::StartError> {
-                        Daemon::start(&mut self.engine)
-                    }
-
-                    fn stop(&mut self) -> Result<(), Self::StopError> {
-                        Daemon::stop(&mut self.engine)
-                    }
-
-                    fn handle_stream(&mut self, stream: UnixStream) -> Result<(), Self::RequestError> {
-                        self.handle_working_stream(stream)
-                    }
-                }
-            }
-        };
-        let listener_tier_enum = ListenerTierEnumTokens;
-        let runtime_impl = if self.shape.is_multi_listener() {
-            quote! {
-                #listener_tier_enum
-                #runtime_impl
-            }
-        } else {
-            runtime_impl
-        };
+        debug_assert_eq!(self.section, DaemonSection::GeneratedRuntime);
         quote! {
-            /// The generated runtime struct that owns the engine and (option B) the
-            /// emitted subscription registry. Its `handle_stream` IS the decode ->
-            /// execute -> encode spine.
+            /// The generated runtime struct that owns the engine. Its
+            /// `handle_connection` IS the async decode -> execute -> encode spine.
             pub struct GeneratedDaemonRuntime<Daemon: ComponentDaemon> {
                 engine: Daemon::Engine,
-                #subscriptions_field
             }
 
             impl<Daemon: ComponentDaemon> GeneratedDaemonRuntime<Daemon> {
                 fn new(engine: Daemon::Engine) -> Self {
-                    Self {
-                        engine,
-                        #subscriptions_init
-                    }
+                    Self { engine }
                 }
 
-                fn handle_working_stream(&self, stream: UnixStream) -> Result<(), Daemon::Error> {
-                    let connection = ConnectionContext::from_stream(&stream).map_err(FrameError::Io)?;
-                    let mut transport = WorkingTransport::new(stream);
-                    #subscription_writer
-                    let frame = transport.read_frame()?;
+                async fn handle_working_connection(
+                    &self,
+                    mut connection: AcceptedConnection,
+                ) -> Result<(), Daemon::Error> {
+                    let mut transport = WorkingTransport::new(&mut connection);
+                    let frame = transport.read_frame().await?;
                     let (_route, input) = Input::decode_signal_frame(&frame)?;
-                    #subscription_filter
-                    let output = Daemon::handle_working_input(&self.engine, input, &connection)?;
-                    transport.write_frame(output.encode_signal_frame()?)?;
-                    #subscription_publish
+                    let output =
+                        Daemon::handle_working_input(&self.engine, input, transport.context())?;
+                    transport.write_frame(output.encode_signal_frame()?).await?;
                     Ok(())
                 }
             }
 
-            #runtime_impl
-        }
-        .to_tokens(tokens);
-    }
-}
+            impl<Daemon: ComponentDaemon> ActorConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
+                type Error = Daemon::Error;
 
-/// The `ListenerTier` enum: which authority-tiered socket an arriving stream
-/// belongs to. Emitted only on the multi-listener path. Carries no
-/// per-component data.
-struct ListenerTierEnumTokens;
+                async fn start(&self) -> Result<(), Self::Error> {
+                    Daemon::start(&self.engine)
+                }
 
-impl ToTokens for ListenerTierEnumTokens {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        quote! {
-            /// Which authority-tiered socket an arriving stream belongs to.
-            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-            pub enum ListenerTier {
-                Working,
-                Meta,
-            }
+                async fn stop(&self) -> Result<(), Self::Error> {
+                    Daemon::stop(&self.engine)
+                }
 
-            impl std::fmt::Display for ListenerTier {
-                fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    match self {
-                        Self::Working => formatter.write_str("working"),
-                        Self::Meta => formatter.write_str("meta"),
-                    }
+                async fn handle_connection(
+                    &self,
+                    connection: AcceptedConnection,
+                ) -> Result<(), Self::Error> {
+                    self.handle_working_connection(connection).await
                 }
             }
         }
@@ -939,52 +628,23 @@ impl ToTokens for ListenerTierEnumTokens {
     }
 }
 
-/// The emitted `DaemonError`: argv, configuration, listener, and the component
-/// error, plus the `From` conversions. Owns the daemon shape, which selects the
-/// single- vs multi-listener `From` impl.
-struct DaemonErrorTokens<'shape> {
-    shape: &'shape NexusDaemonShape,
+/// The emitted `DaemonError`: argv, configuration, Tokio runtime, listener,
+/// and the component error, plus the `From` conversions.
+struct DaemonErrorTokens {
+    section: DaemonSection,
 }
 
-impl<'shape> DaemonErrorTokens<'shape> {
-    fn new(shape: &'shape NexusDaemonShape) -> Self {
-        Self { shape }
+impl DaemonErrorTokens {
+    fn new() -> Self {
+        Self {
+            section: DaemonSection::Error,
+        }
     }
 }
 
-impl ToTokens for DaemonErrorTokens<'_> {
+impl ToTokens for DaemonErrorTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let listener_from_impl = if self.shape.is_multi_listener() {
-            quote! {
-                impl<Daemon: ComponentDaemon> From<MultiListenerDaemonError<Daemon::Error, Daemon::Error>>
-                    for DaemonError<Daemon>
-                {
-                    fn from(error: MultiListenerDaemonError<Daemon::Error, Daemon::Error>) -> Self {
-                        match error {
-                            MultiListenerDaemonError::Listener(error) => Self::Listener(error),
-                            MultiListenerDaemonError::Start(error) | MultiListenerDaemonError::Stop(error) => {
-                                Self::Component(error)
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            quote! {
-                impl<Daemon: ComponentDaemon> From<SingleListenerDaemonError<Daemon::Error, Daemon::Error>>
-                    for DaemonError<Daemon>
-                {
-                    fn from(error: SingleListenerDaemonError<Daemon::Error, Daemon::Error>) -> Self {
-                        match error {
-                            SingleListenerDaemonError::Listener(error) => Self::Listener(error),
-                            SingleListenerDaemonError::Start(error) | SingleListenerDaemonError::Stop(error) => {
-                                Self::Component(error)
-                            }
-                        }
-                    }
-                }
-            }
-        };
+        debug_assert_eq!(self.section, DaemonSection::Error);
         quote! {
             /// The emitted daemon error: argv, configuration, listener, and the
             /// component error. The component's own error rides the `Component` arm.
@@ -996,8 +656,11 @@ impl ToTokens for DaemonErrorTokens<'_> {
                 #[error("daemon configuration error: {0}")]
                 Configuration(Daemon::ConfigurationError),
 
+                #[error("daemon runtime error: {0}")]
+                Runtime(std::io::Error),
+
                 #[error("daemon listener error: {0}")]
-                Listener(ListenerError),
+                Listener(ActorListenerError),
 
                 #[error("component error: {0}")]
                 Component(Daemon::Error),
@@ -1009,7 +672,17 @@ impl ToTokens for DaemonErrorTokens<'_> {
                 }
             }
 
-            #listener_from_impl
+            impl<Daemon: ComponentDaemon> From<ActorSingleListenerDaemonError<Daemon::Error>>
+                for DaemonError<Daemon>
+            {
+                fn from(error: ActorSingleListenerDaemonError<Daemon::Error>) -> Self {
+                    match error {
+                        ActorSingleListenerDaemonError::Listener(error) => Self::Listener(error),
+                        ActorSingleListenerDaemonError::Start(error)
+                        | ActorSingleListenerDaemonError::Stop(error) => Self::Component(error),
+                    }
+                }
+            }
         }
         .to_tokens(tokens);
     }
@@ -1017,10 +690,21 @@ impl ToTokens for DaemonErrorTokens<'_> {
 
 /// The component-agnostic exit body: `DaemonEntry::run_to_exit_code`, called
 /// from the component binary's `fn main`. Carries no per-component data.
-struct DaemonEntryTokens;
+struct DaemonEntryTokens {
+    section: DaemonSection,
+}
+
+impl DaemonEntryTokens {
+    fn new() -> Self {
+        Self {
+            section: DaemonSection::Entry,
+        }
+    }
+}
 
 impl ToTokens for DaemonEntryTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        debug_assert_eq!(self.section, DaemonSection::Entry);
         quote! {
             /// The component-agnostic exit body. The component's binary calls
             /// `<SpiritDaemon as DaemonEntry>::run_to_exit_code()` from `fn main`.
