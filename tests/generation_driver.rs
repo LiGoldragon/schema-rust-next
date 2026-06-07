@@ -65,6 +65,10 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
         "nexus should import contract wire root through a Rust alias:\n{nexus}"
     );
     assert!(
+        nexus.contains("pub use crate::schema::sema::SemaReadInput as SemaReadInput;"),
+        "nexus should import same-package SEMA roots through crate::, not the crate name:\n{nexus}"
+    );
+    assert!(
         nexus.contains("pub trait NexusEngine"),
         "nexus runtime target should emit NexusEngine:\n{nexus}"
     );

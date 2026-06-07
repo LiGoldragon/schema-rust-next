@@ -322,7 +322,7 @@ impl LowerToRust<RustModule> for Schema {
             imports: self
                 .resolved_imports()
                 .iter()
-                .map(|import| import.lower_to_rust(context))
+                .map(|import| RustImport::from_resolved_import(import, self.identity()))
                 .collect(),
             declarations,
             root_enums,
@@ -675,6 +675,35 @@ pub struct RustImport {
 }
 
 impl RustImport {
+    fn from_resolved_import(import: &ResolvedImport, identity: &SchemaIdentity) -> Self {
+        let current_crate = identity
+            .component()
+            .as_str()
+            .split(':')
+            .next()
+            .expect("schema identity has a component name");
+        if import.source().crate_name().as_str() == current_crate {
+            let module_path = import
+                .source()
+                .module()
+                .as_str()
+                .replace('-', "_")
+                .replace(':', "::");
+            return Self {
+                use_item: format!(
+                    "pub use crate::schema::{}::{} as {};",
+                    module_path,
+                    import.source().type_name().local_part(),
+                    import.local_name().local_part()
+                ),
+            };
+        }
+
+        Self {
+            use_item: import.use_item(),
+        }
+    }
+
     pub fn use_item(&self) -> &str {
         &self.use_item
     }
