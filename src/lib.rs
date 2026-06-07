@@ -3593,7 +3593,9 @@ impl RustModuleRenderer {
     }
 
     fn finish(self) -> String {
-        self.output
+        let mut output = self.output.trim_end().to_owned();
+        output.push('\n');
+        output
     }
 
     fn emit_item_tokens(&mut self, tokens: TokenStream) {
