@@ -10,10 +10,11 @@
 //! `Error` / `PROCESS_NAME` + the required `build_runtime`, plus the typed
 //! working-input handler) and a schema-side [`NexusDaemonShape`].
 //!
-//! The actor-native slice intentionally emits only the single working listener
-//! with no stream declarations. Meta and stream support must come back as typed
-//! actor-native tiers; this emitter no longer carries the retired synchronous
-//! multi-listener or subscription mutex compatibility path.
+//! The actor-native slice emits the working listener and the optional meta
+//! listener through `triad-runtime` actor listener shells. Stream support must
+//! still return as a typed actor-native tier; this emitter no longer carries
+//! the retired synchronous multi-listener or subscription mutex compatibility
+//! path.
 //!
 //! Rust syntax is built as `proc_macro2` token streams through `quote!` and
 //! pretty-printed once at the boundary, matching the token-first discipline of
@@ -137,9 +138,11 @@ impl WorkingContractPath {
 }
 
 /// The owner-only meta listener tier: the owner-only socket file mode applied
-/// at bind time. The meta wire codec is the component's escape hatch — the
-/// emitter routes the meta socket to a single component-provided
-/// `handle_meta_stream` method rather than emitting a second frame spine.
+/// at bind time. The meta wire codec is the component's escape hatch until the
+/// meta contract path is represented in the daemon shape — the emitter routes
+/// the meta socket to a component-provided `handle_meta_connection` future over
+/// a runtime-owned `AcceptedConnection`, not to the retired synchronous
+/// `UnixStream` path.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MetaListenerTier {
     socket_mode: SocketModeBits,
@@ -240,15 +243,6 @@ impl<'shape> DaemonModuleBody<'shape> {
 
 impl ToTokens for DaemonModuleBody<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        if self.shape.is_multi_listener() {
-            quote! {
-                compile_error!(
-                    "actor-native daemon emission does not yet support the meta listener tier"
-                );
-            }
-            .to_tokens(tokens);
-            return;
-        }
         if self.emits_stream {
             quote! {
                 compile_error!(
@@ -260,17 +254,19 @@ impl ToTokens for DaemonModuleBody<'_> {
         }
 
         let imports = DaemonImportsTokens::new(self.shape);
-        let hook_trait = ComponentDaemonTraitTokens::new();
+        let hook_trait = ComponentDaemonTraitTokens::new(self.shape);
         let command = DaemonCommandTokens::new();
-        let binder = DaemonBinderTokens::new();
+        let listener_tier = ListenerTierTokens::new(self.shape);
+        let binder = DaemonBinderTokens::new(self.shape);
         let transport = WorkingTransportTokens::new();
-        let runtime = GeneratedDaemonRuntimeTokens::new();
-        let error = DaemonErrorTokens::new();
+        let runtime = GeneratedDaemonRuntimeTokens::new(self.shape);
+        let error = DaemonErrorTokens::new(self.shape);
         let exit = DaemonEntryTokens::new();
         quote! {
             #imports
             #hook_trait
             #command
+            #listener_tier
             #binder
             #transport
             #runtime
@@ -285,6 +281,7 @@ impl ToTokens for DaemonModuleBody<'_> {
 enum DaemonSection {
     ComponentDaemonTrait,
     Command,
+    ListenerTier,
     Binder,
     WorkingTransport,
     GeneratedRuntime,
@@ -308,12 +305,22 @@ impl<'shape> DaemonImportsTokens<'shape> {
 impl ToTokens for DaemonImportsTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let working = self.shape.working_tier().contract_import_path();
+        let listener_imports = if self.shape.is_multi_listener() {
+            quote! {
+                ActorListenerSocket, ActorMultiConnectionRuntime,
+                ActorMultiListenerDaemon, ActorMultiListenerDaemonError, SocketMode,
+            }
+        } else {
+            quote! {
+                ActorConnectionRuntime, ActorSingleListenerDaemon,
+                ActorSingleListenerDaemonError,
+            }
+        };
         quote! {
             use thiserror::Error;
             use tokio::io::AsyncWriteExt;
             use triad_runtime::{
-                AcceptedConnection, ActorConnectionRuntime, ActorListenerError,
-                ActorSingleListenerDaemon, ActorSingleListenerDaemonError, ArgumentError,
+                AcceptedConnection, ActorListenerError, #listener_imports ArgumentError,
                 ComponentArgument, ComponentCommand, DaemonConfiguration, ExitReport, FrameBody,
                 FrameError, LengthPrefixedCodec, RequestErrorLog,
             };
@@ -328,12 +335,14 @@ impl ToTokens for DaemonImportsTokens<'_> {
 /// hand-writes (record 1488 escape hatches).
 struct ComponentDaemonTraitTokens {
     section: DaemonSection,
+    has_meta_tier: bool,
 }
 
 impl ComponentDaemonTraitTokens {
-    fn new() -> Self {
+    fn new(shape: &NexusDaemonShape) -> Self {
         Self {
             section: DaemonSection::ComponentDaemonTrait,
+            has_meta_tier: shape.is_multi_listener(),
         }
     }
 }
@@ -341,6 +350,25 @@ impl ComponentDaemonTraitTokens {
 impl ToTokens for ComponentDaemonTraitTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::ComponentDaemonTrait);
+        let meta_hook = if self.has_meta_tier {
+            quote! {
+                /// Run one accepted meta connection. The meta tier is actor-native,
+                /// but this hook remains the explicit component escape hatch until
+                /// the daemon shape names the meta signal contract path.
+                fn handle_meta_connection(
+                    engine: &Self::Engine,
+                    connection: AcceptedConnection,
+                ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send + '_ {
+                    async move {
+                        let _ = engine;
+                        let _ = connection;
+                        Ok(())
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
         quote! {
             /// The component hook surface for the emitted daemon — the only daemon
             /// code the component hand-writes (record 1488 escape hatches).
@@ -383,6 +411,8 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 /// trusting a payload claim. Components that do not classify by origin
                 /// take it as `_connection`.
                 fn handle_working_input(engine: &Self::Engine, input: Input, connection: &triad_runtime::ConnectionContext) -> Result<Output, Self::Error>;
+
+                #meta_hook
             }
         }
         .to_tokens(tokens);
@@ -461,16 +491,59 @@ impl ToTokens for DaemonCommandTokens {
     }
 }
 
+/// The listener identity enum emitted only for multi-listener daemon shapes.
+struct ListenerTierTokens {
+    section: DaemonSection,
+    has_meta_tier: bool,
+}
+
+impl ListenerTierTokens {
+    fn new(shape: &NexusDaemonShape) -> Self {
+        Self {
+            section: DaemonSection::ListenerTier,
+            has_meta_tier: shape.is_multi_listener(),
+        }
+    }
+}
+
+impl ToTokens for ListenerTierTokens {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        debug_assert_eq!(self.section, DaemonSection::ListenerTier);
+        if !self.has_meta_tier {
+            return;
+        }
+        quote! {
+            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+            pub enum ListenerTier {
+                Working,
+                Meta,
+            }
+
+            impl std::fmt::Display for ListenerTier {
+                fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    match self {
+                        Self::Working => formatter.write_str("working"),
+                        Self::Meta => formatter.write_str("meta"),
+                    }
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
 /// The `DaemonBinder` default-method trait: builds the engine and returns the
 /// actor-native listener shell the `DaemonCommand` drives.
 struct DaemonBinderTokens {
     section: DaemonSection,
+    meta_tier: Option<MetaListenerTier>,
 }
 
 impl DaemonBinderTokens {
-    fn new() -> Self {
+    fn new(shape: &NexusDaemonShape) -> Self {
         Self {
             section: DaemonSection::Binder,
+            meta_tier: shape.meta_tier().cloned(),
         }
     }
 }
@@ -478,6 +551,47 @@ impl DaemonBinderTokens {
 impl ToTokens for DaemonBinderTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::Binder);
+        let bind_return = if self.meta_tier.is_some() {
+            quote! {
+                ActorMultiListenerDaemon<GeneratedDaemonRuntime<Self>>
+            }
+        } else {
+            quote! {
+                ActorSingleListenerDaemon<GeneratedDaemonRuntime<Self>>
+            }
+        };
+        let construction = match self.meta_tier.as_ref() {
+            Some(meta_tier) => {
+                let bits = meta_tier.socket_mode().bits();
+                let socket_mode = syn::LitInt::new(&format!("0o{bits:o}"), Span::call_site());
+                quote! {
+                    let meta_socket_path = configuration
+                        .meta_socket_path()
+                        .ok_or(DaemonError::MissingMetaSocket)?
+                        .to_path_buf();
+                    let listener_sockets = [
+                        ActorListenerSocket::new(
+                            ListenerTier::Working,
+                            configuration.socket_path().to_path_buf(),
+                        ),
+                        ActorListenerSocket::new(ListenerTier::Meta, meta_socket_path)
+                            .with_socket_mode(SocketMode::new(#socket_mode)),
+                    ];
+                    Ok(ActorMultiListenerDaemon::new(
+                        listener_sockets,
+                        runtime,
+                        RequestErrorLog::new(Self::PROCESS_NAME),
+                    ))
+                }
+            }
+            None => quote! {
+                Ok(ActorSingleListenerDaemon::new(
+                    configuration.socket_path().to_path_buf(),
+                    runtime,
+                    RequestErrorLog::new(Self::PROCESS_NAME),
+                ))
+            },
+        };
         quote! {
             /// The bound daemon constructor on the component trait: builds the engine,
             /// wraps it in the generated actor connection runtime, and returns the
@@ -487,14 +601,10 @@ impl ToTokens for DaemonBinderTokens {
             pub trait DaemonBinder: ComponentDaemon {
                 fn bind(
                     configuration: Self::Configuration,
-                ) -> Result<ActorSingleListenerDaemon<GeneratedDaemonRuntime<Self>>, DaemonError<Self>> {
+                ) -> Result<#bind_return, DaemonError<Self>> {
                     let engine = Self::build_runtime(&configuration).map_err(DaemonError::Component)?;
                     let runtime = GeneratedDaemonRuntime::<Self>::new(engine);
-                    Ok(ActorSingleListenerDaemon::new(
-                        configuration.socket_path().to_path_buf(),
-                        runtime,
-                        RequestErrorLog::new(Self::PROCESS_NAME),
-                    ))
+                    #construction
                 }
             }
 
@@ -566,12 +676,14 @@ impl ToTokens for WorkingTransportTokens {
 /// `handle_connection` is the async decode -> execute -> encode spine.
 struct GeneratedDaemonRuntimeTokens {
     section: DaemonSection,
+    has_meta_tier: bool,
 }
 
 impl GeneratedDaemonRuntimeTokens {
-    fn new() -> Self {
+    fn new(shape: &NexusDaemonShape) -> Self {
         Self {
             section: DaemonSection::GeneratedRuntime,
+            has_meta_tier: shape.is_multi_listener(),
         }
     }
 }
@@ -579,6 +691,56 @@ impl GeneratedDaemonRuntimeTokens {
 impl ToTokens for GeneratedDaemonRuntimeTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::GeneratedRuntime);
+        let runtime_impl = if self.has_meta_tier {
+            quote! {
+                impl<Daemon: ComponentDaemon> ActorMultiConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
+                    type Listener = ListenerTier;
+                    type Error = Daemon::Error;
+
+                    async fn start(&self) -> Result<(), Self::Error> {
+                        Daemon::start(&self.engine)
+                    }
+
+                    async fn stop(&self) -> Result<(), Self::Error> {
+                        Daemon::stop(&self.engine)
+                    }
+
+                    async fn handle_connection(
+                        &self,
+                        listener: Self::Listener,
+                        connection: AcceptedConnection,
+                    ) -> Result<(), Self::Error> {
+                        match listener {
+                            ListenerTier::Working => self.handle_working_connection(connection).await,
+                            ListenerTier::Meta => {
+                                Daemon::handle_meta_connection(&self.engine, connection).await
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            quote! {
+                impl<Daemon: ComponentDaemon> ActorConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
+                    type Error = Daemon::Error;
+
+                    async fn start(&self) -> Result<(), Self::Error> {
+                        Daemon::start(&self.engine)
+                    }
+
+                    async fn stop(&self) -> Result<(), Self::Error> {
+                        Daemon::stop(&self.engine)
+                    }
+
+                    async fn handle_connection(
+                        &self,
+                        connection: AcceptedConnection,
+                    ) -> Result<(), Self::Error> {
+                        self.handle_working_connection(connection).await
+                    }
+                }
+            }
+        };
         quote! {
             /// The generated runtime struct that owns the engine. Its
             /// `handle_connection` IS the async decode -> execute -> encode spine.
@@ -605,24 +767,7 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
                 }
             }
 
-            impl<Daemon: ComponentDaemon> ActorConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
-                type Error = Daemon::Error;
-
-                async fn start(&self) -> Result<(), Self::Error> {
-                    Daemon::start(&self.engine)
-                }
-
-                async fn stop(&self) -> Result<(), Self::Error> {
-                    Daemon::stop(&self.engine)
-                }
-
-                async fn handle_connection(
-                    &self,
-                    connection: AcceptedConnection,
-                ) -> Result<(), Self::Error> {
-                    self.handle_working_connection(connection).await
-                }
-            }
+            #runtime_impl
         }
         .to_tokens(tokens);
     }
@@ -632,12 +777,14 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
 /// and the component error, plus the `From` conversions.
 struct DaemonErrorTokens {
     section: DaemonSection,
+    has_meta_tier: bool,
 }
 
 impl DaemonErrorTokens {
-    fn new() -> Self {
+    fn new(shape: &NexusDaemonShape) -> Self {
         Self {
             section: DaemonSection::Error,
+            has_meta_tier: shape.is_multi_listener(),
         }
     }
 }
@@ -645,6 +792,43 @@ impl DaemonErrorTokens {
 impl ToTokens for DaemonErrorTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::Error);
+        let missing_meta_variant = if self.has_meta_tier {
+            quote! {
+                #[error("daemon meta socket path missing from configuration")]
+                MissingMetaSocket,
+            }
+        } else {
+            quote! {}
+        };
+        let listener_error_conversion = if self.has_meta_tier {
+            quote! {
+                impl<Daemon: ComponentDaemon> From<ActorMultiListenerDaemonError<Daemon::Error>>
+                    for DaemonError<Daemon>
+                {
+                    fn from(error: ActorMultiListenerDaemonError<Daemon::Error>) -> Self {
+                        match error {
+                            ActorMultiListenerDaemonError::Listener(error) => Self::Listener(error),
+                            ActorMultiListenerDaemonError::Start(error)
+                            | ActorMultiListenerDaemonError::Stop(error) => Self::Component(error),
+                        }
+                    }
+                }
+            }
+        } else {
+            quote! {
+                impl<Daemon: ComponentDaemon> From<ActorSingleListenerDaemonError<Daemon::Error>>
+                    for DaemonError<Daemon>
+                {
+                    fn from(error: ActorSingleListenerDaemonError<Daemon::Error>) -> Self {
+                        match error {
+                            ActorSingleListenerDaemonError::Listener(error) => Self::Listener(error),
+                            ActorSingleListenerDaemonError::Start(error)
+                            | ActorSingleListenerDaemonError::Stop(error) => Self::Component(error),
+                        }
+                    }
+                }
+            }
+        };
         quote! {
             /// The emitted daemon error: argv, configuration, listener, and the
             /// component error. The component's own error rides the `Component` arm.
@@ -662,6 +846,8 @@ impl ToTokens for DaemonErrorTokens {
                 #[error("daemon listener error: {0}")]
                 Listener(ActorListenerError),
 
+                #missing_meta_variant
+
                 #[error("component error: {0}")]
                 Component(Daemon::Error),
             }
@@ -672,17 +858,7 @@ impl ToTokens for DaemonErrorTokens {
                 }
             }
 
-            impl<Daemon: ComponentDaemon> From<ActorSingleListenerDaemonError<Daemon::Error>>
-                for DaemonError<Daemon>
-            {
-                fn from(error: ActorSingleListenerDaemonError<Daemon::Error>) -> Self {
-                    match error {
-                        ActorSingleListenerDaemonError::Listener(error) => Self::Listener(error),
-                        ActorSingleListenerDaemonError::Start(error)
-                        | ActorSingleListenerDaemonError::Stop(error) => Self::Component(error),
-                    }
-                }
-            }
+            #listener_error_conversion
         }
         .to_tokens(tokens);
     }

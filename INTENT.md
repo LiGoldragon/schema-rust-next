@@ -25,12 +25,15 @@ that declares `Schema::streams()` and whose stream event type matches
 stream declaration is not enough.
 
 *Daemon emission is actor-native at the listener boundary.* The generated
-daemon module emits a single working-socket actor listener over
-`triad_runtime::ActorSingleListenerDaemon`, `ActorConnectionRuntime`, and async
-length-prefixed frame IO. The retired synchronous `{Single,Multi}ListenerDaemon`
-and raw `UnixStream` daemon surfaces are not compatibility paths. Meta listener
-and declared-stream daemon emission are intentionally rejected until they return
-as typed actor-native tiers.
+daemon module emits actor listeners over
+`triad_runtime::ActorSingleListenerDaemon` for working-only daemons and
+`triad_runtime::ActorMultiListenerDaemon` for working + meta daemons. Working
+traffic uses `ActorConnectionRuntime` and the async length-prefixed frame IO
+spine; working + meta traffic uses `ActorMultiConnectionRuntime` with a
+generated listener-identity enum. The retired synchronous
+`{Single,Multi}ListenerDaemon` and raw `UnixStream` daemon surfaces are not
+compatibility paths. Declared-stream daemon emission remains intentionally
+rejected until subscriptions return as a typed actor-native tier.
 
 *Cross-crate schema imports preserve type ownership.* A consumer schema that
 imports `crate:module:Type` emits a local Rust alias to the dependency crate's

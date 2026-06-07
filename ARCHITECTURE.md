@@ -76,17 +76,25 @@ beside that typed source/schema pipeline.
 - `daemon_emit::DaemonModule` is the `triad_main!` emitter (designer report
   542): a per-component, source-visible `src/schema/daemon.rs`. It is OFF by
   default and turns ON only when a component declares a
-  `daemon_emit::NexusDaemonShape` carrying the OS process name and working
-  listener tier. The actor-native slice emits the uniform daemon skeleton:
+  `daemon_emit::NexusDaemonShape` carrying the OS process name, working
+  listener tier, and optional meta listener tier. The actor-native slice emits
+  the uniform daemon skeleton:
   the `ComponentDaemon` hook trait (the 1488 escape hatches),
   `DaemonCommand` argv parsing, the `GeneratedDaemonRuntime`
-  async decode->execute->encode spine, `ActorConnectionRuntime` over
-  `triad_runtime::ActorSingleListenerDaemon`, `DaemonError`, and the
-  `ExitReport`-based `DaemonEntry::run_to_exit_code`. The old synchronous
+  async decode->execute->encode working spine, the generated listener-identity
+  enum for multi-listener shapes, `ActorConnectionRuntime` over
+  `triad_runtime::ActorSingleListenerDaemon` for working-only daemons,
+  `ActorMultiConnectionRuntime` over
+  `triad_runtime::ActorMultiListenerDaemon` for working + meta daemons,
+  `DaemonError`, and the `ExitReport`-based
+  `DaemonEntry::run_to_exit_code`. The old synchronous
   `{Single,Multi}ListenerDaemon` selection and raw `UnixStream` meta hook are
-  gone from daemon emission. If a shape asks for a meta listener tier or the
-  schema declares streams, the emitter emits an explicit compile error until
-  those concerns return as typed actor-native tiers. Each emitted section
+  gone from daemon emission. The current meta tier remains an actor-native
+  `AcceptedConnection` escape hatch because the shape does not yet name a
+  meta-signal contract path; once the shape carries that path, the meta branch
+  should lower to the same typed frame spine as working traffic. If the schema
+  declares streams, the emitter emits an explicit compile error until
+  subscriptions return as a typed actor-native tier. Each emitted section
   renders itself as a `ToTokens` noun through `RustModuleRenderer`, matching
   the rest of the crate — the daemon emitter builds no Rust as strings.
 

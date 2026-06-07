@@ -103,23 +103,43 @@ fn single_listener_daemon_emits_the_actor_native_single_listener_spine() {
         "impl<Daemon: ComponentDaemon> DaemonRuntime for GeneratedDaemonRuntime<Daemon>",
     );
     assert_code_excludes(code, "UnixStream");
-    assert_code_excludes(code, "MultiListenerDaemon");
+    assert_code_excludes(code, "MultiListenerRuntime");
     assert_code_excludes(code, "pub enum ListenerTier");
-    assert_code_excludes(code, "handle_meta_stream");
+    assert_code_excludes(code, "handle_meta_connection");
 }
 
 #[test]
-fn meta_listener_tier_is_rejected_until_actor_native_meta_support_lands() {
+fn meta_listener_tier_emits_the_actor_native_multi_listener_spine() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
         DaemonModule::new(multi_listener_shape(), &schema, "schema-rust-next").to_generated_file();
     let code = generated.code.as_str();
 
+    assert_code_contains(code, "pub enum ListenerTier");
+    assert_code_contains(code, "Working");
+    assert_code_contains(code, "Meta");
+    assert_code_contains(code, "ActorMultiListenerDaemon::new(");
+    assert_code_contains(code, "ActorListenerSocket::new(");
+    assert_code_contains(code, "SocketMode::new(0o600)");
     assert_code_contains(
         code,
-        "compile_error!(\"actor-native daemon emission does not yet support the meta listener tier\");",
+        "impl<Daemon: ComponentDaemon> ActorMultiConnectionRuntime for GeneratedDaemonRuntime<Daemon>",
     );
-    assert_code_excludes(code, "MultiListenerDaemon");
+    assert_code_contains(code, "type Listener = ListenerTier;");
+    assert_code_contains(
+        code,
+        "ListenerTier::Working => self.handle_working_connection(connection).await",
+    );
+    assert_code_contains(
+        code,
+        "ListenerTier::Meta => { Daemon::handle_meta_connection(&self.engine, connection).await }",
+    );
+    assert_code_contains(code, "fn handle_meta_connection(");
+    assert_code_contains(code, "MissingMetaSocket");
+    assert_code_contains(code, "From<ActorMultiListenerDaemonError<Daemon::Error>>");
+    assert_code_excludes(code, "MultiListenerRuntime");
+    assert_code_excludes(code, "ActorSingleListenerDaemon::new(");
+    assert_code_excludes(code, "ActorConnectionRuntime for GeneratedDaemonRuntime");
     assert_code_excludes(code, "handle_meta_stream");
     assert_code_excludes(code, "UnixStream");
 }
