@@ -74,6 +74,10 @@ syntax construction rather than treating Rust as ad hoc formatted strings. The
 source-visible boundary still stands: generated modules are pretty-printed into
 `src/schema/*.rs` and freshness-checked by the build driver rather than hidden
 behind compiler macro expansion.
+Each top-level generated item carries `#[rustfmt::skip]`: the generator's
+`prettyplease` projection is the stable artifact boundary, and
+`cargo fmt --check` validates handwritten Rust without rewriting checked-in
+generated artifacts away from freshness.
 The string-emission migration is complete: every emitted section — the
 declaration surface AND the runtime/plane/runner/codec/projection support AND
 the upgrade-migration modules (`migration.rs`) — renders itself through a

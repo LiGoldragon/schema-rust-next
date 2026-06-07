@@ -29,6 +29,31 @@ impl RustCode {
     }
 }
 
+pub(crate) struct RustfmtSkippedItems {
+    file: syn::File,
+}
+
+impl RustfmtSkippedItems {
+    pub(crate) fn new(file: syn::File) -> Self {
+        Self { file }
+    }
+
+    pub(crate) fn render(self) -> String {
+        let mut output = String::new();
+        for item in self.file.items {
+            let file = syn::File {
+                shebang: None,
+                attrs: Vec::new(),
+                items: vec![item],
+            };
+            output.push_str("#[rustfmt::skip]\n");
+            output.push_str(prettyplease::unparse(&file).trim_end());
+            output.push('\n');
+        }
+        output
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct RustEmitter {
     generator_name: &'static str,
@@ -3561,6 +3586,9 @@ impl RustModuleRenderer {
     }
 
     fn blank(&mut self) {
+        if self.output.ends_with("\n\n") {
+            return;
+        }
         self.output.push('\n');
     }
 
@@ -3570,9 +3598,8 @@ impl RustModuleRenderer {
 
     fn emit_item_tokens(&mut self, tokens: TokenStream) {
         let file = syn::parse2::<syn::File>(tokens).expect("generated Rust item tokens parse");
-        let source = prettyplease::unparse(&file);
-        self.output.push_str(source.trim_end());
-        self.output.push('\n');
+        self.output
+            .push_str(&RustfmtSkippedItems::new(file).render());
     }
 
     /// Emit a `pub use` alias for each cross-crate import.

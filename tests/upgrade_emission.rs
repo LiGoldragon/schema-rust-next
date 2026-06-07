@@ -51,6 +51,10 @@ fn emitter_renders_header_with_identity_transition() {
         source.contains("spirit-min@0.1.0 -> spirit-min@0.2.0"),
         "identity transition appears in header, source:\n{source}"
     );
+    assert!(
+        source.contains("#[rustfmt::skip]"),
+        "generated migration source should opt out of rustfmt, source:\n{source}"
+    );
 }
 
 #[test]

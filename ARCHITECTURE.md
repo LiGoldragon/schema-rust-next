@@ -145,7 +145,10 @@ grow a second parser for the authored form.
   compile that source rather than hiding the interface in `OUT_DIR` or behind a
   compiler macro expansion. The emitter builds every section as `proc_macro2`
   tokens through `quote!` and pretty-prints them into checked source files. The
-  string-based runtime emitter named as a migration target in Spirit record
+  each top-level generated item carries `#[rustfmt::skip]`; the `prettyplease`
+  projection is the stable generated artifact, and `cargo fmt` is kept focused
+  on handwritten Rust instead of rewriting freshness-checked generated files.
+  The string-based runtime emitter named as a migration target in Spirit record
   `0bw0` is gone: emission is token-based end to end (see the Interfaces section
   above).
 - Emission is tested by source fixture comparison and by compiling the fixture

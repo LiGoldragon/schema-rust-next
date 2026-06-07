@@ -169,6 +169,14 @@ fn generated_package_carries_source_and_rust_artifacts() {
             .rust_file()
             .code
             .as_str()
+            .contains("#[rustfmt::skip]"),
+        "generated source-visible files should opt out of rustfmt so fixture freshness and cargo fmt do not fight"
+    );
+    assert!(
+        module
+            .rust_file()
+            .code
+            .as_str()
             .contains("pub trait NexusEngine"),
         "driver should emit Rust from the typed schema source value"
     );

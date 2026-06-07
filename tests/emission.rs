@@ -66,19 +66,16 @@ fn assert_nexus_action_arm(code: &str, pattern: &str, result: &str) {
 }
 
 #[allow(dead_code)]
-mod generated {
-    include!("fixtures/spirit_generated.rs");
-}
+#[path = "fixtures/spirit_generated.rs"]
+mod generated;
 
 #[allow(dead_code)]
-mod collections_generated {
-    include!("fixtures/collections_generated.rs");
-}
+#[path = "fixtures/collections_generated.rs"]
+mod collections_generated;
 
 #[allow(dead_code)]
-mod runner_generated {
-    include!("fixtures/runner_generated.rs");
-}
+#[path = "fixtures/runner_generated.rs"]
+mod runner_generated;
 
 #[test]
 fn emits_rust_source_as_a_separate_artifact() {

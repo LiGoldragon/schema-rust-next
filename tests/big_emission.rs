@@ -11,15 +11,13 @@ mod support;
 use support::FixtureNota;
 
 #[allow(dead_code)]
-mod spirit_large_generated {
-    include!("fixtures/big-schemas/spirit-reactive-large.generated.rs");
-}
+#[path = "fixtures/big-schemas/spirit-reactive-large.generated.rs"]
+mod spirit_large_generated;
 
 #[allow(dead_code)]
 #[allow(clippy::enum_variant_names)]
-mod triad_large_generated {
-    include!("fixtures/big-schemas/triad-reactive-large.generated.rs");
-}
+#[path = "fixtures/big-schemas/triad-reactive-large.generated.rs"]
+mod triad_large_generated;
 
 struct BigRustFixture<'fixture> {
     name: &'fixture str,

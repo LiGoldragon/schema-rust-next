@@ -33,6 +33,8 @@ use schema_next::{
     TypeReference, UpgradeObject,
 };
 
+use crate::RustfmtSkippedItems;
+
 /// The emitter for upgrade/compatibility code derived from an
 /// `UpgradeObject`. The data-bearing noun holds the upgrade object the
 /// emitter is rendering against; the `emit` method produces the Rust
@@ -60,8 +62,7 @@ impl<'upgrade> MigrationEmitter<'upgrade> {
         source.push('\n');
         let body = syn::parse2::<syn::File>(module.body_tokens())
             .expect("generated migration tokens parse");
-        source.push_str(prettyplease::unparse(&body).trim_end());
-        source.push('\n');
+        source.push_str(&RustfmtSkippedItems::new(body).render());
         source
     }
 }
@@ -80,8 +81,8 @@ impl<'upgrade> MigrationModule<'upgrade> {
         Self { upgrade, targets }
     }
 
-    /// The two-line `// @generated` / `// upgrade:` header. Kept as text
-    /// because `prettyplease` drops non-doc comments.
+    /// The generated-file header. Kept as text because `prettyplease` drops
+    /// non-doc comments.
     fn header(&self) -> String {
         let previous = self.upgrade.previous_identity();
         let next = self.upgrade.next_identity();
