@@ -93,10 +93,13 @@ beside that typed source/schema pipeline.
   `AcceptedConnection` escape hatch because the shape does not yet name a
   meta-signal contract path; once the shape carries that path, the meta branch
   should lower to the same typed frame spine as working traffic. If the schema
-  declares streams, the emitter emits an explicit compile error until
-  subscriptions return as a typed actor-native tier. Each emitted section
-  renders itself as a `ToTokens` noun through `RustModuleRenderer`, matching
-  the rest of the crate — the daemon emitter builds no Rust as strings.
+  declares streams, the working branch stays actor-native and adds emitted
+  subscription support: `AcceptedConnection::into_parts`, Tokio stream
+  splitting, retained owned writer halves, `triad_runtime::SubscriptionRegistry`,
+  and `SubscriptionEventPublisher` for length-prefixed pushed events. Each
+  emitted section renders itself as a `ToTokens` noun through
+  `RustModuleRenderer`, matching the rest of the crate — the daemon emitter
+  builds no Rust as strings.
 
 ## Source Input And Semantic Schema
 

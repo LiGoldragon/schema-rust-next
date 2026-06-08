@@ -32,8 +32,11 @@ traffic uses `ActorConnectionRuntime` and the async length-prefixed frame IO
 spine; working + meta traffic uses `ActorMultiConnectionRuntime` with a
 generated listener-identity enum. The retired synchronous
 `{Single,Multi}ListenerDaemon` and raw `UnixStream` daemon surfaces are not
-compatibility paths. Declared-stream daemon emission remains intentionally
-rejected until subscriptions return as a typed actor-native tier.
+compatibility paths. Declared-stream daemon emission stays actor-native: the
+runtime consumes `AcceptedConnection`, preserves the kernel-vouched
+`ConnectionContext`, splits the Tokio stream, retains an owned writer half for
+subscription pushes, and uses `triad_runtime`'s typed subscription registry and
+publisher for event delivery.
 
 *Nexus runtime emission is actor-native at the engine boundary.* Generated
 `NexusEngine::execute` returns an awaitable future, generated SEMA/effect

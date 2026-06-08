@@ -57,7 +57,7 @@ fn daemon_module_emits_the_component_daemon_hook_trait() {
     );
     assert_code_contains(
         code,
-        "fn handle_working_input(engine: &Self::Engine, input: Input, connection: &triad_runtime::ConnectionContext) -> Result<Output, Self::Error>;",
+        "fn handle_working_input(engine: &Self::Engine, input: Input, connection: &triad_runtime::ConnectionContext) -> impl std::future::Future<Output = Result<Output, Self::Error>> + Send + '_;",
     );
 }
 
@@ -93,7 +93,7 @@ fn single_listener_daemon_emits_the_actor_native_single_listener_spine() {
     assert_code_contains(code, "self.handle_working_connection(connection).await");
     assert_code_contains(
         code,
-        "Daemon::handle_working_input(&self.engine, input, transport.context())?",
+        "Daemon::handle_working_input(&self.engine, input, transport.context()).await?",
     );
     assert_code_contains(code, "read_body_async(self.connection.stream_mut())");
     assert_code_contains(code, "write_body_async(");
@@ -146,19 +146,38 @@ fn meta_listener_tier_emits_the_actor_native_multi_listener_spine() {
 }
 
 #[test]
-fn declared_stream_is_rejected_until_actor_native_subscription_support_lands() {
+fn declared_stream_emits_actor_native_subscription_support() {
     let schema = FixtureSchema::new("daemon-stream.schema").lower("test:signal");
     let generated =
         DaemonModule::new(single_listener_shape(), &schema, "schema-rust-next").to_generated_file();
     let code = generated.code.as_str();
 
+    assert_code_contains(code, "type SubscriptionToken:");
+    assert_code_contains(code, "type SubscriptionFilter:");
+    assert_code_contains(code, "type StreamEvent:");
+    assert_code_contains(code, "fn subscription_filter(input: &Input)");
+    assert_code_contains(code, "fn subscription_token(output: &Output)");
+    assert_code_contains(code, "fn published_event(");
+    assert_code_contains(code, "fn event_matches_filter(");
+    assert_code_contains(code, "fn subscription_event_short_header() -> u64");
     assert_code_contains(
         code,
-        "compile_error!(\"actor-native daemon emission does not yet support declared streams\");",
+        "pub struct EmittedSubscriptions<Daemon: ComponentDaemon>",
     );
-    assert_code_excludes(code, "EmittedSubscriptions");
+    assert_code_contains(code, "tokio::sync::Mutex");
+    assert_code_contains(code, "SubscriptionEventPublisher::acceptor(");
+    assert_code_contains(code, "let (stream, context) = connection.into_parts();");
+    assert_code_contains(code, "let (reader, writer) = stream.into_split();");
+    assert_code_contains(code, "transport.into_writer()");
+    assert_code_contains(
+        code,
+        "Daemon::published_event(&self.engine, &output).await?",
+    );
+    assert_code_contains(code, "self.subscriptions.publish(event).await?");
+    assert_code_contains(code, "frame.encode()?");
+    assert_code_contains(code, "write_body_async(writer, &FrameBody::new(bytes))");
+    assert_code_excludes(code, "compile_error!");
     assert_code_excludes(code, "std::sync::Mutex");
-    assert_code_excludes(code, "SubscriptionRegistry");
     assert_code_excludes(code, "try_clone_stream");
     assert_code_excludes(code, "UnixStream");
 }
