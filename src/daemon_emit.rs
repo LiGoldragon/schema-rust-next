@@ -7,8 +7,9 @@
 //! runtime struct + its async decode -> execute -> encode connection spine, and
 //! the `ExitReport`-based exit body). The component hand-writes only `impl
 //! ComponentDaemon` (the `1488` escape hatches: `Configuration` / `Engine` /
-//! `Error` / `PROCESS_NAME` + the required `build_runtime`, plus the typed
-//! working-input handler) and a schema-side [`NexusDaemonShape`].
+//! `Error` / `PROCESS_NAME` + the required `build_runtime`, plus either the
+//! typed working-input handler or an explicitly component-decoded working
+//! connection hook) and a schema-side [`NexusDaemonShape`].
 //!
 //! The actor-native slice emits the working listener and the optional meta
 //! listener through `triad-runtime` actor listener shells. Stream schemas add an
@@ -76,12 +77,20 @@ impl NexusDaemonShape {
     }
 }
 
-/// The peer-callable working listener tier: the contract whose emitted
-/// `Input` / `Output` roots the decode -> execute -> encode spine drives. The
-/// contract is either emitted locally into this crate's `src/schema` (the
-/// common case — spirit, message emit their own `crate::schema::signal`), or
-/// consumed from a dependency crate (cloud's triad keeps the working contract
-/// in `signal-cloud`, imported as `signal_cloud::schema::lib`).
+/// The peer-callable working listener tier.
+///
+/// Normal components name the contract whose emitted `Input` / `Output` roots
+/// the decode -> execute -> encode spine drives. The contract is either emitted
+/// locally into this crate's `src/schema` (the common case — spirit, message
+/// emit their own `crate::schema::signal`), or consumed from a dependency crate
+/// (cloud's triad keeps the working contract in `signal-cloud`, imported as
+/// `signal_cloud::schema::lib`).
+///
+/// `component_decoded` is the narrow transitional escape hatch for daemons
+/// whose ordinary socket intentionally accepts more than one legacy relation
+/// contract. The generated daemon still owns argv, socket binding,
+/// actor-native accept, request gating, peer credentials, lifecycle, and exit
+/// handling; only the per-connection wire dialect is component-owned.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkingListenerTier {
     contract: WorkingContractPath,
@@ -104,11 +113,25 @@ impl WorkingListenerTier {
         }
     }
 
+    /// A generated listener whose accepted working connection is decoded by the
+    /// component. This is for relation-adapter components that must preserve
+    /// multiple legacy public contracts on one ordinary socket while the
+    /// contracts migrate to schema-derived roots.
+    pub fn component_decoded() -> Self {
+        Self {
+            contract: WorkingContractPath::ComponentDecoded,
+        }
+    }
+
     /// The path tokens the emitted daemon imports the contract roots from —
     /// `crate::schema::<module>` for a local contract, the verbatim crate path
     /// for a dependency contract.
-    pub fn contract_import_path(&self) -> TokenStream {
+    pub fn contract_import_path(&self) -> Option<TokenStream> {
         self.contract.import_path()
+    }
+
+    pub fn is_component_decoded(&self) -> bool {
+        self.contract.is_component_decoded()
     }
 }
 
@@ -119,21 +142,29 @@ enum WorkingContractPath {
     Local(String),
     /// A dependency-crate contract path, e.g. `signal_cloud::schema::lib`.
     Dependency(String),
+    /// The component owns relation-specific frame decoding for the working
+    /// connection.
+    ComponentDecoded,
 }
 
 impl WorkingContractPath {
-    fn import_path(&self) -> TokenStream {
+    fn import_path(&self) -> Option<TokenStream> {
         match self {
             Self::Local(module) => {
                 let module = syn::Ident::new(module, Span::call_site());
-                quote!(crate::schema::#module)
+                Some(quote!(crate::schema::#module))
             }
             Self::Dependency(path) => {
                 let path: syn::Path = syn::parse_str(path)
                     .expect("dependency working-contract path is a valid Rust path");
-                quote!(#path)
+                Some(quote!(#path))
             }
+            Self::ComponentDecoded => None,
         }
+    }
+
+    fn is_component_decoded(&self) -> bool {
+        matches!(self, Self::ComponentDecoded)
     }
 }
 
@@ -247,7 +278,7 @@ impl ToTokens for DaemonModuleBody<'_> {
         let command = DaemonCommandTokens::new();
         let listener_tier = ListenerTierTokens::new(self.shape);
         let binder = DaemonBinderTokens::new(self.shape);
-        let transport = WorkingTransportTokens::new(self.emits_stream);
+        let transport = WorkingTransportTokens::new(self.shape, self.emits_stream);
         let subscription_support = SubscriptionSupportTokens::new(self.emits_stream);
         let runtime = GeneratedDaemonRuntimeTokens::new(self.shape, self.emits_stream);
         let error = DaemonErrorTokens::new(self.shape);
@@ -300,7 +331,11 @@ impl<'shape> DaemonImportsTokens<'shape> {
 
 impl ToTokens for DaemonImportsTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let working = self.shape.working_tier().contract_import_path();
+        let component_decoded = self.shape.working_tier().is_component_decoded();
+        let working_import = match self.shape.working_tier().contract_import_path() {
+            Some(working) => quote! { use #working::{Input, Output, SignalFrameError}; },
+            None => quote! {},
+        };
         let listener_imports = if self.shape.is_multi_listener() {
             quote! {
                 ActorListenerSocket, ActorMultiConnectionRuntime,
@@ -312,7 +347,7 @@ impl ToTokens for DaemonImportsTokens<'_> {
                 ActorSingleListenerDaemonError,
             }
         };
-        let stream_imports = if self.emits_stream {
+        let stream_imports = if self.emits_stream && !component_decoded {
             quote! {
                 use signal_frame::SubscriptionTokenInner;
                 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
@@ -323,17 +358,24 @@ impl ToTokens for DaemonImportsTokens<'_> {
         } else {
             quote! {}
         };
+        let typed_transport_imports = if component_decoded {
+            quote! {}
+        } else {
+            quote! {
+                use tokio::io::AsyncWriteExt;
+                use triad_runtime::{FrameBody, FrameError, LengthPrefixedCodec};
+            }
+        };
         quote! {
             use thiserror::Error;
-            use tokio::io::AsyncWriteExt;
             use triad_runtime::{
                 AcceptedConnection, ActorListenerError, #listener_imports ArgumentError,
-                ComponentArgument, ComponentCommand, DaemonConfiguration, ExitReport, FrameBody,
-                FrameError, LengthPrefixedCodec, RequestErrorLog,
+                ComponentArgument, ComponentCommand, DaemonConfiguration, ExitReport,
+                RequestErrorLog,
             };
 
-            use #working::{Input, Output, SignalFrameError};
-
+            #typed_transport_imports
+            #working_import
             #stream_imports
         }
         .to_tokens(tokens);
@@ -346,6 +388,7 @@ struct ComponentDaemonTraitTokens {
     section: DaemonSection,
     has_meta_tier: bool,
     emits_stream: bool,
+    component_decoded: bool,
 }
 
 impl ComponentDaemonTraitTokens {
@@ -354,6 +397,7 @@ impl ComponentDaemonTraitTokens {
             section: DaemonSection::ComponentDaemonTrait,
             has_meta_tier: shape.is_multi_listener(),
             emits_stream,
+            component_decoded: shape.working_tier().is_component_decoded(),
         }
     }
 }
@@ -380,7 +424,11 @@ impl ToTokens for ComponentDaemonTraitTokens {
         } else {
             quote! {}
         };
-        let error_bound = if self.emits_stream {
+        let error_bound = if self.component_decoded {
+            quote! {
+                std::fmt::Display + Send + Sync + 'static
+            }
+        } else if self.emits_stream {
             quote! {
                 std::fmt::Display
                     + From<FrameError>
@@ -395,7 +443,7 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 std::fmt::Display + From<FrameError> + From<SignalFrameError> + Send + Sync + 'static
             }
         };
-        let stream_associated_types = if self.emits_stream {
+        let stream_associated_types = if self.emits_stream && !self.component_decoded {
             quote! {
                 type SubscriptionToken: triad_runtime::SubscriptionToken + Send + Sync + 'static;
                 type SubscriptionFilter: Clone + Send + Sync + 'static;
@@ -415,7 +463,7 @@ impl ToTokens for ComponentDaemonTraitTokens {
         } else {
             quote! {}
         };
-        let stream_hooks = if self.emits_stream {
+        let stream_hooks = if self.emits_stream && !self.component_decoded {
             quote! {
                 /// The subscription filter an `Input` opens, if any. `None` means the
                 /// input does not open a stream.
@@ -443,6 +491,35 @@ impl ToTokens for ComponentDaemonTraitTokens {
             }
         } else {
             quote! {}
+        };
+        let working_hook = if self.component_decoded {
+            quote! {
+                /// Run one accepted working connection. Use this only for a daemon
+                /// whose ordinary socket must preserve multiple relation-specific
+                /// legacy contracts while the public contracts migrate to schema
+                /// roots. The generated daemon owns listener mechanics; the
+                /// component owns only relation-specific frame decode/encode.
+                fn handle_working_connection(
+                    engine: &Self::Engine,
+                    connection: AcceptedConnection,
+                ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send + '_;
+            }
+        } else {
+            quote! {
+                /// Run one decoded working `Input` through the engine and return the
+                /// `Output` root to encode back to the caller.
+                ///
+                /// `connection` carries the accepted stream's kernel-vouched peer
+                /// credentials (uid / gid / pid via `SO_PEERCRED`), so the component can
+                /// mint an origin from the operating-system trust boundary rather than
+                /// trusting a payload claim. Components that do not classify by origin
+                /// take it as `_connection`.
+                fn handle_working_input<'connection>(
+                    engine: &'connection Self::Engine,
+                    input: Input,
+                    connection: &'connection triad_runtime::ConnectionContext,
+                ) -> impl std::future::Future<Output = Result<Output, Self::Error>> + Send + 'connection;
+            }
         };
         quote! {
             /// The component hook surface for the emitted daemon — the only daemon
@@ -478,19 +555,7 @@ impl ToTokens for ComponentDaemonTraitTokens {
                     Ok(())
                 }
 
-                /// Run one decoded working `Input` through the engine and return the
-                /// `Output` root to encode back to the caller.
-                ///
-                /// `connection` carries the accepted stream's kernel-vouched peer
-                /// credentials (uid / gid / pid via `SO_PEERCRED`), so the component can
-                /// mint an origin from the operating-system trust boundary rather than
-                /// trusting a payload claim. Components that do not classify by origin
-                /// take it as `_connection`.
-                fn handle_working_input<'connection>(
-                    engine: &'connection Self::Engine,
-                    input: Input,
-                    connection: &'connection triad_runtime::ConnectionContext,
-                ) -> impl std::future::Future<Output = Result<Output, Self::Error>> + Send + 'connection;
+                #working_hook
 
                 #stream_hooks
 
@@ -703,13 +768,15 @@ impl ToTokens for DaemonBinderTokens {
 struct WorkingTransportTokens {
     section: DaemonSection,
     emits_stream: bool,
+    component_decoded: bool,
 }
 
 impl WorkingTransportTokens {
-    fn new(emits_stream: bool) -> Self {
+    fn new(shape: &NexusDaemonShape, emits_stream: bool) -> Self {
         Self {
             section: DaemonSection::WorkingTransport,
             emits_stream,
+            component_decoded: shape.working_tier().is_component_decoded(),
         }
     }
 }
@@ -717,6 +784,9 @@ impl WorkingTransportTokens {
 impl ToTokens for WorkingTransportTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::WorkingTransport);
+        if self.component_decoded {
+            return;
+        }
         if self.emits_stream {
             quote! {
                 /// The stream-aware working-tier transport over one accepted Tokio stream:
@@ -978,6 +1048,7 @@ struct GeneratedDaemonRuntimeTokens {
     section: DaemonSection,
     has_meta_tier: bool,
     emits_stream: bool,
+    component_decoded: bool,
 }
 
 impl GeneratedDaemonRuntimeTokens {
@@ -986,6 +1057,7 @@ impl GeneratedDaemonRuntimeTokens {
             section: DaemonSection::GeneratedRuntime,
             has_meta_tier: shape.is_multi_listener(),
             emits_stream,
+            component_decoded: shape.working_tier().is_component_decoded(),
         }
     }
 }
@@ -993,21 +1065,25 @@ impl GeneratedDaemonRuntimeTokens {
 impl ToTokens for GeneratedDaemonRuntimeTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::GeneratedRuntime);
-        let subscriptions_field = if self.emits_stream {
+        let subscriptions_field = if self.emits_stream && !self.component_decoded {
             quote! {
                 subscriptions: EmittedSubscriptions<Daemon>,
             }
         } else {
             quote! {}
         };
-        let subscriptions_init = if self.emits_stream {
+        let subscriptions_init = if self.emits_stream && !self.component_decoded {
             quote! {
                 subscriptions: EmittedSubscriptions::default(),
             }
         } else {
             quote! {}
         };
-        let working_connection_body = if self.emits_stream {
+        let working_connection_body = if self.component_decoded {
+            quote! {
+                Daemon::handle_working_connection(&self.engine, connection).await
+            }
+        } else if self.emits_stream {
             quote! {
                 let mut transport = WorkingTransport::new(connection);
                 let frame = transport.read_frame().await?;
@@ -1040,7 +1116,7 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
                 Ok(())
             }
         };
-        let working_connection_parameter = if self.emits_stream {
+        let working_connection_parameter = if self.emits_stream || self.component_decoded {
             quote! { connection }
         } else {
             quote! { mut connection }

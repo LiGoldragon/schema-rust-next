@@ -37,6 +37,12 @@ fn multi_listener_shape() -> NexusDaemonShape {
     )
 }
 
+fn component_decoded_shape() -> NexusDaemonShape {
+    NexusDaemonShape::new("test-daemon", WorkingListenerTier::component_decoded()).with_meta_tier(
+        MetaListenerTier::new(SocketModeBits::new(OWNER_ONLY_SOCKET_MODE)),
+    )
+}
+
 #[test]
 fn daemon_module_emits_the_component_daemon_hook_trait() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
@@ -143,6 +149,37 @@ fn meta_listener_tier_emits_the_actor_native_multi_listener_spine() {
     assert_code_excludes(code, "ActorConnectionRuntime for GeneratedDaemonRuntime");
     assert_code_excludes(code, "handle_meta_stream");
     assert_code_excludes(code, "UnixStream");
+}
+
+#[test]
+fn component_decoded_working_tier_delegates_frame_decode_to_component() {
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let generated = DaemonModule::new(component_decoded_shape(), &schema, "schema-rust-next")
+        .to_generated_file();
+    let code = generated.code.as_str();
+
+    assert_code_contains(code, "pub enum ListenerTier");
+    assert_code_contains(code, "ActorMultiListenerDaemon::new(");
+    assert_code_contains(code, "fn handle_working_connection(");
+    assert_code_contains(
+        code,
+        "ListenerTier::Working => self.handle_working_connection(connection).await",
+    );
+    assert_code_contains(
+        code,
+        "Daemon::handle_working_connection(&self.engine, connection).await",
+    );
+    assert_code_contains(
+        code,
+        "ListenerTier::Meta => { Daemon::handle_meta_connection(&self.engine, connection).await }",
+    );
+    assert_code_excludes(
+        code,
+        "use crate::schema::signal::{Input, Output, SignalFrameError};",
+    );
+    assert_code_excludes(code, "fn handle_working_input");
+    assert_code_excludes(code, "LengthPrefixedCodec");
+    assert_code_excludes(code, "WorkingTransport");
 }
 
 #[test]
