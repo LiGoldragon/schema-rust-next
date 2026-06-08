@@ -918,6 +918,10 @@ impl RustEnum {
     pub fn variants(&self) -> &[RustEnumVariant] {
         &self.variants
     }
+
+    pub fn has_only_unit_variants(&self) -> bool {
+        self.variants.iter().all(RustEnumVariant::has_no_payload)
+    }
 }
 
 impl LowerToRust<RustEnum> for EnumDeclaration {
@@ -946,6 +950,10 @@ impl RustEnumVariant {
 
     pub fn payload(&self) -> Option<&TypeReference> {
         self.payload.as_ref()
+    }
+
+    pub fn has_no_payload(&self) -> bool {
+        self.payload.is_none()
     }
 }
 
@@ -1017,8 +1025,17 @@ impl RustRenderContext {
         )
     }
 
-    fn root_data_type_attributes(&self) -> Vec<TokenStream> {
-        self.derive_attributes(false, false)
+    fn enum_type_attributes(&self, enumeration: &RustEnum) -> Vec<TokenStream> {
+        self.derive_attributes(
+            enumeration.has_only_unit_variants(),
+            self.map_key_type_names
+                .iter()
+                .any(|name| name == enumeration.name().as_str()),
+        )
+    }
+
+    fn root_enum_type_attributes(&self, enumeration: &RustEnum) -> Vec<TokenStream> {
+        self.derive_attributes(enumeration.has_only_unit_variants(), false)
     }
 
     fn derive_attributes(&self, includes_copy: bool, includes_ordering: bool) -> Vec<TokenStream> {
@@ -3191,9 +3208,9 @@ impl<'enumeration, 'context> RustEnumTokens<'enumeration, 'context> {
 
     fn attributes(&self) -> Vec<TokenStream> {
         if self.root {
-            self.context.root_data_type_attributes()
+            self.context.root_enum_type_attributes(self.enumeration)
         } else {
-            self.context.data_type_attributes(self.enumeration.name())
+            self.context.enum_type_attributes(self.enumeration)
         }
     }
 }
@@ -3898,10 +3915,17 @@ impl RustModuleRenderer {
             return;
         }
         for declaration in declarations {
-            if matches!(declaration.value(), RustTypeDeclaration::Alias(_)) {
-                continue;
+            match declaration.value() {
+                RustTypeDeclaration::Alias(_) => continue,
+                RustTypeDeclaration::Enum(enumeration) if enumeration.has_only_unit_variants() => {
+                    self.emit_nota_copy_inherent_bridge(declaration.name().as_str());
+                }
+                RustTypeDeclaration::Struct(_)
+                | RustTypeDeclaration::Enum(_)
+                | RustTypeDeclaration::Newtype(_) => {
+                    self.emit_nota_inherent_bridge(declaration.name().as_str());
+                }
             }
-            self.emit_nota_inherent_bridge(declaration.name().as_str());
             self.blank();
         }
     }
@@ -3923,10 +3947,12 @@ impl RustModuleRenderer {
             return;
         }
         let context = self.render_context();
-        self.emit_item_tokens(
+        let bridge = if root_enum.has_only_unit_variants() {
+            NotaInherentBridgeTokens::owned(root_enum.name().as_str(), &context)
+        } else {
             NotaInherentBridgeTokens::borrowed(root_enum.name().as_str(), &context)
-                .into_token_stream(),
-        );
+        };
+        self.emit_item_tokens(bridge.into_token_stream());
         self.blank();
         self.emit_item_tokens(
             NotaRootEnumStringSupportTokens::new(root_enum.name().as_str(), &context)

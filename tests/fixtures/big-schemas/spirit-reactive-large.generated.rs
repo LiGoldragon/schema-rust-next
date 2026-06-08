@@ -42,7 +42,16 @@ pub type DatabaseDigest = Integer;
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum Magnitude {
     Minimum,
     VeryLow,
@@ -55,7 +64,16 @@ pub enum Magnitude {
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum Kind {
     Decision,
     Principle,
@@ -68,7 +86,16 @@ pub enum Kind {
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum RejectionReason {
     Malformed,
     Unauthorized,
@@ -307,8 +334,8 @@ impl Magnitude {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
+    pub fn to_nota(self) -> String {
+        <Self as NotaEncode>::to_nota(&self)
     }
 }
 
@@ -318,8 +345,8 @@ impl Kind {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
+    pub fn to_nota(self) -> String {
+        <Self as NotaEncode>::to_nota(&self)
     }
 }
 
@@ -329,8 +356,8 @@ impl RejectionReason {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
+    pub fn to_nota(self) -> String {
+        <Self as NotaEncode>::to_nota(&self)
     }
 }
 

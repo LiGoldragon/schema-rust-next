@@ -24,6 +24,15 @@ fn assert_generated_fixture(file_name: &str, generated: &str) {
     assert_eq!(generated, expected);
 }
 
+fn enum_header<'source>(source: &'source str, name: &str) -> &'source str {
+    let marker = format!("pub enum {name}");
+    let enum_start = source.find(&marker).expect("enum exists");
+    let header_start = source[..enum_start]
+        .rfind("#[rustfmt::skip]")
+        .expect("generated enum has rustfmt marker");
+    &source[header_start..enum_start]
+}
+
 fn assert_code_contains(code: &str, expected: &str) {
     let compact_code = code
         .chars()
@@ -91,6 +100,9 @@ fn emits_rust_source_as_a_separate_artifact() {
             .contains("impl std::str::FromStr for Input")
     );
     assert!(generated.code.as_str().contains("rkyv::Archive"));
+    assert!(generated.code.as_str().contains("pub enum Kind"));
+    assert!(enum_header(generated.code.as_str(), "Kind").contains("Copy,"));
+    assert!(!enum_header(generated.code.as_str(), "Input").contains("Copy,"));
     assert!(generated.code.as_str().contains("pub mod short_header"));
     assert!(generated.code.as_str().contains("pub enum InputRoute"));
     assert!(
