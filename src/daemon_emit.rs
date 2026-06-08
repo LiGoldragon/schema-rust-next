@@ -733,7 +733,8 @@ impl ToTokens for DaemonBinderTokens {
                         listener_sockets,
                         runtime,
                         RequestErrorLog::new(Self::PROCESS_NAME),
-                    ))
+                    )
+                    .with_concurrency_limit(configuration.request_concurrency_limit()))
                 }
             }
             None => quote! {
@@ -741,7 +742,8 @@ impl ToTokens for DaemonBinderTokens {
                     configuration.socket_path().to_path_buf(),
                     runtime,
                     RequestErrorLog::new(Self::PROCESS_NAME),
-                );
+                )
+                .with_concurrency_limit(configuration.request_concurrency_limit());
                 Ok(match configuration.socket_mode() {
                     Some(socket_mode) => daemon.with_socket_mode(socket_mode),
                     None => daemon,

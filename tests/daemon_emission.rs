@@ -91,6 +91,10 @@ fn single_listener_daemon_emits_the_async_single_listener_spine() {
     let code = generated.code.as_str();
 
     assert_code_contains(code, "AsyncSingleListenerDaemon::new(");
+    assert_code_contains(
+        code,
+        ".with_concurrency_limit(configuration.request_concurrency_limit())",
+    );
     assert_code_contains(code, "configuration.socket_mode()");
     assert_code_contains(code, "daemon.with_socket_mode(socket_mode)");
     assert_code_contains(
@@ -128,6 +132,10 @@ fn meta_listener_tier_emits_the_async_multi_listener_spine() {
     assert_code_contains(code, "Working");
     assert_code_contains(code, "Meta");
     assert_code_contains(code, "AsyncMultiListenerDaemon::new(");
+    assert_code_contains(
+        code,
+        ".with_concurrency_limit(configuration.request_concurrency_limit())",
+    );
     assert_code_contains(code, "AsyncListenerSocket::new(");
     assert_code_contains(code, "configuration.socket_mode()");
     assert_code_contains(code, "working_socket.with_socket_mode(socket_mode)");

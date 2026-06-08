@@ -632,7 +632,7 @@ dependencies = [
 [[package]]
 name = "triad-runtime"
 version = "0.6.0"
-source = "git+https://github.com/LiGoldragon/triad-runtime.git?branch=main#2025b3c971b14a214586b34c2663933c27b3221a"
+source = "git+https://github.com/LiGoldragon/triad-runtime.git?branch=main#bedbb1dbbe93a78dd990edc60b15a8aa475460c8"
 dependencies = [
  "kameo",
  "rustix",
