@@ -24,15 +24,15 @@ that declares `Schema::streams()` and whose stream event type matches
 `EventPayload::into_subscription_frame`. A bare `Output.Event` name without a
 stream declaration is not enough.
 
-*Daemon emission is actor-native at the listener boundary.* The generated
-daemon module emits actor listeners over
-`triad_runtime::ActorSingleListenerDaemon` for working-only daemons and
-`triad_runtime::ActorMultiListenerDaemon` for working + meta daemons. Working
-traffic uses `ActorConnectionRuntime` and the async length-prefixed frame IO
-spine; working + meta traffic uses `ActorMultiConnectionRuntime` with a
+*Daemon emission is async task-backed at the listener boundary.* The generated
+daemon module emits async listeners over
+`triad_runtime::AsyncSingleListenerDaemon` for working-only daemons and
+`triad_runtime::AsyncMultiListenerDaemon` for working + meta daemons. Working
+traffic uses `AsyncConnectionRuntime` and the async length-prefixed frame IO
+spine; working + meta traffic uses `AsyncMultiConnectionRuntime` with a
 generated listener-identity enum. The retired synchronous
 `{Single,Multi}ListenerDaemon` and raw `UnixStream` daemon surfaces are not
-compatibility paths. Declared-stream daemon emission stays actor-native: the
+compatibility paths. Declared-stream daemon emission stays async task-backed: the
 runtime consumes `AcceptedConnection`, preserves the kernel-vouched
 `ConnectionContext`, splits the Tokio stream, retains an owned writer half for
 subscription pushes, and uses `triad_runtime`'s typed subscription registry and
@@ -41,11 +41,11 @@ Daemon emission applies both the ordinary working socket mode
 (`DaemonConfiguration::socket_mode`) and the meta socket mode through
 runtime-owned listener sockets. Components that need a temporary
 relation-adapter can opt into `WorkingListenerTier::component_decoded()`: the
-generated daemon still owns argv, actor-native binding, request admission,
+generated daemon still owns argv, async task-backed binding, request admission,
 peer credentials, lifecycle, and exit handling, while the component owns only
 the accepted working connection's relation-specific frame decode/encode.
 
-*Nexus runtime emission is actor-native at the engine boundary.* Generated
+*Nexus runtime emission is async task-backed at the engine boundary.* Generated
 `NexusEngine::execute` returns an awaitable future, generated SEMA/effect
 runner hooks are awaitable, and the generated adapter awaits
 `triad_runtime::Runner::drive`. Component crates do not isolate generated

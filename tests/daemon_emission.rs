@@ -84,18 +84,18 @@ fn daemon_module_emits_the_command_and_exit_entry() {
 }
 
 #[test]
-fn single_listener_daemon_emits_the_actor_native_single_listener_spine() {
+fn single_listener_daemon_emits_the_async_single_listener_spine() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
         DaemonModule::new(single_listener_shape(), &schema, "schema-rust-next").to_generated_file();
     let code = generated.code.as_str();
 
-    assert_code_contains(code, "ActorSingleListenerDaemon::new(");
+    assert_code_contains(code, "AsyncSingleListenerDaemon::new(");
     assert_code_contains(code, "configuration.socket_mode()");
     assert_code_contains(code, "daemon.with_socket_mode(socket_mode)");
     assert_code_contains(
         code,
-        "impl<Daemon: ComponentDaemon> ActorConnectionRuntime for GeneratedDaemonRuntime<Daemon>",
+        "impl<Daemon: ComponentDaemon> AsyncConnectionRuntime for GeneratedDaemonRuntime<Daemon>",
     );
     assert_code_contains(code, "async fn handle_connection(");
     assert_code_contains(code, "self.handle_working_connection(connection).await");
@@ -118,7 +118,7 @@ fn single_listener_daemon_emits_the_actor_native_single_listener_spine() {
 }
 
 #[test]
-fn meta_listener_tier_emits_the_actor_native_multi_listener_spine() {
+fn meta_listener_tier_emits_the_async_multi_listener_spine() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
         DaemonModule::new(multi_listener_shape(), &schema, "schema-rust-next").to_generated_file();
@@ -127,14 +127,14 @@ fn meta_listener_tier_emits_the_actor_native_multi_listener_spine() {
     assert_code_contains(code, "pub enum ListenerTier");
     assert_code_contains(code, "Working");
     assert_code_contains(code, "Meta");
-    assert_code_contains(code, "ActorMultiListenerDaemon::new(");
-    assert_code_contains(code, "ActorListenerSocket::new(");
+    assert_code_contains(code, "AsyncMultiListenerDaemon::new(");
+    assert_code_contains(code, "AsyncListenerSocket::new(");
     assert_code_contains(code, "configuration.socket_mode()");
     assert_code_contains(code, "working_socket.with_socket_mode(socket_mode)");
     assert_code_contains(code, "SocketMode::new(0o600)");
     assert_code_contains(
         code,
-        "impl<Daemon: ComponentDaemon> ActorMultiConnectionRuntime for GeneratedDaemonRuntime<Daemon>",
+        "impl<Daemon: ComponentDaemon> AsyncMultiConnectionRuntime for GeneratedDaemonRuntime<Daemon>",
     );
     assert_code_contains(code, "type Listener = ListenerTier;");
     assert_code_contains(
@@ -147,10 +147,10 @@ fn meta_listener_tier_emits_the_actor_native_multi_listener_spine() {
     );
     assert_code_contains(code, "fn handle_meta_connection(");
     assert_code_contains(code, "MissingMetaSocket");
-    assert_code_contains(code, "From<ActorMultiListenerDaemonError<Daemon::Error>>");
+    assert_code_contains(code, "From<AsyncMultiListenerDaemonError<Daemon::Error>>");
     assert_code_excludes(code, "MultiListenerRuntime");
-    assert_code_excludes(code, "ActorSingleListenerDaemon::new(");
-    assert_code_excludes(code, "ActorConnectionRuntime for GeneratedDaemonRuntime");
+    assert_code_excludes(code, "AsyncSingleListenerDaemon::new(");
+    assert_code_excludes(code, "AsyncConnectionRuntime for GeneratedDaemonRuntime");
     assert_code_excludes(code, "handle_meta_stream");
     assert_code_excludes(code, "UnixStream");
 }
@@ -163,7 +163,7 @@ fn component_decoded_working_tier_delegates_frame_decode_to_component() {
     let code = generated.code.as_str();
 
     assert_code_contains(code, "pub enum ListenerTier");
-    assert_code_contains(code, "ActorMultiListenerDaemon::new(");
+    assert_code_contains(code, "AsyncMultiListenerDaemon::new(");
     assert_code_contains(code, "fn handle_working_connection(");
     assert_code_contains(
         code,
@@ -187,7 +187,7 @@ fn component_decoded_working_tier_delegates_frame_decode_to_component() {
 }
 
 #[test]
-fn declared_stream_emits_actor_native_subscription_support() {
+fn declared_stream_emits_async_subscription_support() {
     let schema = FixtureSchema::new("daemon-stream.schema").lower("test:signal");
     let generated =
         DaemonModule::new(single_listener_shape(), &schema, "schema-rust-next").to_generated_file();

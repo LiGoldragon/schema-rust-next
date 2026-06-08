@@ -77,23 +77,23 @@ beside that typed source/schema pipeline.
   542): a per-component, source-visible `src/schema/daemon.rs`. It is OFF by
   default and turns ON only when a component declares a
   `daemon_emit::NexusDaemonShape` carrying the OS process name, working
-  listener tier, and optional meta listener tier. The actor-native slice emits
+  listener tier, and optional meta listener tier. The async task-backed slice emits
   the uniform daemon skeleton:
   the `ComponentDaemon` hook trait (the 1488 escape hatches),
   `DaemonCommand` argv parsing, the `GeneratedDaemonRuntime`
   async decode->execute->encode working spine, the generated listener-identity
-  enum for multi-listener shapes, `ActorConnectionRuntime` over
-  `triad_runtime::ActorSingleListenerDaemon` for working-only daemons,
-  `ActorMultiConnectionRuntime` over
-  `triad_runtime::ActorMultiListenerDaemon` for working + meta daemons,
+  enum for multi-listener shapes, `AsyncConnectionRuntime` over
+  `triad_runtime::AsyncSingleListenerDaemon` for working-only daemons,
+  `AsyncMultiConnectionRuntime` over
+  `triad_runtime::AsyncMultiListenerDaemon` for working + meta daemons,
   `DaemonError`, and the `ExitReport`-based
   `DaemonEntry::run_to_exit_code`. The old synchronous
   `{Single,Multi}ListenerDaemon` selection and raw `UnixStream` meta hook are
-  gone from daemon emission. The current meta tier remains an actor-native
+  gone from daemon emission. The current meta tier remains an async task-backed
   `AcceptedConnection` escape hatch because the shape does not yet name a
   meta-signal contract path; once the shape carries that path, the meta branch
   should lower to the same typed frame spine as working traffic. If the schema
-  declares streams, the working branch stays actor-native and adds emitted
+  declares streams, the working branch stays async task-backed and adds emitted
   subscription support: `AcceptedConnection::into_parts`, Tokio stream
   splitting, retained owned writer halves, `triad_runtime::SubscriptionRegistry`,
   and `SubscriptionEventPublisher` for length-prefixed pushed events. Each
@@ -103,7 +103,7 @@ beside that typed source/schema pipeline.
   `WorkingListenerTier::component_decoded()` is the narrow relation-adapter
   form for daemons whose ordinary socket must preserve more than one legacy
   public contract while those contracts migrate to schema roots. In that form
-  the generated daemon still owns process argv, actor-native socket binding,
+  the generated daemon still owns process argv, async task-backed socket binding,
   per-listener request admission, peer credentials, lifecycle, and exit
   handling; only the accepted working connection's frame dialect is handed to a
   component hook. Generated binders apply `DaemonConfiguration::socket_mode()`

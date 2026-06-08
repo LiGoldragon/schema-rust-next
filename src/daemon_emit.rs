@@ -11,9 +11,9 @@
 //! typed working-input handler or an explicitly component-decoded working
 //! connection hook) and a schema-side [`NexusDaemonShape`].
 //!
-//! The actor-native slice emits the working listener and the optional meta
-//! listener through `triad-runtime` actor listener shells. Stream schemas add an
-//! actor-native subscription registry over Tokio-owned writer halves; the
+//! The async task-backed slice emits the working listener and the optional meta
+//! listener through `triad-runtime` async listener shells. Stream schemas add an
+//! async task-backed subscription registry over Tokio-owned writer halves; the
 //! retired synchronous multi-listener and raw `UnixStream` compatibility paths
 //! are not emitted.
 //!
@@ -89,7 +89,7 @@ impl NexusDaemonShape {
 /// `component_decoded` is the narrow transitional escape hatch for daemons
 /// whose ordinary socket intentionally accepts more than one legacy relation
 /// contract. The generated daemon still owns argv, socket binding,
-/// actor-native accept, request gating, peer credentials, lifecycle, and exit
+/// async task-backed accept, request gating, peer credentials, lifecycle, and exit
 /// handling; only the per-connection wire dialect is component-owned.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkingListenerTier {
@@ -313,7 +313,7 @@ enum DaemonSection {
 }
 
 /// The `use` preamble: the always-present `std`/`thiserror` imports, the
-/// actor-native `triad_runtime` set, and the working contract
+/// async task-backed `triad_runtime` set, and the working contract
 /// `Input`/`Output`/`SignalFrameError`.
 struct DaemonImportsTokens<'shape> {
     shape: &'shape NexusDaemonShape,
@@ -338,13 +338,13 @@ impl ToTokens for DaemonImportsTokens<'_> {
         };
         let listener_imports = if self.shape.is_multi_listener() {
             quote! {
-                ActorListenerSocket, ActorMultiConnectionRuntime,
-                ActorMultiListenerDaemon, ActorMultiListenerDaemonError, SocketMode,
+                AsyncListenerSocket, AsyncMultiConnectionRuntime,
+                AsyncMultiListenerDaemon, AsyncMultiListenerDaemonError, SocketMode,
             }
         } else {
             quote! {
-                ActorConnectionRuntime, ActorSingleListenerDaemon,
-                ActorSingleListenerDaemonError,
+                AsyncConnectionRuntime, AsyncSingleListenerDaemon,
+                AsyncSingleListenerDaemonError,
             }
         };
         let stream_imports = if self.emits_stream && !component_decoded {
@@ -369,7 +369,7 @@ impl ToTokens for DaemonImportsTokens<'_> {
         quote! {
             use thiserror::Error;
             use triad_runtime::{
-                AcceptedConnection, ActorListenerError, #listener_imports ArgumentError,
+                AcceptedConnection, AsyncListenerError, #listener_imports ArgumentError,
                 ComponentArgument, ComponentCommand, DaemonConfiguration, ExitReport,
                 RequestErrorLog,
             };
@@ -407,7 +407,7 @@ impl ToTokens for ComponentDaemonTraitTokens {
         debug_assert_eq!(self.section, DaemonSection::ComponentDaemonTrait);
         let meta_hook = if self.has_meta_tier {
             quote! {
-                /// Run one accepted meta connection. The meta tier is actor-native,
+                /// Run one accepted meta connection. The meta tier is async task-backed,
                 /// but this hook remains the explicit component escape hatch until
                 /// the daemon shape names the meta signal contract path.
                 fn handle_meta_connection(
@@ -680,7 +680,7 @@ impl ToTokens for ListenerTierTokens {
 }
 
 /// The `DaemonBinder` default-method trait: builds the engine and returns the
-/// actor-native listener shell the `DaemonCommand` drives.
+/// async task-backed listener shell the `DaemonCommand` drives.
 struct DaemonBinderTokens {
     section: DaemonSection,
     meta_tier: Option<MetaListenerTier>,
@@ -700,11 +700,11 @@ impl ToTokens for DaemonBinderTokens {
         debug_assert_eq!(self.section, DaemonSection::Binder);
         let bind_return = if self.meta_tier.is_some() {
             quote! {
-                ActorMultiListenerDaemon<GeneratedDaemonRuntime<Self>>
+                AsyncMultiListenerDaemon<GeneratedDaemonRuntime<Self>>
             }
         } else {
             quote! {
-                ActorSingleListenerDaemon<GeneratedDaemonRuntime<Self>>
+                AsyncSingleListenerDaemon<GeneratedDaemonRuntime<Self>>
             }
         };
         let construction = match self.meta_tier.as_ref() {
@@ -712,7 +712,7 @@ impl ToTokens for DaemonBinderTokens {
                 let bits = meta_tier.socket_mode().bits();
                 let socket_mode = syn::LitInt::new(&format!("0o{bits:o}"), Span::call_site());
                 quote! {
-                    let working_socket = ActorListenerSocket::new(
+                    let working_socket = AsyncListenerSocket::new(
                         ListenerTier::Working,
                         configuration.socket_path().to_path_buf(),
                     );
@@ -726,10 +726,10 @@ impl ToTokens for DaemonBinderTokens {
                         .to_path_buf();
                     let listener_sockets = [
                         working_socket,
-                        ActorListenerSocket::new(ListenerTier::Meta, meta_socket_path)
+                        AsyncListenerSocket::new(ListenerTier::Meta, meta_socket_path)
                             .with_socket_mode(SocketMode::new(#socket_mode)),
                     ];
-                    Ok(ActorMultiListenerDaemon::new(
+                    Ok(AsyncMultiListenerDaemon::new(
                         listener_sockets,
                         runtime,
                         RequestErrorLog::new(Self::PROCESS_NAME),
@@ -737,7 +737,7 @@ impl ToTokens for DaemonBinderTokens {
                 }
             }
             None => quote! {
-                let daemon = ActorSingleListenerDaemon::new(
+                let daemon = AsyncSingleListenerDaemon::new(
                     configuration.socket_path().to_path_buf(),
                     runtime,
                     RequestErrorLog::new(Self::PROCESS_NAME),
@@ -751,7 +751,7 @@ impl ToTokens for DaemonBinderTokens {
         quote! {
             /// The bound daemon constructor on the component trait: builds the engine,
             /// wraps it in the generated actor connection runtime, and returns the
-            /// actor-native listener shell the `DaemonCommand` drives. The component
+            /// async task-backed listener shell the `DaemonCommand` drives. The component
             /// never writes this by hand — it is emitted as a default method on
             /// `ComponentDaemon`.
             pub trait DaemonBinder: ComponentDaemon {
@@ -887,7 +887,7 @@ impl ToTokens for WorkingTransportTokens {
     }
 }
 
-/// The actor-native subscription registry emitted only for stream-aware
+/// The async task-backed subscription registry emitted only for stream-aware
 /// schemas. It owns the runtime mechanics: token registration, writer-half
 /// retention, event frame construction, and push delivery.
 struct SubscriptionSupportTokens {
@@ -911,7 +911,7 @@ impl ToTokens for SubscriptionSupportTokens {
             return;
         }
         quote! {
-            /// Actor-native subscription plumbing over retained Tokio writer halves.
+            /// Async task-backed subscription plumbing over retained Tokio writer halves.
             ///
             /// The component supplies the stream vocabulary and filter policy through
             /// `ComponentDaemon`; the generated runtime owns the common registry and
@@ -1132,7 +1132,7 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
         };
         let runtime_impl = if self.has_meta_tier {
             quote! {
-                impl<Daemon: ComponentDaemon> ActorMultiConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
+                impl<Daemon: ComponentDaemon> AsyncMultiConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
                     type Listener = ListenerTier;
                     type Error = Daemon::Error;
 
@@ -1160,7 +1160,7 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
             }
         } else {
             quote! {
-                impl<Daemon: ComponentDaemon> ActorConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
+                impl<Daemon: ComponentDaemon> AsyncConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
                     type Error = Daemon::Error;
 
                     async fn start(&self) -> Result<(), Self::Error> {
@@ -1239,28 +1239,28 @@ impl ToTokens for DaemonErrorTokens {
         };
         let listener_error_conversion = if self.has_meta_tier {
             quote! {
-                impl<Daemon: ComponentDaemon> From<ActorMultiListenerDaemonError<Daemon::Error>>
+                impl<Daemon: ComponentDaemon> From<AsyncMultiListenerDaemonError<Daemon::Error>>
                     for DaemonError<Daemon>
                 {
-                    fn from(error: ActorMultiListenerDaemonError<Daemon::Error>) -> Self {
+                    fn from(error: AsyncMultiListenerDaemonError<Daemon::Error>) -> Self {
                         match error {
-                            ActorMultiListenerDaemonError::Listener(error) => Self::Listener(error),
-                            ActorMultiListenerDaemonError::Start(error)
-                            | ActorMultiListenerDaemonError::Stop(error) => Self::Component(error),
+                            AsyncMultiListenerDaemonError::Listener(error) => Self::Listener(error),
+                            AsyncMultiListenerDaemonError::Start(error)
+                            | AsyncMultiListenerDaemonError::Stop(error) => Self::Component(error),
                         }
                     }
                 }
             }
         } else {
             quote! {
-                impl<Daemon: ComponentDaemon> From<ActorSingleListenerDaemonError<Daemon::Error>>
+                impl<Daemon: ComponentDaemon> From<AsyncSingleListenerDaemonError<Daemon::Error>>
                     for DaemonError<Daemon>
                 {
-                    fn from(error: ActorSingleListenerDaemonError<Daemon::Error>) -> Self {
+                    fn from(error: AsyncSingleListenerDaemonError<Daemon::Error>) -> Self {
                         match error {
-                            ActorSingleListenerDaemonError::Listener(error) => Self::Listener(error),
-                            ActorSingleListenerDaemonError::Start(error)
-                            | ActorSingleListenerDaemonError::Stop(error) => Self::Component(error),
+                            AsyncSingleListenerDaemonError::Listener(error) => Self::Listener(error),
+                            AsyncSingleListenerDaemonError::Start(error)
+                            | AsyncSingleListenerDaemonError::Stop(error) => Self::Component(error),
                         }
                     }
                 }
@@ -1281,7 +1281,7 @@ impl ToTokens for DaemonErrorTokens {
                 Runtime(std::io::Error),
 
                 #[error("daemon listener error: {0}")]
-                Listener(ActorListenerError),
+                Listener(AsyncListenerError),
 
                 #missing_meta_variant
 
