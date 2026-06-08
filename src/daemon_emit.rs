@@ -426,10 +426,10 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 fn subscription_token(output: &Output) -> Option<Self::SubscriptionToken>;
 
                 /// The stream event a committed `Output` publishes, if any.
-                fn published_event(
-                    engine: &Self::Engine,
-                    output: &Output,
-                ) -> impl std::future::Future<Output = Result<Option<Self::StreamEvent>, Self::Error>> + Send + '_;
+                fn published_event<'event>(
+                    engine: &'event Self::Engine,
+                    output: &'event Output,
+                ) -> impl std::future::Future<Output = Result<Option<Self::StreamEvent>, Self::Error>> + Send + 'event;
 
                 /// Whether a stream event matches a registered subscription filter.
                 fn event_matches_filter(
@@ -486,11 +486,11 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 /// mint an origin from the operating-system trust boundary rather than
                 /// trusting a payload claim. Components that do not classify by origin
                 /// take it as `_connection`.
-                fn handle_working_input(
-                    engine: &Self::Engine,
+                fn handle_working_input<'connection>(
+                    engine: &'connection Self::Engine,
                     input: Input,
-                    connection: &triad_runtime::ConnectionContext,
-                ) -> impl std::future::Future<Output = Result<Output, Self::Error>> + Send + '_;
+                    connection: &'connection triad_runtime::ConnectionContext,
+                ) -> impl std::future::Future<Output = Result<Output, Self::Error>> + Send + 'connection;
 
                 #stream_hooks
 
@@ -963,7 +963,7 @@ impl ToTokens for SubscriptionSupportTokens {
                     LengthPrefixedCodec::default()
                         .write_body_async(writer, &FrameBody::new(bytes))
                         .await?;
-                    writer.flush().await?;
+                    writer.flush().await.map_err(FrameError::from)?;
                     Ok(true)
                 }
             }

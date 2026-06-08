@@ -57,7 +57,7 @@ fn daemon_module_emits_the_component_daemon_hook_trait() {
     );
     assert_code_contains(
         code,
-        "fn handle_working_input(engine: &Self::Engine, input: Input, connection: &triad_runtime::ConnectionContext) -> impl std::future::Future<Output = Result<Output, Self::Error>> + Send + '_;",
+        "fn handle_working_input<'connection>(engine: &'connection Self::Engine, input: Input, connection: &'connection triad_runtime::ConnectionContext) -> impl std::future::Future<Output = Result<Output, Self::Error>> + Send + 'connection;",
     );
 }
 
@@ -157,7 +157,10 @@ fn declared_stream_emits_actor_native_subscription_support() {
     assert_code_contains(code, "type StreamEvent:");
     assert_code_contains(code, "fn subscription_filter(input: &Input)");
     assert_code_contains(code, "fn subscription_token(output: &Output)");
-    assert_code_contains(code, "fn published_event(");
+    assert_code_contains(
+        code,
+        "fn published_event<'event>(engine: &'event Self::Engine, output: &'event Output)",
+    );
     assert_code_contains(code, "fn event_matches_filter(");
     assert_code_contains(code, "fn subscription_event_short_header() -> u64");
     assert_code_contains(
