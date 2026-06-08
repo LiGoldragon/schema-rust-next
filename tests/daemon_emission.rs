@@ -91,6 +91,8 @@ fn single_listener_daemon_emits_the_actor_native_single_listener_spine() {
     let code = generated.code.as_str();
 
     assert_code_contains(code, "ActorSingleListenerDaemon::new(");
+    assert_code_contains(code, "configuration.socket_mode()");
+    assert_code_contains(code, "daemon.with_socket_mode(socket_mode)");
     assert_code_contains(
         code,
         "impl<Daemon: ComponentDaemon> ActorConnectionRuntime for GeneratedDaemonRuntime<Daemon>",
@@ -127,6 +129,8 @@ fn meta_listener_tier_emits_the_actor_native_multi_listener_spine() {
     assert_code_contains(code, "Meta");
     assert_code_contains(code, "ActorMultiListenerDaemon::new(");
     assert_code_contains(code, "ActorListenerSocket::new(");
+    assert_code_contains(code, "configuration.socket_mode()");
+    assert_code_contains(code, "working_socket.with_socket_mode(socket_mode)");
     assert_code_contains(code, "SocketMode::new(0o600)");
     assert_code_contains(
         code,

@@ -100,6 +100,15 @@ beside that typed source/schema pipeline.
   emitted section renders itself as a `ToTokens` noun through
   `RustModuleRenderer`, matching the rest of the crate — the daemon emitter
   builds no Rust as strings.
+  `WorkingListenerTier::component_decoded()` is the narrow relation-adapter
+  form for daemons whose ordinary socket must preserve more than one legacy
+  public contract while those contracts migrate to schema roots. In that form
+  the generated daemon still owns process argv, actor-native socket binding,
+  per-listener request admission, peer credentials, lifecycle, and exit
+  handling; only the accepted working connection's frame dialect is handed to a
+  component hook. Generated binders apply `DaemonConfiguration::socket_mode()`
+  to the ordinary socket and the configured meta mode to the meta socket, so
+  security-sensitive chmod behavior stays in the shared daemon path.
 
 ## Source Input And Semantic Schema
 

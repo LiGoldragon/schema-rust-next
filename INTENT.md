@@ -37,6 +37,13 @@ runtime consumes `AcceptedConnection`, preserves the kernel-vouched
 `ConnectionContext`, splits the Tokio stream, retains an owned writer half for
 subscription pushes, and uses `triad_runtime`'s typed subscription registry and
 publisher for event delivery.
+Daemon emission applies both the ordinary working socket mode
+(`DaemonConfiguration::socket_mode`) and the meta socket mode through
+runtime-owned listener sockets. Components that need a temporary
+relation-adapter can opt into `WorkingListenerTier::component_decoded()`: the
+generated daemon still owns argv, actor-native binding, request admission,
+peer credentials, lifecycle, and exit handling, while the component owns only
+the accepted working connection's relation-specific frame decode/encode.
 
 *Nexus runtime emission is actor-native at the engine boundary.* Generated
 `NexusEngine::execute` returns an awaitable future, generated SEMA/effect

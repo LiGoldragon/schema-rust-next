@@ -712,15 +712,20 @@ impl ToTokens for DaemonBinderTokens {
                 let bits = meta_tier.socket_mode().bits();
                 let socket_mode = syn::LitInt::new(&format!("0o{bits:o}"), Span::call_site());
                 quote! {
+                    let working_socket = ActorListenerSocket::new(
+                        ListenerTier::Working,
+                        configuration.socket_path().to_path_buf(),
+                    );
+                    let working_socket = match configuration.socket_mode() {
+                        Some(socket_mode) => working_socket.with_socket_mode(socket_mode),
+                        None => working_socket,
+                    };
                     let meta_socket_path = configuration
                         .meta_socket_path()
                         .ok_or(DaemonError::MissingMetaSocket)?
                         .to_path_buf();
                     let listener_sockets = [
-                        ActorListenerSocket::new(
-                            ListenerTier::Working,
-                            configuration.socket_path().to_path_buf(),
-                        ),
+                        working_socket,
                         ActorListenerSocket::new(ListenerTier::Meta, meta_socket_path)
                             .with_socket_mode(SocketMode::new(#socket_mode)),
                     ];
@@ -732,11 +737,15 @@ impl ToTokens for DaemonBinderTokens {
                 }
             }
             None => quote! {
-                Ok(ActorSingleListenerDaemon::new(
+                let daemon = ActorSingleListenerDaemon::new(
                     configuration.socket_path().to_path_buf(),
                     runtime,
                     RequestErrorLog::new(Self::PROCESS_NAME),
-                ))
+                );
+                Ok(match configuration.socket_mode() {
+                    Some(socket_mode) => daemon.with_socket_mode(socket_mode),
+                    None => daemon,
+                })
             },
         };
         quote! {
