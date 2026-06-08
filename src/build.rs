@@ -328,6 +328,111 @@ impl GenerationDriver {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractCrateBuild {
+    crate_root: PathBuf,
+    crate_name: String,
+    schema_version: String,
+    links_name: String,
+    module: String,
+    update_environment_variable: String,
+}
+
+impl ContractCrateBuild {
+    pub fn new(
+        crate_root: impl Into<PathBuf>,
+        crate_name: impl Into<String>,
+        schema_version: impl Into<String>,
+        update_environment_variable: impl Into<String>,
+    ) -> Self {
+        let crate_name = crate_name.into();
+        Self {
+            crate_root: crate_root.into(),
+            links_name: crate_name.clone(),
+            crate_name,
+            schema_version: schema_version.into(),
+            module: "lib".to_owned(),
+            update_environment_variable: update_environment_variable.into(),
+        }
+    }
+
+    pub fn from_environment(
+        crate_name: impl Into<String>,
+        schema_version: impl Into<String>,
+        update_environment_variable: impl Into<String>,
+    ) -> Self {
+        Self::new(
+            PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest dir set")),
+            crate_name,
+            schema_version,
+            update_environment_variable,
+        )
+    }
+
+    pub fn with_links_name(mut self, links_name: impl Into<String>) -> Self {
+        self.links_name = links_name.into();
+        self
+    }
+
+    pub fn with_module(mut self, module: impl Into<String>) -> Self {
+        self.module = module.into();
+        self
+    }
+
+    pub fn crate_root(&self) -> &Path {
+        &self.crate_root
+    }
+
+    pub fn crate_name(&self) -> &str {
+        &self.crate_name
+    }
+
+    pub fn schema_version(&self) -> &str {
+        &self.schema_version
+    }
+
+    pub fn links_name(&self) -> &str {
+        &self.links_name
+    }
+
+    pub fn module(&self) -> &str {
+        &self.module
+    }
+
+    pub fn update_environment_variable(&self) -> &str {
+        &self.update_environment_variable
+    }
+
+    pub fn generation_plan(&self) -> GenerationPlan {
+        GenerationPlan::new(&self.crate_root, &self.crate_name, &self.schema_version)
+            .with_module(ModuleEmission::wire_contract_module(&self.module))
+    }
+
+    pub fn generated_package(&self) -> Result<GeneratedPackage, BuildError> {
+        GenerationDriver::new(self.generation_plan()).generate()
+    }
+
+    pub fn run(&self) -> Result<(), BuildError> {
+        self.print_cargo_directives();
+        self.generated_package()?
+            .write_or_check(&self.update_environment_variable)
+    }
+
+    pub fn expect_fresh(&self) {
+        self.run()
+            .expect("checked-in wire contract schema artifacts are fresh");
+    }
+
+    fn print_cargo_directives(&self) {
+        println!("cargo:rerun-if-changed=schema/{}.schema", self.module);
+        println!(
+            "cargo:rerun-if-changed=src/schema/{}.rs",
+            Name::new(self.module.as_str()).field_name()
+        );
+        CargoSchemaMetadata::new(&self.links_name).emit_schema_directory(&self.crate_root);
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GeneratedPackage {
     crate_root: PathBuf,
     modules: Vec<GeneratedModule>,

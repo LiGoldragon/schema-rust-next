@@ -73,6 +73,12 @@ beside that typed source/schema pipeline.
 - `build::GenerationPlan` names the crate package, target modules, and
   dependency schema directories. `build::ModuleEmission` selects the
   Rust-emission target for each schema module.
+- `build::ContractCrateBuild` is the published `signal-*` /
+  `meta-signal-*` crate driver. It owns the standard contract-crate
+  build-script facts — crate root, crate name, schema version, Cargo `links`
+  metadata name, module name, and freshness environment variable — then emits
+  the standalone `WireContract` module and publishes the crate's `schema/`
+  directory for daemon/runtime imports.
 - `daemon_emit::DaemonModule` is the `triad_main!` emitter (designer report
   542): a per-component, source-visible `src/schema/daemon.rs`. It is OFF by
   default and turns ON only when a component declares a
@@ -203,17 +209,19 @@ grow a second parser for the authored form.
   runtime support, including the generic plane enum and cross-plane
   projections. New daemon schemas use the per-plane targets instead.
 - Build scripts use the shared driver rather than local emit loops. A signal or
-  meta-signal contract crate uses `GenerationPlan::wire_contract`, which emits
-  `schema/lib.schema` through `RustEmissionTarget::WireContract`. A daemon
-  crate uses `GenerationPlan::daemon_runtime`, which emits `schema/nexus.schema`
-  through `RustEmissionTarget::NexusRuntime` and `schema/sema.schema` through
-  `RustEmissionTarget::SemaRuntime`; daemon crates that carry a local Signal
-  runtime module add `ModuleEmission::signal_runtime_module("signal")`
-  explicitly. The shared runtime module builders use the same feature-gated
-  `nota-text` surface as contracts: normal binary daemon builds keep
-  `nota-next` absent, while all-feature trace/testing builds can round-trip
-  generated runtime support nouns such as `NexusObjectName` and
-  `SemaObjectName`. An unsplit bootstrap schema uses
+  meta-signal contract crate uses `build::ContractCrateBuild`, which emits
+  `schema/lib.schema` through `RustEmissionTarget::WireContract`, writes/checks
+  `src/schema/lib.rs`, and publishes `cargo::metadata=schema-dir=...` for
+  importers. A daemon crate uses `GenerationPlan::daemon_runtime`, which emits
+  `schema/nexus.schema` through `RustEmissionTarget::NexusRuntime` and
+  `schema/sema.schema` through `RustEmissionTarget::SemaRuntime`; daemon crates
+  that carry a local Signal runtime module add
+  `ModuleEmission::signal_runtime_module("signal")` explicitly. The shared
+  runtime module builders use the same feature-gated `nota-text` surface as
+  contracts: normal binary daemon builds keep `nota-next` absent, while
+  all-feature trace/testing builds can round-trip generated runtime support
+  nouns such as `NexusObjectName` and `SemaObjectName`. An unsplit bootstrap
+  schema uses
   `GenerationPlan::component_runtime_compatibility`, keeping
   `RustEmissionTarget::ComponentRuntime` explicit until the schema is split.
 - Cross-crate imports in daemon runtime schemas come from Cargo-exposed

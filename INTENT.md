@@ -77,6 +77,13 @@ or freshness-check an intermediate schema artifact, and it does not preserve
 older assembled-schema artifact or path APIs beside the source/schema
 pipeline.
 
+*Published signal contracts use the contract-crate driver.* A `signal-*` or
+`meta-signal-*` crate is not a daemon-local module and does not own a custom
+`SchemaBuild` loop. Its `build.rs` uses `build::ContractCrateBuild`, which
+wraps the `WireContract` target, freshness-checks `src/schema/lib.rs`, and
+publishes the crate's `schema/` directory through Cargo metadata so daemon
+schemas can import the contract roots.
+
 *Rust lowering is a trait surface on the typed schema objects and their
 subobjects.* `schema-next` owns schema semantics and must not depend on Rust
 emission, so the trait lives here and is implemented for `schema_next::Schema`,

@@ -1,4 +1,6 @@
-use schema_rust_next::build::{DependencySchema, GenerationDriver, GenerationPlan, ModuleEmission};
+use schema_rust_next::build::{
+    ContractCrateBuild, DependencySchema, GenerationDriver, GenerationPlan, ModuleEmission,
+};
 
 mod support;
 
@@ -204,5 +206,60 @@ fn signal_runtime_module_selects_the_signal_runtime_target() {
     assert_eq!(
         plan.modules(),
         &[ModuleEmission::signal_runtime_module("signal")]
+    );
+}
+
+#[test]
+fn contract_crate_build_is_the_standalone_wire_contract_driver() {
+    let fixture = FixtureSchemaDirectory::new("driver-contract");
+    let build = ContractCrateBuild::new(
+        fixture.crate_root(),
+        "driver-contract",
+        "0.1.0",
+        "DRIVER_CONTRACT_UPDATE_SCHEMA_ARTIFACTS",
+    );
+
+    assert_eq!(build.crate_name(), "driver-contract");
+    assert_eq!(build.links_name(), "driver-contract");
+    assert_eq!(build.module(), "lib");
+    assert_eq!(
+        build.update_environment_variable(),
+        "DRIVER_CONTRACT_UPDATE_SCHEMA_ARTIFACTS"
+    );
+    assert_eq!(
+        build.generation_plan(),
+        GenerationPlan::wire_contract(fixture.crate_root(), "driver-contract", "0.1.0")
+    );
+}
+
+#[test]
+fn contract_crate_build_emits_standalone_schema_file() {
+    let generated = ContractCrateBuild::new(
+        FixtureSchemaDirectory::new("driver-contract").crate_root(),
+        "driver-contract",
+        "0.1.0",
+        "DRIVER_CONTRACT_UPDATE_SCHEMA_ARTIFACTS",
+    )
+    .generated_package()
+    .expect("contract crate generates");
+    let source = generated
+        .rust_file_named("src/schema/lib.rs")
+        .expect("wire contract file")
+        .code
+        .as_str();
+
+    assert!(
+        source.contains("pub enum Input"),
+        "standalone contract crate should emit public wire input root:\n{source}"
+    );
+    assert!(
+        source.contains("pub type Frame = signal_frame::ExchangeFrame<Input, Output>;")
+            && source.contains("impl signal_frame::RequestPayload for Input {}")
+            && source.contains("pub fn encode_signal_frame(&self)"),
+        "standalone contract crate should own signal-frame aliases and codecs:\n{source}"
+    );
+    assert!(
+        !source.contains("pub trait NexusEngine") && !source.contains("pub trait SemaEngine"),
+        "standalone contract crate must not emit daemon-internal engine traits:\n{source}"
     );
 }
