@@ -17,7 +17,11 @@ objects. Do not add parser-side shortcuts or hand-written helper APIs beside
 the generated trait path.
 
 Use `RustEmissionTarget::WireContract` for signal and meta-signal contract
-repos: that target emits wire nouns and codecs only. Use
+repos: that target emits wire nouns, rkyv/NOTA codecs, and the universal
+`signal-frame` request/reply aliases and traits (`Frame`, `FrameBody`,
+`Request`, `ReplyEnvelope`, `RequestBuilder`, `RequestPayload`,
+`SignalOperationHeads`). Do not hand-write those aliases in contract crates.
+Use
 `RustEmissionTarget::NexusRuntime` for daemon-crate `schema/nexus.schema` files
 and `RustEmissionTarget::SemaRuntime` for `schema/sema.schema` files. Those
 per-plane runtime schemas import contract roots where needed.

@@ -166,9 +166,13 @@ grow a second parser for the authored form.
 - Emission is tested by source fixture comparison and by compiling the fixture
   as Rust code.
 - `RustEmissionTarget::WireContract` emits the external signal or meta-signal
-  wire surface: schema nouns, derives, NOTA/rkyv codecs, and short-header
-  route constants. It does not emit runtime envelopes, engine traits, mail
-  support, trace support, or signal-frame encode/decode helpers.
+  wire surface: schema nouns, derives, NOTA/rkyv codecs, short-header route
+  constants, and the universal `signal-frame` request/reply surface (`Frame`,
+  `FrameBody`, `Request`, `ReplyEnvelope`, `RequestBuilder`,
+  `RequestPayload`, `SignalOperationHeads`, `Input::into_frame`, and
+  `Output::into_reply_frame`). It does not emit runtime envelopes, engine
+  traits, mail support, trace support, or subscription-event push unless the
+  schema declares a stream.
 - `RustEmissionTarget::SignalRuntime` emits daemon-local Signal runtime
   support over signal roots: the Signal envelope, origin route, mail lifecycle
   nouns, Signal trace object names, and `SignalEngine`. The engine bridge uses
@@ -250,16 +254,16 @@ grow a second parser for the authored form.
   upgrade behavior on the generated noun; unchanged types do not need upgrade
   logic.
 - Generated signal roots emit rkyv-derived data types, NOTA text conversion,
-  short-header route triage, and binary signal-frame encode/decode methods.
-- Stream-aware signal schemas additionally emit the direct `signal-frame`
-  streaming surface when semantic `Schema::streams()` is non-empty and the
-  stream event type is the payload of `Output.Event`. The emitted aliases mirror
-  the wire kernel (`Frame = signal_frame::StreamingFrame<Input, Output, Event>`,
-  `FrameBody`, `Request`, `ReplyEnvelope`, `RequestBuilder`) and the generated
-  methods construct real `signal_frame::StreamingFrameBody::Request`,
-  `Reply`, and `SubscriptionEvent` frames. This path reads schema-next stream
-  metadata; it does not infer streaming from names alone and it does not route
-  through the retired `signal_channel!` macro.
+  short-header route triage, binary signal-frame encode/decode methods, and
+  the universal `signal-frame` request/reply aliases and builders. Non-streaming
+  contracts emit `Frame = signal_frame::ExchangeFrame<Input, Output>`.
+  Stream-aware signal schemas instead emit
+  `Frame = signal_frame::StreamingFrame<Input, Output, Event>` when semantic
+  `Schema::streams()` is non-empty and the stream event type is the payload of
+  `Output.Event`; only then does the event payload get
+  `into_subscription_frame`. This path reads schema-next stream metadata; it
+  does not infer streaming from names alone and it does not route through the
+  retired `signal_channel!` macro.
 - Bootstrap all-in-one runtime emission emits mail-event nouns.
   `signal::Signal<Root>`, `nexus::Nexus<Root>`, and `sema::Sema<Root>` are the
   automatic envelopes for root objects in each plane; each has an

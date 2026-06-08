@@ -1126,6 +1126,16 @@ impl Output {
 #[rustfmt::skip]
 impl signal_frame::RequestPayload for Input {}
 #[rustfmt::skip]
+impl signal_frame::SignalOperationHeads for Input {
+    const HEADS: &'static [&'static str] = &[
+        "SignalIn",
+        "NexusIn",
+        "SemaIn",
+        "Admin",
+        "Heartbeat",
+    ];
+}
+#[rustfmt::skip]
 impl signal_frame::LogVariant for Input {
     fn log_variant(&self) -> u64 {
         self.short_header()
@@ -1171,6 +1181,7 @@ impl Output {
         )
     }
 }
+
 #[rustfmt::skip]
 impl RuntimeEvent {
     pub fn into_subscription_frame(

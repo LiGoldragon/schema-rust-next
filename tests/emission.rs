@@ -675,11 +675,20 @@ fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
     assert!(code.contains("pub fn decode_signal_frame"));
     assert!(code.contains("pub enum SignalFrameError"));
 
-    // The streaming / observable surface stays gated behind a declared
-    // stream, so a non-streaming wire contract carries none of it.
-    assert!(!code.contains("pub type Frame ="));
+    // The published contract crate must be a real signal-frame contract,
+    // not only a daemon-local short-header payload codec.
+    assert!(code.contains("impl signal_frame::RequestPayload for Input"));
+    assert!(code.contains("impl signal_frame::SignalOperationHeads for Input"));
+    assert!(code.contains("pub type Frame = signal_frame::ExchangeFrame<Input, Output>;"));
+    assert!(code.contains("pub type FrameBody = signal_frame::ExchangeFrameBody<Input, Output>;"));
+    assert!(code.contains("pub type Request = signal_frame::Request<Input>;"));
+    assert!(code.contains("pub type ReplyEnvelope = signal_frame::Reply<Output>;"));
+    assert!(code.contains("pub type RequestBuilder = signal_frame::RequestBuilder<Input>;"));
+    assert!(code.contains("pub fn into_frame"));
+    assert!(code.contains("pub fn into_reply_frame"));
+
+    // Subscription event push remains gated behind declared stream metadata.
     assert!(!code.contains("into_subscription_frame"));
-    assert!(!code.contains("impl signal_frame::RequestPayload for Input"));
 
     assert!(!code.contains("pub trait SignalEngine"));
     assert!(!code.contains("pub trait NexusEngine"));
@@ -703,8 +712,8 @@ fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
 /// frame code, but it gated ALL frame-codec emission behind
 /// `emits_signal()`, which is false for `WireContract` — stripping the
 /// codec from freshly-generated wire contracts. The split gate restores
-/// the basic codec for every wire-facing target while keeping the
-/// streaming / observable surface gated behind a declared stream.
+/// the basic codec and signal-frame transport surface for every wire-facing
+/// target while keeping subscription event push gated behind a declared stream.
 #[test]
 fn frame_codec_reaches_wire_contract_targets_but_not_internal_planes() {
     let schema = FixtureSchema::new("plane-triad.schema");
@@ -722,14 +731,23 @@ fn frame_codec_reaches_wire_contract_targets_but_not_internal_planes() {
     assert!(wire_code.contains("pub fn decode_signal_frame"));
     assert!(wire_code.contains("pub enum SignalFrameError"));
 
-    // (2) No declared stream, so no streaming / observable surface.
-    assert!(!wire_code.contains("pub type Frame ="));
+    // (2) Even without streams, a contract crate exposes the universal
+    // signal-frame request/reply surface its consumers import.
+    assert!(wire_code.contains("impl signal_frame::RequestPayload for Input"));
+    assert!(wire_code.contains("impl signal_frame::SignalOperationHeads for Input"));
+    assert!(wire_code.contains("pub type Frame = signal_frame::ExchangeFrame<Input, Output>;"));
+    assert!(
+        wire_code.contains("pub type FrameBody = signal_frame::ExchangeFrameBody<Input, Output>;")
+    );
+    assert!(wire_code.contains("pub type Request = signal_frame::Request<Input>;"));
+    assert!(wire_code.contains("pub type ReplyEnvelope = signal_frame::Reply<Output>;"));
+    assert!(wire_code.contains("pub type RequestBuilder = signal_frame::RequestBuilder<Input>;"));
+
+    // (3) No declared stream, so no subscription event push surface.
     assert!(!wire_code.contains("into_subscription_frame"));
-    assert!(!wire_code.contains("impl signal_frame::RequestPayload for Input"));
-    assert!(!wire_code.contains("impl signal_frame::LogVariant for Input"));
 
     // The internal Nexus plane is not wire-facing: it carries NEITHER the
-    // frame codec NOR the streaming surface.
+    // frame codec NOR the transport surface.
     let nexus_runtime = RustEmitter::new(
         RustEmissionOptions::binary_only().with_target(RustEmissionTarget::NexusRuntime),
     )
@@ -741,6 +759,7 @@ fn frame_codec_reaches_wire_contract_targets_but_not_internal_planes() {
     assert!(!nexus_code.contains("pub enum SignalFrameError"));
     assert!(!nexus_code.contains("pub type Frame ="));
     assert!(!nexus_code.contains("into_subscription_frame"));
+    assert!(!nexus_code.contains("impl signal_frame::RequestPayload for Input"));
 }
 
 #[test]

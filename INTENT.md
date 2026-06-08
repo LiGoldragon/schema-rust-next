@@ -16,13 +16,14 @@ Nexus, and SEMA input/output roots become enums; runtime engines implement
 generated traits with one method per reaction variant on data-bearing objects,
 not free helper functions.
 
-*Streaming wire support is emitted from semantic stream metadata.* A schema
-that declares `Schema::streams()` and whose stream event type matches
-`Output.Event` emits direct `signal-frame` streaming aliases and frame builders:
+*Wire contracts emit the real signal-frame request/reply surface.* Every
+wire-facing target emits `signal-frame` aliases and builders:
 `Frame`, `FrameBody`, `Request`, `ReplyEnvelope`, `RequestBuilder`,
-`Input::into_frame`, `Output::into_reply_frame`, and
-`EventPayload::into_subscription_frame`. A bare `Output.Event` name without a
-stream declaration is not enough.
+`RequestPayload`, `SignalOperationHeads`, `Input::into_frame`, and
+`Output::into_reply_frame`. Stream push is the semantic-stream extension: only
+a schema that declares `Schema::streams()` and whose stream event type matches
+`Output.Event` additionally emits `EventPayload::into_subscription_frame`. A
+bare `Output.Event` name without a stream declaration is not enough.
 
 *Daemon emission is async task-backed at the listener boundary.* The generated
 daemon module emits async listeners over

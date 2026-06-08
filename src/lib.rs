@@ -305,13 +305,14 @@ impl RustModule {
         }
         if writer.emits_wire_frame() {
             writer.emit_signal_frame_codec(&self.root_enums);
-        }
-        if writer.emits_signal()
-            && let Some(event_payload) =
-                writer.streaming_event_payload(&self.root_enums, &self.streams)
-        {
-            writer.emit_signal_frame_streaming_support(event_payload);
+            let streaming_event_payload =
+                writer.streaming_event_payload(&self.root_enums, &self.streams);
+            writer.emit_signal_frame_transport_support(&self.root_enums, streaming_event_payload);
             writer.blank();
+            if let Some(event_payload) = streaming_event_payload {
+                writer.emit_signal_frame_streaming_support(event_payload);
+                writer.blank();
+            }
         }
         if writer.emits_runtime_support() {
             writer.emit_plane_route_support(&self.declarations);
@@ -1737,7 +1738,67 @@ impl ToTokens for SignalFrameStreamingSupportTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let event_type = RustTypeReferenceTokens::new(self.event_payload);
         quote! {
+            impl #event_type {
+                pub fn into_subscription_frame(
+                    self,
+                    event_identifier: signal_frame::StreamEventIdentifier,
+                    token: signal_frame::SubscriptionTokenInner,
+                ) -> Frame {
+                    Frame::with_short_header(
+                        signal_frame::ShortHeader::new(short_header::OUTPUT_EVENT),
+                        FrameBody::SubscriptionEvent {
+                            event_identifier,
+                            token,
+                            event: self,
+                        },
+                    )
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct SignalFrameTransportSupportTokens<'schema> {
+    input: &'schema RustEnum,
+    event_payload: Option<&'schema TypeReference>,
+}
+
+impl<'schema> SignalFrameTransportSupportTokens<'schema> {
+    fn new(input: &'schema RustEnum, event_payload: Option<&'schema TypeReference>) -> Self {
+        Self {
+            input,
+            event_payload,
+        }
+    }
+}
+
+impl ToTokens for SignalFrameTransportSupportTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let heads = self
+            .input
+            .variants()
+            .iter()
+            .map(|variant| Literal::string(variant.name().as_str()));
+        let frame_alias = match self.event_payload {
+            Some(event_payload) => {
+                let event_type = RustTypeReferenceTokens::new(event_payload);
+                quote! {
+                    pub type Frame = signal_frame::StreamingFrame<Input, Output, #event_type>;
+                    pub type FrameBody = signal_frame::StreamingFrameBody<Input, Output, #event_type>;
+                }
+            }
+            None => quote! {
+                pub type Frame = signal_frame::ExchangeFrame<Input, Output>;
+                pub type FrameBody = signal_frame::ExchangeFrameBody<Input, Output>;
+            },
+        };
+        quote! {
             impl signal_frame::RequestPayload for Input {}
+
+            impl signal_frame::SignalOperationHeads for Input {
+                const HEADS: &'static [&'static str] = &[#(#heads),*];
+            }
 
             impl signal_frame::LogVariant for Input {
                 fn log_variant(&self) -> u64 {
@@ -1745,8 +1806,7 @@ impl ToTokens for SignalFrameStreamingSupportTokens<'_> {
                 }
             }
 
-            pub type Frame = signal_frame::StreamingFrame<Input, Output, #event_type>;
-            pub type FrameBody = signal_frame::StreamingFrameBody<Input, Output, #event_type>;
+            #frame_alias
             pub type Request = signal_frame::Request<Input>;
             pub type ReplyEnvelope = signal_frame::Reply<Output>;
             pub type RequestBuilder = signal_frame::RequestBuilder<Input>;
@@ -1774,23 +1834,6 @@ impl ToTokens for SignalFrameStreamingSupportTokens<'_> {
                     Frame::with_short_header(
                         short_header,
                         FrameBody::Reply { exchange, reply },
-                    )
-                }
-            }
-
-            impl #event_type {
-                pub fn into_subscription_frame(
-                    self,
-                    event_identifier: signal_frame::StreamEventIdentifier,
-                    token: signal_frame::SubscriptionTokenInner,
-                ) -> Frame {
-                    Frame::with_short_header(
-                        signal_frame::ShortHeader::new(short_header::OUTPUT_EVENT),
-                        FrameBody::SubscriptionEvent {
-                            event_identifier,
-                            token,
-                            event: self,
-                        },
                     )
                 }
             }
@@ -3555,10 +3598,6 @@ impl RustModuleRenderer {
         self.target.emits_runtime_support()
     }
 
-    fn emits_signal(&self) -> bool {
-        self.runtime_planes().emits_signal()
-    }
-
     fn emits_wire_frame(&self) -> bool {
         self.target.emits_wire_frame()
     }
@@ -3971,6 +4010,22 @@ impl RustModuleRenderer {
 
     fn emit_signal_frame_impl(&mut self, root_enum: &RustEnum) {
         self.emit_item_tokens(SignalFrameImplTokens::new(root_enum).into_token_stream());
+    }
+
+    fn emit_signal_frame_transport_support(
+        &mut self,
+        root_enums: &[RustEnum],
+        event_payload: Option<&TypeReference>,
+    ) {
+        let Some(input) = self.root_enum_named(root_enums, "Input") else {
+            return;
+        };
+        if self.root_enum_named(root_enums, "Output").is_none() {
+            return;
+        }
+        self.emit_item_tokens(
+            SignalFrameTransportSupportTokens::new(input, event_payload).into_token_stream(),
+        );
     }
 
     fn streaming_event_payload<'schema>(
