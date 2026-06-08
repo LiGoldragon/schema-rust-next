@@ -44,6 +44,7 @@ pub struct NexusDaemonShape {
     process_name: String,
     working_tier: WorkingListenerTier,
     meta_tier: Option<MetaListenerTier>,
+    upgrade_tier: Option<UpgradeListenerTier>,
 }
 
 impl NexusDaemonShape {
@@ -52,11 +53,17 @@ impl NexusDaemonShape {
             process_name: process_name.into(),
             working_tier,
             meta_tier: None,
+            upgrade_tier: None,
         }
     }
 
     pub fn with_meta_tier(mut self, meta_tier: MetaListenerTier) -> Self {
         self.meta_tier = Some(meta_tier);
+        self
+    }
+
+    pub fn with_upgrade_tier(mut self, upgrade_tier: UpgradeListenerTier) -> Self {
+        self.upgrade_tier = Some(upgrade_tier);
         self
     }
 
@@ -72,8 +79,22 @@ impl NexusDaemonShape {
         self.meta_tier.as_ref()
     }
 
-    fn is_multi_listener(&self) -> bool {
+    pub fn upgrade_tier(&self) -> Option<&UpgradeListenerTier> {
+        self.upgrade_tier.as_ref()
+    }
+
+    fn has_meta_tier(&self) -> bool {
         self.meta_tier.is_some()
+    }
+
+    fn has_upgrade_tier(&self) -> bool {
+        self.upgrade_tier.is_some()
+    }
+
+    /// A daemon binds more than one listener whenever it declares any
+    /// owner-only tier beyond the working listener — meta, upgrade, or both.
+    fn is_multi_listener(&self) -> bool {
+        self.meta_tier.is_some() || self.upgrade_tier.is_some()
     }
 }
 
@@ -180,6 +201,26 @@ pub struct MetaListenerTier {
 }
 
 impl MetaListenerTier {
+    pub fn new(socket_mode: SocketModeBits) -> Self {
+        Self { socket_mode }
+    }
+
+    pub fn socket_mode(&self) -> SocketModeBits {
+        self.socket_mode
+    }
+}
+
+/// The owner-only upgrade listener tier: the third optional listener, mirroring
+/// [`MetaListenerTier`]. It binds a third owner-only socket whose accepted
+/// connection routes to a component-provided `handle_upgrade_connection` future
+/// over a runtime-owned `AcceptedConnection` — the self-upgrade escape hatch
+/// until the upgrade signal contract path is represented in the daemon shape.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpgradeListenerTier {
+    socket_mode: SocketModeBits,
+}
+
+impl UpgradeListenerTier {
     pub fn new(socket_mode: SocketModeBits) -> Self {
         Self { socket_mode }
     }
@@ -332,6 +373,18 @@ impl<'shape> DaemonImportsTokens<'shape> {
 impl ToTokens for DaemonImportsTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let component_decoded = self.shape.working_tier().is_component_decoded();
+        let actor_engine = !component_decoded;
+        let actor_imports = if actor_engine {
+            quote! {
+                use triad_runtime::EngineRequestError;
+                use triad_runtime::kameo::Actor;
+                use triad_runtime::kameo::actor::{ActorRef, Spawn, WeakActorRef};
+                use triad_runtime::kameo::error::{ActorStopReason, HookError, SendError};
+                use triad_runtime::kameo::message::{Context, Message};
+            }
+        } else {
+            quote! {}
+        };
         let working_import = match self.shape.working_tier().contract_import_path() {
             Some(working) => quote! { use #working::{Input, Output, SignalFrameError}; },
             None => quote! {},
@@ -374,6 +427,7 @@ impl ToTokens for DaemonImportsTokens<'_> {
                 RequestErrorLog,
             };
 
+            #actor_imports
             #typed_transport_imports
             #working_import
             #stream_imports
@@ -387,6 +441,7 @@ impl ToTokens for DaemonImportsTokens<'_> {
 struct ComponentDaemonTraitTokens {
     section: DaemonSection,
     has_meta_tier: bool,
+    has_upgrade_tier: bool,
     emits_stream: bool,
     component_decoded: bool,
 }
@@ -395,7 +450,8 @@ impl ComponentDaemonTraitTokens {
     fn new(shape: &NexusDaemonShape, emits_stream: bool) -> Self {
         Self {
             section: DaemonSection::ComponentDaemonTrait,
-            has_meta_tier: shape.is_multi_listener(),
+            has_meta_tier: shape.has_meta_tier(),
+            has_upgrade_tier: shape.has_upgrade_tier(),
             emits_stream,
             component_decoded: shape.working_tier().is_component_decoded(),
         }
@@ -405,13 +461,39 @@ impl ComponentDaemonTraitTokens {
 impl ToTokens for ComponentDaemonTraitTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::ComponentDaemonTrait);
+        let actor_engine = !self.component_decoded;
+        let owner_engine_parameter = if actor_engine {
+            quote! { engine: &mut Self::Engine }
+        } else {
+            quote! { engine: &Self::Engine }
+        };
         let meta_hook = if self.has_meta_tier {
             quote! {
                 /// Run one accepted meta connection. The meta tier is async task-backed,
                 /// but this hook remains the explicit component escape hatch until
                 /// the daemon shape names the meta signal contract path.
                 fn handle_meta_connection(
-                    engine: &Self::Engine,
+                    #owner_engine_parameter,
+                    connection: AcceptedConnection,
+                ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send + '_ {
+                    async move {
+                        let _ = engine;
+                        let _ = connection;
+                        Ok(())
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+        let upgrade_hook = if self.has_upgrade_tier {
+            quote! {
+                /// Run one accepted upgrade connection. The upgrade tier is async
+                /// task-backed; this hook is the component escape hatch for the
+                /// owner-only self-upgrade protocol until the daemon shape names the
+                /// upgrade signal contract path. Defaults to a no-op like the meta tier.
+                fn handle_upgrade_connection(
+                    #owner_engine_parameter,
                     connection: AcceptedConnection,
                 ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send + '_ {
                     async move {
@@ -429,18 +511,31 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 std::fmt::Display + Send + Sync + 'static
             }
         } else if self.emits_stream {
+            // The stream tier now also routes through the kameo `EngineActor`, so
+            // the error must satisfy `ReplyError` (`Debug`) and absorb the
+            // mailbox-failure translation (`From<EngineRequestError>`), exactly
+            // like the non-stream actor tier.
             quote! {
-                std::fmt::Display
+                std::fmt::Debug
+                    + std::fmt::Display
                     + From<FrameError>
                     + From<SignalFrameError>
                     + From<signal_frame::FrameError>
+                    + From<EngineRequestError>
                     + Send
                     + Sync
                     + 'static
             }
         } else {
             quote! {
-                std::fmt::Display + From<FrameError> + From<SignalFrameError> + Send + Sync + 'static
+                std::fmt::Debug
+                    + std::fmt::Display
+                    + From<FrameError>
+                    + From<SignalFrameError>
+                    + From<EngineRequestError>
+                    + Send
+                    + Sync
+                    + 'static
             }
         };
         let stream_associated_types = if self.emits_stream && !self.component_decoded {
@@ -505,6 +600,11 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send + '_;
             }
         } else {
+            let working_engine_parameter = if actor_engine {
+                quote! { engine: &'connection mut Self::Engine }
+            } else {
+                quote! { engine: &'connection Self::Engine }
+            };
             quote! {
                 /// Run one decoded working `Input` through the engine and return the
                 /// `Output` root to encode back to the caller.
@@ -515,7 +615,7 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 /// trusting a payload claim. Components that do not classify by origin
                 /// take it as `_connection`.
                 fn handle_working_input<'connection>(
-                    engine: &'connection Self::Engine,
+                    #working_engine_parameter,
                     input: Input,
                     connection: &'connection triad_runtime::ConnectionContext,
                 ) -> impl std::future::Future<Output = Result<Output, Self::Error>> + Send + 'connection;
@@ -560,6 +660,8 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 #stream_hooks
 
                 #meta_hook
+
+                #upgrade_hook
             }
         }
         .to_tokens(tokens);
@@ -639,16 +741,21 @@ impl ToTokens for DaemonCommandTokens {
 }
 
 /// The listener identity enum emitted only for multi-listener daemon shapes.
+/// `Working` is always present; `Meta` and `Upgrade` ride their declared tiers.
 struct ListenerTierTokens {
     section: DaemonSection,
+    is_multi_listener: bool,
     has_meta_tier: bool,
+    has_upgrade_tier: bool,
 }
 
 impl ListenerTierTokens {
     fn new(shape: &NexusDaemonShape) -> Self {
         Self {
             section: DaemonSection::ListenerTier,
-            has_meta_tier: shape.is_multi_listener(),
+            is_multi_listener: shape.is_multi_listener(),
+            has_meta_tier: shape.has_meta_tier(),
+            has_upgrade_tier: shape.has_upgrade_tier(),
         }
     }
 }
@@ -656,21 +763,43 @@ impl ListenerTierTokens {
 impl ToTokens for ListenerTierTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::ListenerTier);
-        if !self.has_meta_tier {
+        if !self.is_multi_listener {
             return;
         }
+        let meta_variant = if self.has_meta_tier {
+            quote! { Meta, }
+        } else {
+            quote! {}
+        };
+        let upgrade_variant = if self.has_upgrade_tier {
+            quote! { Upgrade, }
+        } else {
+            quote! {}
+        };
+        let meta_display = if self.has_meta_tier {
+            quote! { Self::Meta => formatter.write_str("meta"), }
+        } else {
+            quote! {}
+        };
+        let upgrade_display = if self.has_upgrade_tier {
+            quote! { Self::Upgrade => formatter.write_str("upgrade"), }
+        } else {
+            quote! {}
+        };
         quote! {
             #[derive(Clone, Copy, Debug, Eq, PartialEq)]
             pub enum ListenerTier {
                 Working,
-                Meta,
+                #meta_variant
+                #upgrade_variant
             }
 
             impl std::fmt::Display for ListenerTier {
                 fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         Self::Working => formatter.write_str("working"),
-                        Self::Meta => formatter.write_str("meta"),
+                        #meta_display
+                        #upgrade_display
                     }
                 }
             }
@@ -683,14 +812,18 @@ impl ToTokens for ListenerTierTokens {
 /// async task-backed listener shell the `DaemonCommand` drives.
 struct DaemonBinderTokens {
     section: DaemonSection,
+    is_multi_listener: bool,
     meta_tier: Option<MetaListenerTier>,
+    upgrade_tier: Option<UpgradeListenerTier>,
 }
 
 impl DaemonBinderTokens {
     fn new(shape: &NexusDaemonShape) -> Self {
         Self {
             section: DaemonSection::Binder,
+            is_multi_listener: shape.is_multi_listener(),
             meta_tier: shape.meta_tier().cloned(),
+            upgrade_tier: shape.upgrade_tier().cloned(),
         }
     }
 }
@@ -698,7 +831,7 @@ impl DaemonBinderTokens {
 impl ToTokens for DaemonBinderTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::Binder);
-        let bind_return = if self.meta_tier.is_some() {
+        let bind_return = if self.is_multi_listener {
             quote! {
                 AsyncMultiListenerDaemon<GeneratedDaemonRuntime<Self>>
             }
@@ -707,37 +840,62 @@ impl ToTokens for DaemonBinderTokens {
                 AsyncSingleListenerDaemon<GeneratedDaemonRuntime<Self>>
             }
         };
-        let construction = match self.meta_tier.as_ref() {
+        let meta_socket_push = match self.meta_tier.as_ref() {
             Some(meta_tier) => {
                 let bits = meta_tier.socket_mode().bits();
                 let socket_mode = syn::LitInt::new(&format!("0o{bits:o}"), Span::call_site());
                 quote! {
-                    let working_socket = AsyncListenerSocket::new(
-                        ListenerTier::Working,
-                        configuration.socket_path().to_path_buf(),
-                    );
-                    let working_socket = match configuration.socket_mode() {
-                        Some(socket_mode) => working_socket.with_socket_mode(socket_mode),
-                        None => working_socket,
-                    };
                     let meta_socket_path = configuration
                         .meta_socket_path()
                         .ok_or(DaemonError::MissingMetaSocket)?
                         .to_path_buf();
-                    let listener_sockets = [
-                        working_socket,
+                    listener_sockets.push(
                         AsyncListenerSocket::new(ListenerTier::Meta, meta_socket_path)
                             .with_socket_mode(SocketMode::new(#socket_mode)),
-                    ];
-                    Ok(AsyncMultiListenerDaemon::new(
-                        listener_sockets,
-                        runtime,
-                        RequestErrorLog::new(Self::PROCESS_NAME),
-                    )
-                    .with_concurrency_limit(configuration.request_concurrency_limit()))
+                    );
                 }
             }
-            None => quote! {
+            None => quote! {},
+        };
+        let upgrade_socket_push = match self.upgrade_tier.as_ref() {
+            Some(upgrade_tier) => {
+                let bits = upgrade_tier.socket_mode().bits();
+                let socket_mode = syn::LitInt::new(&format!("0o{bits:o}"), Span::call_site());
+                quote! {
+                    let upgrade_socket_path = configuration
+                        .upgrade_socket_path()
+                        .ok_or(DaemonError::MissingUpgradeSocket)?
+                        .to_path_buf();
+                    listener_sockets.push(
+                        AsyncListenerSocket::new(ListenerTier::Upgrade, upgrade_socket_path)
+                            .with_socket_mode(SocketMode::new(#socket_mode)),
+                    );
+                }
+            }
+            None => quote! {},
+        };
+        let construction = if self.is_multi_listener {
+            quote! {
+                let working_socket = AsyncListenerSocket::new(
+                    ListenerTier::Working,
+                    configuration.socket_path().to_path_buf(),
+                );
+                let working_socket = match configuration.socket_mode() {
+                    Some(socket_mode) => working_socket.with_socket_mode(socket_mode),
+                    None => working_socket,
+                };
+                let mut listener_sockets = std::vec![working_socket];
+                #meta_socket_push
+                #upgrade_socket_push
+                Ok(AsyncMultiListenerDaemon::new(
+                    listener_sockets,
+                    runtime,
+                    RequestErrorLog::new(Self::PROCESS_NAME),
+                )
+                .with_concurrency_limit(configuration.request_concurrency_limit()))
+            }
+        } else {
+            quote! {
                 let daemon = AsyncSingleListenerDaemon::new(
                     configuration.socket_path().to_path_buf(),
                     runtime,
@@ -748,7 +906,7 @@ impl ToTokens for DaemonBinderTokens {
                     Some(socket_mode) => daemon.with_socket_mode(socket_mode),
                     None => daemon,
                 })
-            },
+            }
         };
         quote! {
             /// The bound daemon constructor on the component trait: builds the engine,
@@ -1058,6 +1216,7 @@ impl ToTokens for SubscriptionSupportTokens {
 struct GeneratedDaemonRuntimeTokens {
     section: DaemonSection,
     has_meta_tier: bool,
+    has_upgrade_tier: bool,
     emits_stream: bool,
     component_decoded: bool,
 }
@@ -1066,73 +1225,54 @@ impl GeneratedDaemonRuntimeTokens {
     fn new(shape: &NexusDaemonShape, emits_stream: bool) -> Self {
         Self {
             section: DaemonSection::GeneratedRuntime,
-            has_meta_tier: shape.is_multi_listener(),
+            has_meta_tier: shape.has_meta_tier(),
+            has_upgrade_tier: shape.has_upgrade_tier(),
             emits_stream,
             component_decoded: shape.working_tier().is_component_decoded(),
         }
+    }
+
+    fn is_multi_listener(&self) -> bool {
+        self.has_meta_tier || self.has_upgrade_tier
     }
 }
 
 impl ToTokens for GeneratedDaemonRuntimeTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::GeneratedRuntime);
-        let subscriptions_field = if self.emits_stream && !self.component_decoded {
+        // Both the stream and non-stream tiers route the engine through a kameo
+        // `EngineActor`; only the component-decoded tier keeps the engine shared
+        // behind `&self` and owns its own per-connection frame decode.
+        let actor_engine = !self.component_decoded;
+        if actor_engine {
+            self.emit_actor_runtime(tokens);
+            return;
+        }
+        // The remaining path is the component-decoded working tier: the engine
+        // stays shared and the component owns the connection hook.
+        let working_connection_body = quote! {
+            Daemon::handle_working_connection(&self.engine, connection).await
+        };
+        let working_connection_parameter = quote! { connection };
+        let meta_connection_arm = if self.has_meta_tier {
             quote! {
-                subscriptions: EmittedSubscriptions<Daemon>,
+                ListenerTier::Meta => {
+                    Daemon::handle_meta_connection(&self.engine, connection).await
+                }
             }
         } else {
             quote! {}
         };
-        let subscriptions_init = if self.emits_stream && !self.component_decoded {
+        let upgrade_connection_arm = if self.has_upgrade_tier {
             quote! {
-                subscriptions: EmittedSubscriptions::default(),
+                ListenerTier::Upgrade => {
+                    Daemon::handle_upgrade_connection(&self.engine, connection).await
+                }
             }
         } else {
             quote! {}
         };
-        let working_connection_body = if self.component_decoded {
-            quote! {
-                Daemon::handle_working_connection(&self.engine, connection).await
-            }
-        } else if self.emits_stream {
-            quote! {
-                let mut transport = WorkingTransport::new(connection);
-                let frame = transport.read_frame().await?;
-                let (_route, input) = Input::decode_signal_frame(&frame)?;
-                let subscription_filter = Daemon::subscription_filter(&input);
-                let output =
-                    Daemon::handle_working_input(&self.engine, input, transport.context()).await?;
-                transport.write_frame(output.encode_signal_frame()?).await?;
-                if let (Some(filter), Some(token)) = (
-                    subscription_filter,
-                    Daemon::subscription_token(&output),
-                ) {
-                    self.subscriptions
-                        .register(token, filter, transport.into_writer())
-                        .await;
-                }
-                if let Some(event) = Daemon::published_event(&self.engine, &output).await? {
-                    self.subscriptions.publish(event).await?;
-                }
-                Ok(())
-            }
-        } else {
-            quote! {
-                let mut transport = WorkingTransport::new(&mut connection);
-                let frame = transport.read_frame().await?;
-                let (_route, input) = Input::decode_signal_frame(&frame)?;
-                let output =
-                    Daemon::handle_working_input(&self.engine, input, transport.context()).await?;
-                transport.write_frame(output.encode_signal_frame()?).await?;
-                Ok(())
-            }
-        };
-        let working_connection_parameter = if self.emits_stream || self.component_decoded {
-            quote! { connection }
-        } else {
-            quote! { mut connection }
-        };
-        let runtime_impl = if self.has_meta_tier {
+        let runtime_impl = if self.is_multi_listener() {
             quote! {
                 impl<Daemon: ComponentDaemon> AsyncMultiConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
                     type Listener = ListenerTier;
@@ -1153,9 +1293,8 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
                     ) -> Result<(), Self::Error> {
                         match listener {
                             ListenerTier::Working => self.handle_working_connection(connection).await,
-                            ListenerTier::Meta => {
-                                Daemon::handle_meta_connection(&self.engine, connection).await
-                            }
+                            #meta_connection_arm
+                            #upgrade_connection_arm
                         }
                     }
                 }
@@ -1187,15 +1326,11 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
             /// `handle_connection` IS the async decode -> execute -> encode spine.
             pub struct GeneratedDaemonRuntime<Daemon: ComponentDaemon> {
                 engine: Daemon::Engine,
-                #subscriptions_field
             }
 
             impl<Daemon: ComponentDaemon> GeneratedDaemonRuntime<Daemon> {
                 fn new(engine: Daemon::Engine) -> Self {
-                    Self {
-                        engine,
-                        #subscriptions_init
-                    }
+                    Self { engine }
                 }
 
                 async fn handle_working_connection(
@@ -1212,18 +1347,400 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
     }
 }
 
+impl GeneratedDaemonRuntimeTokens {
+    /// Emit the actor-tier runtime: a kameo `EngineActor<Daemon>` owns the
+    /// engine, the runtime holds an `ActorRef`, and every request crosses the
+    /// mailbox — serialising writes the way a lock did, but without holding a
+    /// guard across an `.await`, and handing the engine its `&mut self` for free.
+    /// Emitted for every non-component-decoded tier — both non-stream and stream
+    /// (the stream handler also returns the published event via `WorkingOutcome`).
+    fn emit_actor_runtime(&self, tokens: &mut TokenStream) {
+        let emits_stream = self.emits_stream;
+        // The owner-only `MetaConnection` / `UpgradeConnection` messages and the
+        // runtime ask-methods share an identical `SendError` translation; emit
+        // each through `owner_connection_message` / `owner_connection_method`.
+        let meta_message = if self.has_meta_tier {
+            Self::owner_connection_message(
+                quote!(MetaConnection),
+                quote!(handle_meta_connection),
+            )
+        } else {
+            quote! {}
+        };
+        let upgrade_message = if self.has_upgrade_tier {
+            Self::owner_connection_message(
+                quote!(UpgradeConnection),
+                quote!(handle_upgrade_connection),
+            )
+        } else {
+            quote! {}
+        };
+        let meta_connection_method = if self.has_meta_tier {
+            Self::owner_connection_method(
+                quote!(handle_meta_connection),
+                quote!(MetaConnection),
+            )
+        } else {
+            quote! {}
+        };
+        let upgrade_connection_method = if self.has_upgrade_tier {
+            Self::owner_connection_method(
+                quote!(handle_upgrade_connection),
+                quote!(UpgradeConnection),
+            )
+        } else {
+            quote! {}
+        };
+        // The working-input message reply: a plain `Output` for non-stream tiers,
+        // or a `WorkingOutcome` carrying both the output and the published event
+        // for stream tiers (the actor computes the event under the same `&mut`
+        // borrow that produced the output, so the runtime never re-borrows the
+        // engine for `published_event`).
+        let working_outcome_type = if emits_stream {
+            quote! {
+                /// The stream actor's working reply: the encoded `Output` plus the
+                /// stream event the committed output published, computed together
+                /// inside the engine actor's exclusive `&mut` handler.
+                pub struct WorkingOutcome<Daemon: ComponentDaemon> {
+                    output: Output,
+                    event: Option<Daemon::StreamEvent>,
+                }
+            }
+        } else {
+            quote! {}
+        };
+        let working_input_reply = if emits_stream {
+            quote! { Result<WorkingOutcome<Daemon>, Daemon::Error> }
+        } else {
+            quote! { Result<Output, Daemon::Error> }
+        };
+        let working_input_handler_body = if emits_stream {
+            quote! {
+                let output =
+                    Daemon::handle_working_input(&mut self.engine, message.input, &message.context).await?;
+                let event = Daemon::published_event(&self.engine, &output).await?;
+                Ok(WorkingOutcome { output, event })
+            }
+        } else {
+            quote! {
+                Daemon::handle_working_input(&mut self.engine, message.input, &message.context).await
+            }
+        };
+        // The runtime's working-connection spine. Both tiers decode the frame and
+        // ask the engine actor; the stream tier additionally computes the
+        // subscription filter BEFORE the ask, registers the writer half when the
+        // output opens a subscription, and publishes the returned event.
+        let working_connection_body = if emits_stream {
+            quote! {
+                async fn handle_working_connection(
+                    &self,
+                    connection: AcceptedConnection,
+                ) -> Result<(), Daemon::Error> {
+                    let mut transport = WorkingTransport::new(connection);
+                    let frame = transport.read_frame().await?;
+                    let (_route, input) = Input::decode_signal_frame(&frame)?;
+                    let filter = Daemon::subscription_filter(&input);
+                    let context = *transport.context();
+                    let outcome = match self.engine.ask(WorkingInput { input, context }).await {
+                        Ok(outcome) => outcome,
+                        Err(error) => return Err(Self::engine_send_error(error)),
+                    };
+                    transport.write_frame(outcome.output.encode_signal_frame()?).await?;
+                    if let (Some(filter), Some(token)) = (
+                        filter,
+                        Daemon::subscription_token(&outcome.output),
+                    ) {
+                        self.subscriptions
+                            .register(token, filter, transport.into_writer())
+                            .await;
+                    }
+                    if let Some(event) = outcome.event {
+                        self.subscriptions.publish(event).await?;
+                    }
+                    Ok(())
+                }
+            }
+        } else {
+            quote! {
+                async fn handle_working_connection(
+                    &self,
+                    mut connection: AcceptedConnection,
+                ) -> Result<(), Daemon::Error> {
+                    let mut transport = WorkingTransport::new(&mut connection);
+                    let frame = transport.read_frame().await?;
+                    let (_route, input) = Input::decode_signal_frame(&frame)?;
+                    let context = *transport.context();
+                    match self.engine.ask(WorkingInput { input, context }).await {
+                        Ok(output) => {
+                            transport.write_frame(output.encode_signal_frame()?).await?;
+                            Ok(())
+                        }
+                        Err(error) => Err(Self::engine_send_error(error)),
+                    }
+                }
+            }
+        };
+        let subscriptions_field = if emits_stream {
+            quote! { subscriptions: EmittedSubscriptions<Daemon>, }
+        } else {
+            quote! {}
+        };
+        let subscriptions_init = if emits_stream {
+            quote! { subscriptions: EmittedSubscriptions::default(), }
+        } else {
+            quote! {}
+        };
+        let meta_connection_arm = if self.has_meta_tier {
+            quote! { ListenerTier::Meta => self.handle_meta_connection(connection).await, }
+        } else {
+            quote! {}
+        };
+        let upgrade_connection_arm = if self.has_upgrade_tier {
+            quote! { ListenerTier::Upgrade => self.handle_upgrade_connection(connection).await, }
+        } else {
+            quote! {}
+        };
+        let lifecycle_methods = quote! {
+            async fn start(&self) -> Result<(), Daemon::Error> {
+                // `wait_for_startup_result` needs `Error: Clone`; the
+                // borrowing form does not, so the startup error is
+                // surfaced through `EngineRequestError` carrying its text.
+                self.engine
+                    .wait_for_startup_with_result(|result| match result {
+                        Ok(()) => Ok(()),
+                        Err(HookError::Error(error)) => Err(EngineRequestError::new(
+                            format!("engine actor failed to start: {error:?}"),
+                        )
+                        .into()),
+                        Err(HookError::Panicked(_)) => Err(EngineRequestError::new(
+                            "engine actor panicked during startup",
+                        )
+                        .into()),
+                    })
+                    .await
+            }
+
+            async fn stop(&self) -> Result<(), Daemon::Error> {
+                let _ = self.engine.stop_gracefully().await;
+                self.engine.wait_for_shutdown().await;
+                Ok(())
+            }
+        };
+        let runtime_impl = if self.is_multi_listener() {
+            quote! {
+                impl<Daemon: ComponentDaemon> AsyncMultiConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
+                    type Listener = ListenerTier;
+                    type Error = Daemon::Error;
+
+                    #lifecycle_methods
+
+                    async fn handle_connection(
+                        &self,
+                        listener: Self::Listener,
+                        connection: AcceptedConnection,
+                    ) -> Result<(), Self::Error> {
+                        match listener {
+                            ListenerTier::Working => self.handle_working_connection(connection).await,
+                            #meta_connection_arm
+                            #upgrade_connection_arm
+                        }
+                    }
+                }
+            }
+        } else {
+            quote! {
+                impl<Daemon: ComponentDaemon> AsyncConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
+                    type Error = Daemon::Error;
+
+                    #lifecycle_methods
+
+                    async fn handle_connection(
+                        &self,
+                        connection: AcceptedConnection,
+                    ) -> Result<(), Self::Error> {
+                        self.handle_working_connection(connection).await
+                    }
+                }
+            }
+        };
+        quote! {
+            /// The kameo actor that owns the component engine. The mailbox
+            /// serialises every request, giving each handler exclusive `&mut`
+            /// access to the engine without a component-internal lock.
+            pub struct EngineActor<Daemon: ComponentDaemon> {
+                engine: Daemon::Engine,
+            }
+
+            impl<Daemon: ComponentDaemon> Actor for EngineActor<Daemon> {
+                type Args = Self;
+                type Error = Daemon::Error;
+
+                async fn on_start(
+                    actor: Self::Args,
+                    _actor_reference: ActorRef<Self>,
+                ) -> Result<Self, Self::Error> {
+                    Daemon::start(&actor.engine)?;
+                    Ok(actor)
+                }
+
+                async fn on_stop(
+                    &mut self,
+                    _actor_reference: WeakActorRef<Self>,
+                    _reason: ActorStopReason,
+                ) -> Result<(), Self::Error> {
+                    Daemon::stop(&self.engine)
+                }
+            }
+
+            #working_outcome_type
+
+            #[derive(Debug)]
+            pub struct WorkingInput {
+                input: Input,
+                context: triad_runtime::ConnectionContext,
+            }
+
+            impl<Daemon: ComponentDaemon> Message<WorkingInput> for EngineActor<Daemon> {
+                type Reply = #working_input_reply;
+
+                async fn handle(
+                    &mut self,
+                    message: WorkingInput,
+                    _context: &mut Context<Self, Self::Reply>,
+                ) -> Self::Reply {
+                    #working_input_handler_body
+                }
+            }
+
+            #meta_message
+
+            #upgrade_message
+
+            /// The generated runtime struct holds an `ActorRef` to the engine
+            /// actor. Its `handle_connection` IS the async decode -> ask -> encode
+            /// spine; the engine state lives behind the actor mailbox.
+            pub struct GeneratedDaemonRuntime<Daemon: ComponentDaemon> {
+                engine: ActorRef<EngineActor<Daemon>>,
+                #subscriptions_field
+            }
+
+            impl<Daemon: ComponentDaemon> GeneratedDaemonRuntime<Daemon> {
+                fn new(engine: Daemon::Engine) -> Self {
+                    Self {
+                        engine: EngineActor::<Daemon>::spawn(EngineActor { engine }),
+                        #subscriptions_init
+                    }
+                }
+
+                /// Translate a kameo `SendError` from an engine `ask` into the
+                /// component's typed `Error` via `EngineRequestError`.
+                fn engine_send_error(
+                    error: SendError<WorkingInput, Daemon::Error>,
+                ) -> Daemon::Error {
+                    match error {
+                        SendError::HandlerError(error) => error,
+                        SendError::ActorNotRunning(_) => {
+                            EngineRequestError::new("engine actor is not running").into()
+                        }
+                        SendError::ActorStopped => {
+                            EngineRequestError::new("engine actor stopped before replying").into()
+                        }
+                        SendError::MailboxFull(_) => {
+                            EngineRequestError::new("engine actor mailbox is full").into()
+                        }
+                        SendError::Timeout(_) => {
+                            EngineRequestError::new("engine actor request timed out").into()
+                        }
+                    }
+                }
+
+                #working_connection_body
+
+                #meta_connection_method
+
+                #upgrade_connection_method
+            }
+
+            #runtime_impl
+        }
+        .to_tokens(tokens);
+    }
+
+    /// Emit one owner-only connection `Message<T>` impl on `EngineActor` routing
+    /// to the named component hook — the shared shape for the meta and upgrade
+    /// tiers.
+    fn owner_connection_message(
+        message_type: TokenStream,
+        hook: TokenStream,
+    ) -> TokenStream {
+        quote! {
+            pub struct #message_type {
+                connection: AcceptedConnection,
+            }
+
+            impl<Daemon: ComponentDaemon> Message<#message_type> for EngineActor<Daemon> {
+                type Reply = Result<(), Daemon::Error>;
+
+                async fn handle(
+                    &mut self,
+                    message: #message_type,
+                    _context: &mut Context<Self, Self::Reply>,
+                ) -> Self::Reply {
+                    Daemon::#hook(&mut self.engine, message.connection).await
+                }
+            }
+        }
+    }
+
+    /// Emit one runtime ask-method that forwards an accepted owner-only
+    /// connection to the engine actor and translates the `SendError` — the
+    /// shared shape for the meta and upgrade tiers.
+    fn owner_connection_method(
+        method: TokenStream,
+        message_type: TokenStream,
+    ) -> TokenStream {
+        quote! {
+            async fn #method(
+                &self,
+                connection: AcceptedConnection,
+            ) -> Result<(), Daemon::Error> {
+                match self.engine.ask(#message_type { connection }).await {
+                    Ok(()) => Ok(()),
+                    Err(SendError::HandlerError(error)) => Err(error),
+                    Err(SendError::ActorNotRunning(_)) => {
+                        Err(EngineRequestError::new("engine actor is not running").into())
+                    }
+                    Err(SendError::ActorStopped) => {
+                        Err(EngineRequestError::new("engine actor stopped before replying").into())
+                    }
+                    Err(SendError::MailboxFull(_)) => {
+                        Err(EngineRequestError::new("engine actor mailbox is full").into())
+                    }
+                    Err(SendError::Timeout(_)) => {
+                        Err(EngineRequestError::new("engine actor request timed out").into())
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// The emitted `DaemonError`: argv, configuration, Tokio runtime, listener,
 /// and the component error, plus the `From` conversions.
 struct DaemonErrorTokens {
     section: DaemonSection,
+    is_multi_listener: bool,
     has_meta_tier: bool,
+    has_upgrade_tier: bool,
 }
 
 impl DaemonErrorTokens {
     fn new(shape: &NexusDaemonShape) -> Self {
         Self {
             section: DaemonSection::Error,
-            has_meta_tier: shape.is_multi_listener(),
+            is_multi_listener: shape.is_multi_listener(),
+            has_meta_tier: shape.has_meta_tier(),
+            has_upgrade_tier: shape.has_upgrade_tier(),
         }
     }
 }
@@ -1239,7 +1756,15 @@ impl ToTokens for DaemonErrorTokens {
         } else {
             quote! {}
         };
-        let listener_error_conversion = if self.has_meta_tier {
+        let missing_upgrade_variant = if self.has_upgrade_tier {
+            quote! {
+                #[error("daemon upgrade socket path missing from configuration")]
+                MissingUpgradeSocket,
+            }
+        } else {
+            quote! {}
+        };
+        let listener_error_conversion = if self.is_multi_listener {
             quote! {
                 impl<Daemon: ComponentDaemon> From<AsyncMultiListenerDaemonError<Daemon::Error>>
                     for DaemonError<Daemon>
@@ -1286,6 +1811,8 @@ impl ToTokens for DaemonErrorTokens {
                 Listener(AsyncListenerError),
 
                 #missing_meta_variant
+
+                #missing_upgrade_variant
 
                 #[error("component error: {0}")]
                 Component(Daemon::Error),
