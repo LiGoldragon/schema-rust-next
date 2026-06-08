@@ -11,10 +11,10 @@ code is emitted into the consumer crate source tree under `src/schema/`, not
 hidden in `OUT_DIR`. Source-visible generated interfaces are reviewable and
 can become committed or freshness-checked build artifacts.
 
-*Schema-generated objects are the Rust nouns that carry behavior.* Actor input
-and output roots become enums; runtime engines implement generated Nexus
-traits with one method per reaction variant on data-bearing objects, not free
-helper functions.
+*Schema-generated objects are the Rust nouns that carry behavior.* Signal,
+Nexus, and SEMA input/output roots become enums; runtime engines implement
+generated traits with one method per reaction variant on data-bearing objects,
+not free helper functions.
 
 *Streaming wire support is emitted from semantic stream metadata.* A schema
 that declares `Schema::streams()` and whose stream event type matches

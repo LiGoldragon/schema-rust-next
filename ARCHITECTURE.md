@@ -305,7 +305,7 @@ grow a second parser for the authored form.
   wildcard. The shared loop itself stays in `triad-runtime`.
 - Generated engine traits carry minimal lifecycle hooks. `NexusEngine` and
   `SemaEngine` each emit default no-op `on_start` and `on_stop` methods
-  returning typed `ActorStartFailure` and `ActorStopFailure` results. The
+  returning typed `EngineStartFailure` and `EngineStopFailure` results. The
   bootstrap all-in-one `ComponentRuntime` target still emits the historical
   `SignalEngine` trait while unsplit schemas exist. These hooks give the
   generated runner and persona supervision a graceful-start/stop address

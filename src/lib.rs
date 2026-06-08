@@ -2002,67 +2002,67 @@ impl ToTokens for NexusRunnerAdapterTokens<'_> {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RuntimeSupportSection {
-    ActorLifecycle,
+    EngineLifecycle,
     SchemaPlane,
 }
 
-struct ActorLifecycleSupportTokens {
+struct EngineLifecycleSupportTokens {
     section: RuntimeSupportSection,
 }
 
-impl ActorLifecycleSupportTokens {
+impl EngineLifecycleSupportTokens {
     fn new() -> Self {
         Self {
-            section: RuntimeSupportSection::ActorLifecycle,
+            section: RuntimeSupportSection::EngineLifecycle,
         }
     }
 }
 
-impl ToTokens for ActorLifecycleSupportTokens {
+impl ToTokens for EngineLifecycleSupportTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        debug_assert_eq!(self.section, RuntimeSupportSection::ActorLifecycle);
+        debug_assert_eq!(self.section, RuntimeSupportSection::EngineLifecycle);
         quote! {
             #[derive(Clone, Debug, PartialEq, Eq)]
-            pub enum ActorStartFailure {
+            pub enum EngineStartFailure {
                 ResourceBusy(String),
                 ConfigurationInvalid(String),
             }
 
-            impl std::fmt::Display for ActorStartFailure {
+            impl std::fmt::Display for EngineStartFailure {
                 fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         Self::ResourceBusy(message) => {
-                            write!(formatter, "actor resource busy: {message}")
+                            write!(formatter, "engine resource busy: {message}")
                         }
                         Self::ConfigurationInvalid(message) => {
-                            write!(formatter, "actor configuration invalid: {message}")
+                            write!(formatter, "engine configuration invalid: {message}")
                         }
                     }
                 }
             }
 
-            impl std::error::Error for ActorStartFailure {}
+            impl std::error::Error for EngineStartFailure {}
 
             #[derive(Clone, Debug, PartialEq, Eq)]
-            pub enum ActorStopFailure {
+            pub enum EngineStopFailure {
                 ResourceLocked(String),
                 ChildStillRunning(String),
             }
 
-            impl std::fmt::Display for ActorStopFailure {
+            impl std::fmt::Display for EngineStopFailure {
                 fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         Self::ResourceLocked(message) => {
-                            write!(formatter, "actor resource locked: {message}")
+                            write!(formatter, "engine resource locked: {message}")
                         }
                         Self::ChildStillRunning(message) => {
-                            write!(formatter, "actor child still running: {message}")
+                            write!(formatter, "engine child still running: {message}")
                         }
                     }
                 }
             }
 
-            impl std::error::Error for ActorStopFailure {}
+            impl std::error::Error for EngineStopFailure {}
         }
         .to_tokens(tokens);
     }
@@ -2135,11 +2135,11 @@ impl ToTokens for SignalEngineTraitTokens {
             pub trait #engine_trait: Send {
                 #associated_nexus_types
 
-                fn on_start(&mut self) -> Result<(), ActorStartFailure> {
+                fn on_start(&mut self) -> Result<(), EngineStartFailure> {
                     Ok(())
                 }
 
-                fn on_stop(&mut self) -> Result<(), ActorStopFailure> {
+                fn on_stop(&mut self) -> Result<(), EngineStopFailure> {
                     Ok(())
                 }
 
@@ -2293,11 +2293,11 @@ impl ToTokens for NexusEngineTraitTokens<'_> {
 
         quote! {
             pub trait #engine_trait: Send {
-                fn on_start(&mut self) -> Result<(), ActorStartFailure> {
+                fn on_start(&mut self) -> Result<(), EngineStartFailure> {
                     Ok(())
                 }
 
-                fn on_stop(&mut self) -> Result<(), ActorStopFailure> {
+                fn on_stop(&mut self) -> Result<(), EngineStopFailure> {
                     Ok(())
                 }
 
@@ -2412,11 +2412,11 @@ impl ToTokens for SemaEngineTraitTokens {
 
         quote! {
             pub trait #engine_trait: Send {
-                fn on_start(&mut self) -> Result<(), ActorStartFailure> {
+                fn on_start(&mut self) -> Result<(), EngineStartFailure> {
                     Ok(())
                 }
 
-                fn on_stop(&mut self) -> Result<(), ActorStopFailure> {
+                fn on_stop(&mut self) -> Result<(), EngineStopFailure> {
                     Ok(())
                 }
 
@@ -5293,7 +5293,7 @@ impl RustModuleRenderer {
     }
 
     fn emit_actor_lifecycle_support(&mut self) {
-        self.emit_item_tokens(ActorLifecycleSupportTokens::new().into_token_stream());
+        self.emit_item_tokens(EngineLifecycleSupportTokens::new().into_token_stream());
         self.blank();
     }
 

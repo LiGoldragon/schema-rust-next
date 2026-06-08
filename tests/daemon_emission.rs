@@ -105,7 +105,7 @@ fn single_listener_daemon_emits_the_async_single_listener_spine() {
     );
     assert_code_contains(code, "read_body_async(self.connection.stream_mut())");
     assert_code_contains(code, "write_body_async(");
-    // The single-listener actor daemon has no sync listener, no meta tier, and
+    // The single-listener async daemon has no sync listener, no meta tier, and
     // no listener-tier enum.
     assert_code_excludes(
         code,

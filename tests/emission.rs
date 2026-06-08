@@ -354,7 +354,7 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("pub enum ActorStartFailure")
+            .contains("pub enum EngineStartFailure")
     );
     assert!(generated.code.as_str().contains("ResourceBusy(String)"));
     assert!(
@@ -367,7 +367,7 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("pub enum ActorStopFailure")
+            .contains("pub enum EngineStopFailure")
     );
     assert!(generated.code.as_str().contains("ResourceLocked(String)"));
     assert!(
@@ -380,13 +380,13 @@ fn emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages
         generated
             .code
             .as_str()
-            .contains("fn on_start(&mut self) -> Result<(), ActorStartFailure>")
+            .contains("fn on_start(&mut self) -> Result<(), EngineStartFailure>")
     );
     assert!(
         generated
             .code
             .as_str()
-            .contains("fn on_stop(&mut self) -> Result<(), ActorStopFailure>")
+            .contains("fn on_stop(&mut self) -> Result<(), EngineStopFailure>")
     );
     assert!(
         generated
@@ -684,7 +684,7 @@ fn wire_contract_target_emits_wire_codecs_without_runtime_plane_support() {
     assert!(!code.contains("pub trait SignalEngine"));
     assert!(!code.contains("pub trait NexusEngine"));
     assert!(!code.contains("pub trait SemaEngine"));
-    assert!(!code.contains("pub enum ActorStartFailure"));
+    assert!(!code.contains("pub enum EngineStartFailure"));
     assert!(!code.contains("pub struct MessageSent"));
     assert!(!code.contains("pub struct OriginRoute"));
     assert!(!code.contains("pub enum Plane"));
