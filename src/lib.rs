@@ -274,6 +274,9 @@ impl RustModule {
         for alias in &self.scalar_aliases {
             writer.emit_scalar_alias(alias);
         }
+        if self.support.references_bytes() {
+            writer.emit_bytes_scalar();
+        }
         writer.blank();
         writer.emit_imports(&self.imports);
         writer.emit_nota_support();
@@ -942,6 +945,7 @@ impl LowerToRust<RustEnumVariant> for EnumVariant {
 struct RustSupportModel {
     map_key_type_names: Vec<String>,
     private_type_names: Vec<String>,
+    references_bytes: bool,
 }
 
 impl RustSupportModel {
@@ -952,12 +956,17 @@ impl RustSupportModel {
     fn private_type_names(&self) -> &[String] {
         &self.private_type_names
     }
+
+    fn references_bytes(&self) -> bool {
+        self.references_bytes
+    }
 }
 
 impl LowerToRust<RustSupportModel> for Schema {
     fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustSupportModel {
         RustSupportModel {
             map_key_type_names: CollectionScan::new(self).map_key_type_names(),
+            references_bytes: CollectionScan::new(self).references_bytes(),
             private_type_names: self
                 .namespace()
                 .iter()
@@ -3289,6 +3298,58 @@ impl<'schema> CollectionScan<'schema> {
         names
     }
 
+    /// Whether the schema references the `Bytes` scalar anywhere (directly or
+    /// nested in a collection), so the renderer only emits the `Bytes`
+    /// newtype-prelude + hex codec when a module actually uses it.
+    fn references_bytes(&self) -> bool {
+        self.schema
+            .namespace()
+            .iter()
+            .any(|declaration| Self::declaration_uses_bytes(declaration.value()))
+            || self
+                .schema
+                .input_and_output()
+                .into_iter()
+                .any(Self::enum_uses_bytes)
+    }
+
+    fn declaration_uses_bytes(declaration: &TypeDeclaration) -> bool {
+        match declaration {
+            TypeDeclaration::Struct(declaration) => declaration
+                .fields
+                .iter()
+                .any(|field| Self::reference_uses_bytes(&field.reference)),
+            TypeDeclaration::Newtype(declaration) => {
+                Self::reference_uses_bytes(&declaration.reference)
+            }
+            TypeDeclaration::Enum(declaration) => Self::enum_uses_bytes(declaration),
+        }
+    }
+
+    fn enum_uses_bytes(declaration: &EnumDeclaration) -> bool {
+        declaration
+            .variants
+            .iter()
+            .any(|variant| variant.payload.as_ref().is_some_and(Self::reference_uses_bytes))
+    }
+
+    fn reference_uses_bytes(reference: &TypeReference) -> bool {
+        match reference {
+            TypeReference::Bytes => true,
+            TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
+                Self::reference_uses_bytes(inner)
+            }
+            TypeReference::Map(key, value) => {
+                Self::reference_uses_bytes(key) || Self::reference_uses_bytes(value)
+            }
+            TypeReference::String
+            | TypeReference::Integer
+            | TypeReference::Boolean
+            | TypeReference::Path
+            | TypeReference::Plain(_) => false,
+        }
+    }
+
     fn collect_enum_map_keys(declaration: &EnumDeclaration, names: &mut Vec<String>) {
         for variant in &declaration.variants {
             if let Some(payload) = &variant.payload {
@@ -3639,6 +3700,105 @@ impl RustModuleRenderer {
     /// type therefore use the dependency crate's type identity.
     fn emit_scalar_alias(&mut self, alias: &RustScalarAlias) {
         self.emit_item_tokens(RustScalarAliasTokens::new(alias).into_token_stream());
+    }
+
+    /// Emits the `Bytes` scalar as a newtype over `Vec<u8>` carrying its own
+    /// lowercase-hex NOTA codec (`[deadbeef]`), NOT a transparent `Vec<u8>`
+    /// alias (whose blanket codec would render `[1 2 3 …]`). The struct +
+    /// accessors are always emitted; the hex codec follows the module's
+    /// NOTA surface.
+    fn emit_bytes_scalar(&mut self) {
+        let gate = match &self.nota_surface {
+            NotaSurface::AlwaysEnabled | NotaSurface::Disabled => None,
+            NotaSurface::FeatureGated { feature } => Some(quote! {
+                #[cfg(feature = #feature)]
+            }),
+        };
+        let codec = if self.nota_surface.emits_nota() {
+            quote! {
+                #gate
+                impl Bytes {
+                    fn from_hex(text: &str) -> Result<Self, nota_next::NotaDecodeError> {
+                        if !text.len().is_multiple_of(2) {
+                            return Err(nota_next::NotaDecodeError::Parse(format!(
+                                "Bytes hex literal has odd length: {text}"
+                            )));
+                        }
+                        let mut bytes = Vec::with_capacity(text.len() / 2);
+                        for pair in text.as_bytes().chunks_exact(2) {
+                            let high = Self::hex_digit(pair[0])?;
+                            let low = Self::hex_digit(pair[1])?;
+                            bytes.push((high << 4) | low);
+                        }
+                        Ok(Self(bytes))
+                    }
+
+                    fn hex_digit(digit: u8) -> Result<u8, nota_next::NotaDecodeError> {
+                        match digit {
+                            b'0'..=b'9' => Ok(digit - b'0'),
+                            b'a'..=b'f' => Ok(digit - b'a' + 10),
+                            other => Err(nota_next::NotaDecodeError::Parse(format!(
+                                "Bytes hex literal has a non-hex digit: {other}"
+                            ))),
+                        }
+                    }
+                }
+
+                #gate
+                impl nota_next::NotaEncode for Bytes {
+                    fn to_nota(&self) -> String {
+                        let mut hex = String::with_capacity(self.0.len() * 2);
+                        for byte in &self.0 {
+                            hex.push_str(&format!("{byte:02x}"));
+                        }
+                        nota_next::NotaEncode::to_nota(&hex)
+                    }
+                }
+
+                #gate
+                impl nota_next::NotaDecode for Bytes {
+                    fn from_nota_block(
+                        block: &nota_next::Block,
+                    ) -> Result<Self, nota_next::NotaDecodeError> {
+                        let hex = <String as nota_next::NotaDecode>::from_nota_block(block)?;
+                        Self::from_hex(&hex)
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+        self.emit_item_tokens(quote! {
+            #[derive(
+                rkyv::Archive,
+                rkyv::Serialize,
+                rkyv::Deserialize,
+                Clone,
+                Debug,
+                PartialEq,
+                Eq,
+                PartialOrd,
+                Ord,
+                Hash,
+            )]
+            pub struct Bytes(Vec<u8>);
+
+            impl Bytes {
+                pub fn new(payload: Vec<u8>) -> Self {
+                    Self(payload)
+                }
+
+                pub fn payload(&self) -> &[u8] {
+                    &self.0
+                }
+
+                pub fn into_payload(self) -> Vec<u8> {
+                    self.0
+                }
+            }
+
+            #codec
+        });
     }
 
     fn emit_imports(&mut self, imports: &[RustImport]) {

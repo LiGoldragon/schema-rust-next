@@ -8,6 +8,86 @@ pub type Integer = u64;
 pub type Boolean = bool;
 #[rustfmt::skip]
 pub type Path = std::string::String;
+#[rustfmt::skip]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+)]
+pub struct Bytes(Vec<u8>);
+#[rustfmt::skip]
+impl Bytes {
+    pub fn new(payload: Vec<u8>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &[u8] {
+        &self.0
+    }
+    pub fn into_payload(self) -> Vec<u8> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl Bytes {
+    fn from_hex(text: &str) -> Result<Self, nota_next::NotaDecodeError> {
+        if !text.len().is_multiple_of(2) {
+            return Err(
+                nota_next::NotaDecodeError::Parse(
+                    format!("Bytes hex literal has odd length: {text}"),
+                ),
+            );
+        }
+        let mut bytes = Vec::with_capacity(text.len() / 2);
+        for pair in text.as_bytes().chunks_exact(2) {
+            let high = Self::hex_digit(pair[0])?;
+            let low = Self::hex_digit(pair[1])?;
+            bytes.push((high << 4) | low);
+        }
+        Ok(Self(bytes))
+    }
+    fn hex_digit(digit: u8) -> Result<u8, nota_next::NotaDecodeError> {
+        match digit {
+            b'0'..=b'9' => Ok(digit - b'0'),
+            b'a'..=b'f' => Ok(digit - b'a' + 10),
+            other => {
+                Err(
+                    nota_next::NotaDecodeError::Parse(
+                        format!("Bytes hex literal has a non-hex digit: {other}"),
+                    ),
+                )
+            }
+        }
+    }
+}
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl nota_next::NotaEncode for Bytes {
+    fn to_nota(&self) -> String {
+        let mut hex = String::with_capacity(self.0.len() * 2);
+        for byte in &self.0 {
+            hex.push_str(&format!("{byte:02x}"));
+        }
+        nota_next::NotaEncode::to_nota(&hex)
+    }
+}
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl nota_next::NotaDecode for Bytes {
+    fn from_nota_block(
+        block: &nota_next::Block,
+    ) -> Result<Self, nota_next::NotaDecodeError> {
+        let hex = <String as nota_next::NotaDecode>::from_nota_block(block)?;
+        Self::from_hex(&hex)
+    }
+}
 
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
@@ -58,6 +138,7 @@ pub struct Cluster {
     pub cache: Option<NodeConfig>,
     pub healthy: Boolean,
     pub config_path: Path,
+    pub digest: Bytes,
 }
 
 #[rustfmt::skip]
