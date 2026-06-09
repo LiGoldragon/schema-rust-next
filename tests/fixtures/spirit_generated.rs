@@ -802,7 +802,16 @@ impl TraceEvent {
     PartialEq,
     Eq,
 )]
-pub struct MessageIdentifier(pub Integer);
+pub struct MessageIdentifier(Integer);
+#[rustfmt::skip]
+impl MessageIdentifier {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> Integer {
+        self.0
+    }
+}
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
 impl MessageIdentifier {
@@ -826,7 +835,16 @@ impl MessageIdentifier {
     PartialEq,
     Eq,
 )]
-pub struct OriginRoute(pub Integer);
+pub struct OriginRoute(Integer);
+#[rustfmt::skip]
+impl OriginRoute {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> Integer {
+        self.0
+    }
+}
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
 impl OriginRoute {

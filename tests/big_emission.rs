@@ -327,17 +327,17 @@ fn compiled_large_spirit_generated_rust_parses_frames_and_emits_mail_events() {
     let (route, decoded) =
         spirit_large_generated::Input::decode_signal_frame(&frame).expect("signal frame decodes");
     let event = decoded
-        .with_origin_route(spirit_large_generated::OriginRoute(7001))
-        .message_sent(spirit_large_generated::MessageIdentifier(99));
+        .with_origin_route(spirit_large_generated::OriginRoute::new(7001))
+        .message_sent(spirit_large_generated::MessageIdentifier::new(99));
 
     assert_eq!(route, spirit_large_generated::InputRoute::Record);
     assert_eq!(
         event.identifier,
-        spirit_large_generated::MessageIdentifier(99)
+        spirit_large_generated::MessageIdentifier::new(99)
     );
     assert_eq!(
         event.origin_route,
-        spirit_large_generated::OriginRoute(7001)
+        spirit_large_generated::OriginRoute::new(7001)
     );
     assert_eq!(event.root, spirit_large_generated::MessageRoot::Input);
 }

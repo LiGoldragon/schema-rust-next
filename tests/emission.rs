@@ -1029,11 +1029,11 @@ fn generated_roots_wrap_into_messages_with_automatic_origin_route() {
         .parse::<generated::Input>()
         .expect("parse observe input");
     let message: generated::signal::Signal<generated::signal::Input> =
-        input.with_origin_route(generated::OriginRoute(19));
+        input.with_origin_route(generated::OriginRoute::new(19));
 
-    assert_eq!(message.origin_route(), generated::OriginRoute(19));
+    assert_eq!(message.origin_route(), generated::OriginRoute::new(19));
     let plane = generated::schema::Plane::<generated::signal::Input, (), ()>::Signal(message);
-    assert_eq!(plane.origin_route(), generated::OriginRoute(19));
+    assert_eq!(plane.origin_route(), generated::OriginRoute::new(19));
     let generated::schema::Plane::Signal(message) = plane else {
         panic!("expected signal plane");
     };
@@ -1130,8 +1130,8 @@ fn generated_signal_roots_emit_typed_message_sent_events() {
         .parse::<generated::Input>()
         .expect("parse observe input");
     let event = input
-        .with_origin_route(generated::OriginRoute(900))
-        .message_sent(generated::MessageIdentifier(42));
+        .with_origin_route(generated::OriginRoute::new(900))
+        .message_sent(generated::MessageIdentifier::new(42));
     let mut hook = MailHook::new();
 
     event.push_to(&mut hook).expect("message sent event pushes");
@@ -1139,30 +1139,30 @@ fn generated_signal_roots_emit_typed_message_sent_events() {
     assert_eq!(
         hook.sent_events,
         vec![generated::MessageSent {
-            identifier: generated::MessageIdentifier(42),
-            origin_route: generated::OriginRoute(900),
+            identifier: generated::MessageIdentifier::new(42),
+            origin_route: generated::OriginRoute::new(900),
             root: generated::MessageRoot::Input,
             short_header: generated::short_header::INPUT_OBSERVE,
         }],
     );
-    assert_eq!(event.origin_route(), generated::OriginRoute(900));
+    assert_eq!(event.origin_route(), generated::OriginRoute::new(900));
     assert_eq!(
         generated::NotaSource::new("900")
             .parse::<generated::OriginRoute>()
             .expect("origin route decodes through shared codec"),
-        generated::OriginRoute(900)
+        generated::OriginRoute::new(900)
     );
-    assert_eq!(generated::OriginRoute(900).to_nota(), "900");
+    assert_eq!(generated::OriginRoute::new(900).to_nota(), "900");
     assert_eq!(
         generated::NotaSource::new("42")
             .parse::<generated::MessageIdentifier>()
             .expect("message identifier decodes through shared codec"),
-        generated::MessageIdentifier(42)
+        generated::MessageIdentifier::new(42)
     );
-    assert_eq!(generated::MessageIdentifier(42).to_nota(), "42");
+    assert_eq!(generated::MessageIdentifier::new(42).to_nota(), "42");
     assert_ne!(
         event.origin_route(),
-        generated::OriginRoute(event.identifier.0),
+        generated::OriginRoute::new(event.identifier.payload()),
         "origin route is minted separately from the message identifier"
     );
 }
@@ -1191,8 +1191,8 @@ fn generated_processed_mail_events_are_typed_without_root_dispatch_traits() {
     let reply = generated::Output::RecordsObserved(generated::RecordSet::new(vec![]));
 
     let processed = generated::MessageProcessed::new(
-        generated::MessageIdentifier(77),
-        generated::OriginRoute(701),
+        generated::MessageIdentifier::new(77),
+        generated::OriginRoute::new(701),
         reply,
     );
     processed
@@ -1202,8 +1202,8 @@ fn generated_processed_mail_events_are_typed_without_root_dispatch_traits() {
     assert_eq!(
         hook.processed_events,
         vec![generated::MessageProcessed {
-            identifier: generated::MessageIdentifier(77),
-            origin_route: generated::OriginRoute(701),
+            identifier: generated::MessageIdentifier::new(77),
+            origin_route: generated::OriginRoute::new(701),
             reply: generated::Output::RecordsObserved(generated::RecordSet::new(vec![])),
         }],
     );

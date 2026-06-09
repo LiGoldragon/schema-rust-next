@@ -2504,7 +2504,16 @@ impl ToTokens for RuntimeCopyNewtypeTokens<'_> {
         let attributes = self.context.derive_attributes(true, false);
         quote! {
             #( #attributes )*
-            pub struct #name(pub Integer);
+            pub struct #name(Integer);
+
+            impl #name {
+                pub fn new(payload: Integer) -> Self {
+                    Self(payload)
+                }
+                pub fn payload(&self) -> Integer {
+                    self.0
+                }
+            }
         }
         .to_tokens(tokens);
     }
