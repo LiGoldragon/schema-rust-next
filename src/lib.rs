@@ -277,6 +277,9 @@ impl RustModule {
         if self.support.references_bytes() {
             writer.emit_bytes_scalar();
         }
+        if self.support.references_fixed_bytes() {
+            writer.emit_fixed_bytes_scalar();
+        }
         writer.blank();
         writer.emit_imports(&self.imports);
         writer.emit_nota_support();
@@ -946,6 +949,7 @@ struct RustSupportModel {
     map_key_type_names: Vec<String>,
     private_type_names: Vec<String>,
     references_bytes: bool,
+    references_fixed_bytes: bool,
 }
 
 impl RustSupportModel {
@@ -960,6 +964,10 @@ impl RustSupportModel {
     fn references_bytes(&self) -> bool {
         self.references_bytes
     }
+
+    fn references_fixed_bytes(&self) -> bool {
+        self.references_fixed_bytes
+    }
 }
 
 impl LowerToRust<RustSupportModel> for Schema {
@@ -967,6 +975,7 @@ impl LowerToRust<RustSupportModel> for Schema {
         RustSupportModel {
             map_key_type_names: CollectionScan::new(self).map_key_type_names(),
             references_bytes: CollectionScan::new(self).references_bytes(),
+            references_fixed_bytes: CollectionScan::new(self).references_fixed_bytes(),
             private_type_names: self
                 .namespace()
                 .iter()
@@ -1110,7 +1119,8 @@ impl RustRenderContext {
             | TypeReference::Integer
             | TypeReference::Boolean
             | TypeReference::Path
-            | TypeReference::Bytes => false,
+            | TypeReference::Bytes
+            | TypeReference::FixedBytes(_) => false,
         }
     }
 }
@@ -1158,6 +1168,10 @@ impl ToTokens for RustTypeReferenceTokens<'_> {
             TypeReference::Boolean => quote! { Boolean }.to_tokens(tokens),
             TypeReference::Path => quote! { Path }.to_tokens(tokens),
             TypeReference::Bytes => quote! { Bytes }.to_tokens(tokens),
+            TypeReference::FixedBytes(width) => {
+                let width = proc_macro2::Literal::u64_unsuffixed(*width);
+                quote! { FixedBytes<#width> }.to_tokens(tokens);
+            }
             TypeReference::Plain(name) => RustIdentifier::new(name.as_str()).to_tokens(tokens),
             TypeReference::Vector(inner) => {
                 let inner = Self::new(inner);
@@ -3346,6 +3360,61 @@ impl<'schema> CollectionScan<'schema> {
             | TypeReference::Integer
             | TypeReference::Boolean
             | TypeReference::Path
+            | TypeReference::FixedBytes(_)
+            | TypeReference::Plain(_) => false,
+        }
+    }
+
+    /// Whether the schema references a fixed-size `(Bytes N)` anywhere, so the
+    /// renderer only emits the generic `FixedBytes<N>` newtype-prelude when used.
+    fn references_fixed_bytes(&self) -> bool {
+        self.schema
+            .namespace()
+            .iter()
+            .any(|declaration| Self::declaration_uses_fixed_bytes(declaration.value()))
+            || self
+                .schema
+                .input_and_output()
+                .into_iter()
+                .any(Self::enum_uses_fixed_bytes)
+    }
+
+    fn declaration_uses_fixed_bytes(declaration: &TypeDeclaration) -> bool {
+        match declaration {
+            TypeDeclaration::Struct(declaration) => declaration
+                .fields
+                .iter()
+                .any(|field| Self::reference_uses_fixed_bytes(&field.reference)),
+            TypeDeclaration::Newtype(declaration) => {
+                Self::reference_uses_fixed_bytes(&declaration.reference)
+            }
+            TypeDeclaration::Enum(declaration) => Self::enum_uses_fixed_bytes(declaration),
+        }
+    }
+
+    fn enum_uses_fixed_bytes(declaration: &EnumDeclaration) -> bool {
+        declaration.variants.iter().any(|variant| {
+            variant
+                .payload
+                .as_ref()
+                .is_some_and(Self::reference_uses_fixed_bytes)
+        })
+    }
+
+    fn reference_uses_fixed_bytes(reference: &TypeReference) -> bool {
+        match reference {
+            TypeReference::FixedBytes(_) => true,
+            TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
+                Self::reference_uses_fixed_bytes(inner)
+            }
+            TypeReference::Map(key, value) => {
+                Self::reference_uses_fixed_bytes(key) || Self::reference_uses_fixed_bytes(value)
+            }
+            TypeReference::String
+            | TypeReference::Integer
+            | TypeReference::Boolean
+            | TypeReference::Path
+            | TypeReference::Bytes
             | TypeReference::Plain(_) => false,
         }
     }
@@ -3375,6 +3444,7 @@ impl<'schema> CollectionScan<'schema> {
             | TypeReference::Boolean
             | TypeReference::Path
             | TypeReference::Bytes
+            | TypeReference::FixedBytes(_)
             | TypeReference::Plain(_) => {}
             TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
                 Self::collect_map_keys(inner, names);
@@ -3793,6 +3863,106 @@ impl RustModuleRenderer {
                 }
 
                 pub fn into_payload(self) -> Vec<u8> {
+                    self.0
+                }
+            }
+
+            #codec
+        });
+    }
+
+    /// Emits the generic fixed-size `FixedBytes<const WIDTH: usize>([u8; WIDTH])`
+    /// that `(Bytes N)` references lower to (`FixedBytes<N>`). One generic type
+    /// serves every width, with the same lowercase-hex codec as `Bytes` but a
+    /// length check (the orphan rule blocks a codec on a bare `[u8; N]`).
+    fn emit_fixed_bytes_scalar(&mut self) {
+        let gate = match &self.nota_surface {
+            NotaSurface::AlwaysEnabled | NotaSurface::Disabled => None,
+            NotaSurface::FeatureGated { feature } => Some(quote! {
+                #[cfg(feature = #feature)]
+            }),
+        };
+        let codec = if self.nota_surface.emits_nota() {
+            quote! {
+                #gate
+                impl<const WIDTH: usize> FixedBytes<WIDTH> {
+                    fn from_hex(text: &str) -> Result<Self, nota_next::NotaDecodeError> {
+                        if text.len() != WIDTH * 2 {
+                            return Err(nota_next::NotaDecodeError::Parse(format!(
+                                "FixedBytes<{}> expected {} hex digits, found {}",
+                                WIDTH,
+                                WIDTH * 2,
+                                text.len()
+                            )));
+                        }
+                        let mut bytes = [0u8; WIDTH];
+                        for (index, pair) in text.as_bytes().chunks_exact(2).enumerate() {
+                            bytes[index] =
+                                (Self::hex_digit(pair[0])? << 4) | Self::hex_digit(pair[1])?;
+                        }
+                        Ok(Self(bytes))
+                    }
+
+                    fn hex_digit(digit: u8) -> Result<u8, nota_next::NotaDecodeError> {
+                        match digit {
+                            b'0'..=b'9' => Ok(digit - b'0'),
+                            b'a'..=b'f' => Ok(digit - b'a' + 10),
+                            other => Err(nota_next::NotaDecodeError::Parse(format!(
+                                "FixedBytes hex literal has a non-hex digit: {other}"
+                            ))),
+                        }
+                    }
+                }
+
+                #gate
+                impl<const WIDTH: usize> nota_next::NotaEncode for FixedBytes<WIDTH> {
+                    fn to_nota(&self) -> String {
+                        let mut hex = String::with_capacity(WIDTH * 2);
+                        for byte in &self.0 {
+                            hex.push_str(&format!("{byte:02x}"));
+                        }
+                        nota_next::NotaEncode::to_nota(&hex)
+                    }
+                }
+
+                #gate
+                impl<const WIDTH: usize> nota_next::NotaDecode for FixedBytes<WIDTH> {
+                    fn from_nota_block(
+                        block: &nota_next::Block,
+                    ) -> Result<Self, nota_next::NotaDecodeError> {
+                        let hex = <String as nota_next::NotaDecode>::from_nota_block(block)?;
+                        Self::from_hex(&hex)
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+        self.emit_item_tokens(quote! {
+            #[derive(
+                rkyv::Archive,
+                rkyv::Serialize,
+                rkyv::Deserialize,
+                Clone,
+                Debug,
+                PartialEq,
+                Eq,
+                PartialOrd,
+                Ord,
+                Hash,
+            )]
+            pub struct FixedBytes<const WIDTH: usize>([u8; WIDTH]);
+
+            impl<const WIDTH: usize> FixedBytes<WIDTH> {
+                pub fn new(payload: [u8; WIDTH]) -> Self {
+                    Self(payload)
+                }
+
+                pub fn payload(&self) -> &[u8; WIDTH] {
+                    &self.0
+                }
+
+                pub fn into_payload(self) -> [u8; WIDTH] {
                     self.0
                 }
             }
@@ -5457,6 +5627,7 @@ impl RustModuleRenderer {
             TypeReference::Boolean => "Boolean".to_owned(),
             TypeReference::Path => "Path".to_owned(),
             TypeReference::Bytes => "Bytes".to_owned(),
+            TypeReference::FixedBytes(width) => format!("FixedBytes<{width}>"),
             TypeReference::Plain(name) => name.as_str().to_owned(),
             TypeReference::Vector(inner) => format!("Vec<{}>", self.rust_type(inner)),
             TypeReference::Map(key, value) => format!(

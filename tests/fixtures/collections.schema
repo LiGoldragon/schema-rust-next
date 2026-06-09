@@ -7,5 +7,6 @@
   Query Topic
   Topic String
   Digest Bytes
-  Cluster { services (Vec Service) nodes (Map (NodeName NodeConfig)) cache (Optional NodeConfig) healthy Boolean configPath Path digest Digest }
+  Fingerprint (Bytes 4)
+  Cluster { services (Vec Service) nodes (Map (NodeName NodeConfig)) cache (Optional NodeConfig) healthy Boolean configPath Path digest Digest fingerprint Fingerprint }
 }

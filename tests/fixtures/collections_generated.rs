@@ -88,6 +88,87 @@ impl nota_next::NotaDecode for Bytes {
         Self::from_hex(&hex)
     }
 }
+#[rustfmt::skip]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+)]
+pub struct FixedBytes<const WIDTH: usize>([u8; WIDTH]);
+#[rustfmt::skip]
+impl<const WIDTH: usize> FixedBytes<WIDTH> {
+    pub fn new(payload: [u8; WIDTH]) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &[u8; WIDTH] {
+        &self.0
+    }
+    pub fn into_payload(self) -> [u8; WIDTH] {
+        self.0
+    }
+}
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl<const WIDTH: usize> FixedBytes<WIDTH> {
+    fn from_hex(text: &str) -> Result<Self, nota_next::NotaDecodeError> {
+        if text.len() != WIDTH * 2 {
+            return Err(
+                nota_next::NotaDecodeError::Parse(
+                    format!(
+                        "FixedBytes<{}> expected {} hex digits, found {}", WIDTH, WIDTH *
+                        2, text.len()
+                    ),
+                ),
+            );
+        }
+        let mut bytes = [0u8; WIDTH];
+        for (index, pair) in text.as_bytes().chunks_exact(2).enumerate() {
+            bytes[index] = (Self::hex_digit(pair[0])? << 4) | Self::hex_digit(pair[1])?;
+        }
+        Ok(Self(bytes))
+    }
+    fn hex_digit(digit: u8) -> Result<u8, nota_next::NotaDecodeError> {
+        match digit {
+            b'0'..=b'9' => Ok(digit - b'0'),
+            b'a'..=b'f' => Ok(digit - b'a' + 10),
+            other => {
+                Err(
+                    nota_next::NotaDecodeError::Parse(
+                        format!("FixedBytes hex literal has a non-hex digit: {other}"),
+                    ),
+                )
+            }
+        }
+    }
+}
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl<const WIDTH: usize> nota_next::NotaEncode for FixedBytes<WIDTH> {
+    fn to_nota(&self) -> String {
+        let mut hex = String::with_capacity(WIDTH * 2);
+        for byte in &self.0 {
+            hex.push_str(&format!("{byte:02x}"));
+        }
+        nota_next::NotaEncode::to_nota(&hex)
+    }
+}
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl<const WIDTH: usize> nota_next::NotaDecode for FixedBytes<WIDTH> {
+    fn from_nota_block(
+        block: &nota_next::Block,
+    ) -> Result<Self, nota_next::NotaDecodeError> {
+        let hex = <String as nota_next::NotaDecode>::from_nota_block(block)?;
+        Self::from_hex(&hex)
+    }
+}
 
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
@@ -137,6 +218,11 @@ pub struct Digest(Bytes);
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Fingerprint(FixedBytes<4>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Cluster {
     pub services: Vec<Service>,
     pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,
@@ -144,6 +230,7 @@ pub struct Cluster {
     pub healthy: Boolean,
     pub config_path: Path,
     pub digest: Digest,
+    pub fingerprint: Fingerprint,
 }
 
 #[rustfmt::skip]
@@ -277,6 +364,25 @@ impl From<Bytes> for Digest {
 }
 
 #[rustfmt::skip]
+impl Fingerprint {
+    pub fn new(payload: FixedBytes<4>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &FixedBytes<4> {
+        &self.0
+    }
+    pub fn into_payload(self) -> FixedBytes<4> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<FixedBytes<4>> for Fingerprint {
+    fn from(payload: FixedBytes<4>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl Input {
     pub fn register(payload: Cluster) -> Self {
         Self::Register(payload)
@@ -368,6 +474,17 @@ impl Topic {
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
 impl Digest {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl Fingerprint {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }

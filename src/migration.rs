@@ -470,6 +470,10 @@ impl ToTokens for TypeRenderer<'_> {
             TypeReference::Boolean => quote! { bool }.to_tokens(tokens),
             TypeReference::Path => quote! { String }.to_tokens(tokens),
             TypeReference::Bytes => quote! { Bytes }.to_tokens(tokens),
+            TypeReference::FixedBytes(width) => {
+                let width = proc_macro2::Literal::u64_unsuffixed(*width);
+                quote! { FixedBytes<#width> }.to_tokens(tokens);
+            }
             TypeReference::Plain(name) => {
                 Ident::new(name.as_str(), Span::call_site()).to_tokens(tokens)
             }
