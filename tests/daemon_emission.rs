@@ -66,7 +66,7 @@ fn daemon_module_emits_the_component_daemon_hook_trait() {
     let code = generated.code.as_str();
     assert_code_contains(code, "#[rustfmt::skip]");
     assert_code_contains(code, "pub trait ComponentDaemon");
-    assert_code_contains(code, "type Configuration: DaemonConfiguration");
+    assert_code_contains(code, "type Configuration: BindingSurface");
     assert_code_contains(code, "type Engine: Send + Sync + 'static;");
     assert_code_contains(code, "type Error:");
     assert_code_contains(code, "const PROCESS_NAME: &'static str;");

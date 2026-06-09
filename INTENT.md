@@ -39,7 +39,7 @@ runtime consumes `AcceptedConnection`, preserves the kernel-vouched
 subscription pushes, and uses `triad_runtime`'s typed subscription registry and
 publisher for event delivery.
 Daemon emission applies both the ordinary working socket mode
-(`DaemonConfiguration::socket_mode`) and the meta socket mode through
+(`BindingSurface::socket_mode`) and the meta socket mode through
 runtime-owned listener sockets. Components that need a temporary
 relation-adapter can opt into `WorkingListenerTier::component_decoded()`: the
 generated daemon still owns argv, async task-backed binding, request admission,

@@ -423,7 +423,7 @@ impl ToTokens for DaemonImportsTokens<'_> {
             use thiserror::Error;
             use triad_runtime::{
                 AcceptedConnection, AsyncListenerError, #listener_imports ArgumentError,
-                ComponentArgument, ComponentCommand, DaemonConfiguration, ExitReport,
+                ComponentArgument, ComponentCommand, BindingSurface, ExitReport,
                 RequestErrorLog,
             };
 
@@ -630,7 +630,7 @@ impl ToTokens for ComponentDaemonTraitTokens {
             /// emitter cannot know how to open the component's Store/Engine) plus the
             /// typed working-input handler.
             pub trait ComponentDaemon: Sized + 'static {
-                type Configuration: DaemonConfiguration;
+                type Configuration: BindingSurface;
                 type ConfigurationError: std::error::Error;
                 type Engine: Send + Sync + 'static;
                 type Error: #error_bound;

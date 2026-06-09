@@ -112,7 +112,7 @@ beside that typed source/schema pipeline.
   the generated daemon still owns process argv, async task-backed socket binding,
   per-listener request admission, peer credentials, lifecycle, and exit
   handling; only the accepted working connection's frame dialect is handed to a
-  component hook. Generated binders apply `DaemonConfiguration::socket_mode()`
+  component hook. Generated binders apply `BindingSurface::socket_mode()`
   to the ordinary socket and the configured meta mode to the meta socket, so
   security-sensitive chmod behavior stays in the shared daemon path.
 
