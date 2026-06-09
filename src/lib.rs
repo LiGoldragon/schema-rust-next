@@ -1698,11 +1698,25 @@ impl ToTokens for NewtypeInherentImplTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = RustIdentifier::new(self.newtype.name().as_str());
         let payload_type = RustTypeReferenceTokens::new(self.newtype.reference());
-        quote! {
-            impl #name {
+        // String-backed newtypes take `impl Into<String>` so call sites pass
+        // `&str` literals without `.to_string()`; other payloads keep the exact
+        // type (integer literals would not infer through `impl Into`).
+        let constructor = if quote! { #payload_type }.to_string() == "String" {
+            quote! {
+                pub fn new(payload: impl Into<String>) -> Self {
+                    Self(payload.into())
+                }
+            }
+        } else {
+            quote! {
                 pub fn new(payload: #payload_type) -> Self {
                     Self(payload)
                 }
+            }
+        };
+        quote! {
+            impl #name {
+                #constructor
                 pub fn payload(&self) -> &#payload_type {
                     &self.0
                 }
