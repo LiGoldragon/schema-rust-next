@@ -20,7 +20,7 @@ pub type Description = String;
 
 #[rustfmt::skip]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Summary(pub Description);
+pub struct Summary(Description);
 
 #[rustfmt::skip]
 pub type RecordIdentifier = Integer;

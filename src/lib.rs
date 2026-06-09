@@ -3110,7 +3110,7 @@ impl ToTokens for RustNewtypeTokens<'_, '_> {
         let reference = RustTypeReferenceTokens::new(self.newtype.reference());
         quote! {
             #(#attributes)*
-            #visibility struct #name(#visibility #reference);
+            #visibility struct #name(#reference);
         }
         .to_tokens(tokens);
     }

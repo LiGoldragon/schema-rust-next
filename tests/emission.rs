@@ -242,7 +242,7 @@ fn generated_objects_expose_named_constructors_and_newtype_payload_accessors() {
     assert!(source.contains("pub type Topic = String;"));
     assert!(source.contains("pub type Topics = Vec<Topic>;"));
     assert!(source.contains("pub type Description = String;"));
-    assert!(source.contains("pub struct Summary(pub Description);"));
+    assert!(source.contains("pub struct Summary(Description);"));
     assert!(source.contains("impl Summary {"));
     assert!(source.contains("pub fn new(payload: Description) -> Self"));
     assert!(source.contains("pub fn payload(&self) -> &Description"));

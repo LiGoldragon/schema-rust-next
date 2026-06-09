@@ -166,7 +166,7 @@ pub struct Entry {
 
 #[rustfmt::skip]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Query(pub Topic);
+pub struct Query(Topic);
 
 #[rustfmt::skip]
 pub type RecordSet = Vec<Entry>;
