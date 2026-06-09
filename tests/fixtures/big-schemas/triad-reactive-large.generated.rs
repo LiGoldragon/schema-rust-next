@@ -14,16 +14,24 @@ pub type Path = std::string::String;
 pub use nota_next::{NotaDecode, NotaDecodeError, NotaEncode, NotaSource};
 
 #[rustfmt::skip]
-pub type CommitSequence = Integer;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CommitSequence(Integer);
 
 #[rustfmt::skip]
-pub type DatabaseDigest = Integer;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DatabaseDigest(Integer);
 
 #[rustfmt::skip]
-pub type ActorIdentifier = String;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ActorIdentifier(String);
 
 #[rustfmt::skip]
-pub type SocketPath = String;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SocketPath(String);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -113,7 +121,9 @@ pub enum RuntimeEvent {
 }
 
 #[rustfmt::skip]
-pub type Rejected = RejectionReason;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Rejected(RejectionReason);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -145,10 +155,14 @@ pub struct RecordIntent {
 }
 
 #[rustfmt::skip]
-pub type ObserveIntent = Query;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ObserveIntent(Query);
 
 #[rustfmt::skip]
-pub type SubscribeIntent = Query;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SubscribeIntent(Query);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -159,34 +173,54 @@ pub struct RecordAccepted {
 }
 
 #[rustfmt::skip]
-pub type ObservationReturned = RecordSet;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ObservationReturned(RecordSet);
 
 #[rustfmt::skip]
-pub type SubscriptionStarted = SubscriptionToken;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SubscriptionStarted(SubscriptionToken);
 
 #[rustfmt::skip]
-pub type PushSignal = SignalRequest;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PushSignal(SignalRequest);
 
 #[rustfmt::skip]
-pub type PushSemaResult = SemaReply;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PushSemaResult(SemaReply);
 
 #[rustfmt::skip]
-pub type PushedToSema = SemaRequest;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PushedToSema(SemaRequest);
 
 #[rustfmt::skip]
-pub type MailResolved = SignalReply;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct MailResolved(SignalReply);
 
 #[rustfmt::skip]
-pub type WriteEntry = Entry;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WriteEntry(Entry);
 
 #[rustfmt::skip]
-pub type ReadEntries = Query;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ReadEntries(Query);
 
 #[rustfmt::skip]
-pub type OpenSubscription = Query;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct OpenSubscription(Query);
 
 #[rustfmt::skip]
-pub type CloseSubscription = SubscriptionToken;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CloseSubscription(SubscriptionToken);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -222,7 +256,9 @@ pub struct SubscriptionClosed {
 }
 
 #[rustfmt::skip]
-pub type Snapshot = SocketPath;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Snapshot(SocketPath);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -233,16 +269,24 @@ pub struct SnapshotReady {
 }
 
 #[rustfmt::skip]
-pub type MailSent = SignalRequest;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct MailSent(SignalRequest);
 
 #[rustfmt::skip]
-pub type MessageAccepted = SignalRequest;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct MessageAccepted(SignalRequest);
 
 #[rustfmt::skip]
-pub type MessageCommitted = CommitSequence;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct MessageCommitted(CommitSequence);
 
 #[rustfmt::skip]
-pub type MessageFailed = RejectionReason;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct MessageFailed(RejectionReason);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -256,13 +300,30 @@ pub struct Entry {
 }
 
 #[rustfmt::skip]
-pub type Topic = String;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+)]
+#[rkyv(derive(PartialEq, Eq, PartialOrd, Ord))]
+pub struct Topic(String);
 
 #[rustfmt::skip]
-pub type Topics = Vec<Topic>;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Topics(Vec<Topic>);
 
 #[rustfmt::skip]
-pub type Description = String;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Description(String);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -318,10 +379,14 @@ pub struct Query {
 }
 
 #[rustfmt::skip]
-pub type RecordIdentifier = Integer;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RecordIdentifier(Integer);
 
 #[rustfmt::skip]
-pub type SubscriptionToken = Integer;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SubscriptionToken(Integer);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -355,15 +420,528 @@ pub enum Output {
 }
 
 #[rustfmt::skip]
+impl CommitSequence {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Integer> for CommitSequence {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl DatabaseDigest {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Integer> for DatabaseDigest {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl ActorIdentifier {
+    pub fn new(payload: impl Into<String>) -> Self {
+        Self(payload.into())
+    }
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<String> for ActorIdentifier {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl SocketPath {
+    pub fn new(payload: impl Into<String>) -> Self {
+        Self(payload.into())
+    }
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<String> for SocketPath {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Rejected {
+    pub fn new(payload: RejectionReason) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &RejectionReason {
+        &self.0
+    }
+    pub fn into_payload(self) -> RejectionReason {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<RejectionReason> for Rejected {
+    fn from(payload: RejectionReason) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl ObserveIntent {
+    pub fn new(payload: Query) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Query {
+        &self.0
+    }
+    pub fn into_payload(self) -> Query {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Query> for ObserveIntent {
+    fn from(payload: Query) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl SubscribeIntent {
+    pub fn new(payload: Query) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Query {
+        &self.0
+    }
+    pub fn into_payload(self) -> Query {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Query> for SubscribeIntent {
+    fn from(payload: Query) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl ObservationReturned {
+    pub fn new(payload: RecordSet) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &RecordSet {
+        &self.0
+    }
+    pub fn into_payload(self) -> RecordSet {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<RecordSet> for ObservationReturned {
+    fn from(payload: RecordSet) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl SubscriptionStarted {
+    pub fn new(payload: SubscriptionToken) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &SubscriptionToken {
+        &self.0
+    }
+    pub fn into_payload(self) -> SubscriptionToken {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<SubscriptionToken> for SubscriptionStarted {
+    fn from(payload: SubscriptionToken) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl PushSignal {
+    pub fn new(payload: SignalRequest) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &SignalRequest {
+        &self.0
+    }
+    pub fn into_payload(self) -> SignalRequest {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<SignalRequest> for PushSignal {
+    fn from(payload: SignalRequest) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl PushSemaResult {
+    pub fn new(payload: SemaReply) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &SemaReply {
+        &self.0
+    }
+    pub fn into_payload(self) -> SemaReply {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<SemaReply> for PushSemaResult {
+    fn from(payload: SemaReply) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl PushedToSema {
+    pub fn new(payload: SemaRequest) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &SemaRequest {
+        &self.0
+    }
+    pub fn into_payload(self) -> SemaRequest {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<SemaRequest> for PushedToSema {
+    fn from(payload: SemaRequest) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl MailResolved {
+    pub fn new(payload: SignalReply) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &SignalReply {
+        &self.0
+    }
+    pub fn into_payload(self) -> SignalReply {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<SignalReply> for MailResolved {
+    fn from(payload: SignalReply) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl WriteEntry {
+    pub fn new(payload: Entry) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Entry {
+        &self.0
+    }
+    pub fn into_payload(self) -> Entry {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Entry> for WriteEntry {
+    fn from(payload: Entry) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl ReadEntries {
+    pub fn new(payload: Query) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Query {
+        &self.0
+    }
+    pub fn into_payload(self) -> Query {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Query> for ReadEntries {
+    fn from(payload: Query) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl OpenSubscription {
+    pub fn new(payload: Query) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Query {
+        &self.0
+    }
+    pub fn into_payload(self) -> Query {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Query> for OpenSubscription {
+    fn from(payload: Query) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl CloseSubscription {
+    pub fn new(payload: SubscriptionToken) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &SubscriptionToken {
+        &self.0
+    }
+    pub fn into_payload(self) -> SubscriptionToken {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<SubscriptionToken> for CloseSubscription {
+    fn from(payload: SubscriptionToken) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Snapshot {
+    pub fn new(payload: SocketPath) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &SocketPath {
+        &self.0
+    }
+    pub fn into_payload(self) -> SocketPath {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<SocketPath> for Snapshot {
+    fn from(payload: SocketPath) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl MailSent {
+    pub fn new(payload: SignalRequest) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &SignalRequest {
+        &self.0
+    }
+    pub fn into_payload(self) -> SignalRequest {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<SignalRequest> for MailSent {
+    fn from(payload: SignalRequest) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl MessageAccepted {
+    pub fn new(payload: SignalRequest) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &SignalRequest {
+        &self.0
+    }
+    pub fn into_payload(self) -> SignalRequest {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<SignalRequest> for MessageAccepted {
+    fn from(payload: SignalRequest) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl MessageCommitted {
+    pub fn new(payload: CommitSequence) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &CommitSequence {
+        &self.0
+    }
+    pub fn into_payload(self) -> CommitSequence {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<CommitSequence> for MessageCommitted {
+    fn from(payload: CommitSequence) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl MessageFailed {
+    pub fn new(payload: RejectionReason) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &RejectionReason {
+        &self.0
+    }
+    pub fn into_payload(self) -> RejectionReason {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<RejectionReason> for MessageFailed {
+    fn from(payload: RejectionReason) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Topic {
+    pub fn new(payload: impl Into<String>) -> Self {
+        Self(payload.into())
+    }
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<String> for Topic {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Topics {
+    pub fn new(payload: Vec<Topic>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Vec<Topic> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Vec<Topic> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Vec<Topic>> for Topics {
+    fn from(payload: Vec<Topic>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Description {
+    pub fn new(payload: impl Into<String>) -> Self {
+        Self(payload.into())
+    }
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<String> for Description {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl RecordIdentifier {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Integer> for RecordIdentifier {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl SubscriptionToken {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Integer> for SubscriptionToken {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl SignalRequest {
     pub fn record_intent(payload: RecordIntent) -> Self {
         Self::RecordIntent(payload)
     }
-    pub fn observe_intent(payload: ObserveIntent) -> Self {
-        Self::ObserveIntent(payload)
+    pub fn observe_intent(payload: Query) -> Self {
+        Self::ObserveIntent(ObserveIntent::new(payload))
     }
-    pub fn subscribe_intent(payload: SubscribeIntent) -> Self {
-        Self::SubscribeIntent(payload)
+    pub fn subscribe_intent(payload: Query) -> Self {
+        Self::SubscribeIntent(SubscribeIntent::new(payload))
     }
 }
 
@@ -372,47 +950,47 @@ impl SignalReply {
     pub fn record_accepted(payload: RecordAccepted) -> Self {
         Self::RecordAccepted(payload)
     }
-    pub fn observation_returned(payload: ObservationReturned) -> Self {
-        Self::ObservationReturned(payload)
+    pub fn observation_returned(payload: RecordSet) -> Self {
+        Self::ObservationReturned(ObservationReturned::new(payload))
     }
-    pub fn subscription_started(payload: SubscriptionStarted) -> Self {
-        Self::SubscriptionStarted(payload)
+    pub fn subscription_started(payload: SubscriptionToken) -> Self {
+        Self::SubscriptionStarted(SubscriptionStarted::new(payload))
     }
 }
 
 #[rustfmt::skip]
 impl NexusRequest {
-    pub fn push_signal(payload: PushSignal) -> Self {
-        Self::PushSignal(payload)
+    pub fn push_signal(payload: SignalRequest) -> Self {
+        Self::PushSignal(PushSignal::new(payload))
     }
-    pub fn push_sema_result(payload: PushSemaResult) -> Self {
-        Self::PushSemaResult(payload)
+    pub fn push_sema_result(payload: SemaReply) -> Self {
+        Self::PushSemaResult(PushSemaResult::new(payload))
     }
 }
 
 #[rustfmt::skip]
 impl NexusReply {
-    pub fn pushed_to_sema(payload: PushedToSema) -> Self {
-        Self::PushedToSema(payload)
+    pub fn pushed_to_sema(payload: SemaRequest) -> Self {
+        Self::PushedToSema(PushedToSema::new(payload))
     }
-    pub fn mail_resolved(payload: MailResolved) -> Self {
-        Self::MailResolved(payload)
+    pub fn mail_resolved(payload: SignalReply) -> Self {
+        Self::MailResolved(MailResolved::new(payload))
     }
 }
 
 #[rustfmt::skip]
 impl SemaRequest {
-    pub fn write_entry(payload: WriteEntry) -> Self {
-        Self::WriteEntry(payload)
+    pub fn write_entry(payload: Entry) -> Self {
+        Self::WriteEntry(WriteEntry::new(payload))
     }
-    pub fn read_entries(payload: ReadEntries) -> Self {
-        Self::ReadEntries(payload)
+    pub fn read_entries(payload: Query) -> Self {
+        Self::ReadEntries(ReadEntries::new(payload))
     }
-    pub fn open_subscription(payload: OpenSubscription) -> Self {
-        Self::OpenSubscription(payload)
+    pub fn open_subscription(payload: Query) -> Self {
+        Self::OpenSubscription(OpenSubscription::new(payload))
     }
-    pub fn close_subscription(payload: CloseSubscription) -> Self {
-        Self::CloseSubscription(payload)
+    pub fn close_subscription(payload: SubscriptionToken) -> Self {
+        Self::CloseSubscription(CloseSubscription::new(payload))
     }
 }
 
@@ -434,8 +1012,8 @@ impl SemaReply {
 
 #[rustfmt::skip]
 impl AdminRequest {
-    pub fn snapshot(payload: Snapshot) -> Self {
-        Self::Snapshot(payload)
+    pub fn snapshot(payload: SocketPath) -> Self {
+        Self::Snapshot(Snapshot::new(payload))
     }
 }
 
@@ -448,17 +1026,17 @@ impl AdminReply {
 
 #[rustfmt::skip]
 impl RuntimeEvent {
-    pub fn mail_sent(payload: MailSent) -> Self {
-        Self::MailSent(payload)
+    pub fn mail_sent(payload: SignalRequest) -> Self {
+        Self::MailSent(MailSent::new(payload))
     }
-    pub fn message_accepted(payload: MessageAccepted) -> Self {
-        Self::MessageAccepted(payload)
+    pub fn message_accepted(payload: SignalRequest) -> Self {
+        Self::MessageAccepted(MessageAccepted::new(payload))
     }
-    pub fn message_committed(payload: MessageCommitted) -> Self {
-        Self::MessageCommitted(payload)
+    pub fn message_committed(payload: CommitSequence) -> Self {
+        Self::MessageCommitted(MessageCommitted::new(payload))
     }
-    pub fn message_failed(payload: MessageFailed) -> Self {
-        Self::MessageFailed(payload)
+    pub fn message_failed(payload: RejectionReason) -> Self {
+        Self::MessageFailed(MessageFailed::new(payload))
     }
 }
 
@@ -495,8 +1073,8 @@ impl Output {
     pub fn event(payload: RuntimeEvent) -> Self {
         Self::Event(payload)
     }
-    pub fn rejected(payload: Rejected) -> Self {
-        Self::Rejected(payload)
+    pub fn rejected(payload: RejectionReason) -> Self {
+        Self::Rejected(Rejected::new(payload))
     }
 }
 
@@ -508,9 +1086,93 @@ impl From<RecordIntent> for SignalRequest {
 }
 
 #[rustfmt::skip]
+impl From<ObserveIntent> for SignalRequest {
+    fn from(payload: ObserveIntent) -> Self {
+        Self::ObserveIntent(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<SubscribeIntent> for SignalRequest {
+    fn from(payload: SubscribeIntent) -> Self {
+        Self::SubscribeIntent(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl From<RecordAccepted> for SignalReply {
     fn from(payload: RecordAccepted) -> Self {
         Self::RecordAccepted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<ObservationReturned> for SignalReply {
+    fn from(payload: ObservationReturned) -> Self {
+        Self::ObservationReturned(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<SubscriptionStarted> for SignalReply {
+    fn from(payload: SubscriptionStarted) -> Self {
+        Self::SubscriptionStarted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<PushSignal> for NexusRequest {
+    fn from(payload: PushSignal) -> Self {
+        Self::PushSignal(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<PushSemaResult> for NexusRequest {
+    fn from(payload: PushSemaResult) -> Self {
+        Self::PushSemaResult(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<PushedToSema> for NexusReply {
+    fn from(payload: PushedToSema) -> Self {
+        Self::PushedToSema(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<MailResolved> for NexusReply {
+    fn from(payload: MailResolved) -> Self {
+        Self::MailResolved(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<WriteEntry> for SemaRequest {
+    fn from(payload: WriteEntry) -> Self {
+        Self::WriteEntry(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<ReadEntries> for SemaRequest {
+    fn from(payload: ReadEntries) -> Self {
+        Self::ReadEntries(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<OpenSubscription> for SemaRequest {
+    fn from(payload: OpenSubscription) -> Self {
+        Self::OpenSubscription(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<CloseSubscription> for SemaRequest {
+    fn from(payload: CloseSubscription) -> Self {
+        Self::CloseSubscription(payload)
     }
 }
 
@@ -543,9 +1205,44 @@ impl From<SubscriptionClosed> for SemaReply {
 }
 
 #[rustfmt::skip]
+impl From<Snapshot> for AdminRequest {
+    fn from(payload: Snapshot) -> Self {
+        Self::Snapshot(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl From<SnapshotReady> for AdminReply {
     fn from(payload: SnapshotReady) -> Self {
         Self::SnapshotReady(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<MailSent> for RuntimeEvent {
+    fn from(payload: MailSent) -> Self {
+        Self::MailSent(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<MessageAccepted> for RuntimeEvent {
+    fn from(payload: MessageAccepted) -> Self {
+        Self::MessageAccepted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<MessageCommitted> for RuntimeEvent {
+    fn from(payload: MessageCommitted) -> Self {
+        Self::MessageCommitted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<MessageFailed> for RuntimeEvent {
+    fn from(payload: MessageFailed) -> Self {
+        Self::MessageFailed(payload)
     }
 }
 
@@ -613,6 +1310,57 @@ impl From<RuntimeEvent> for Output {
 }
 
 #[rustfmt::skip]
+impl From<Rejected> for Output {
+    fn from(payload: Rejected) -> Self {
+        Self::Rejected(payload)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl CommitSequence {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl DatabaseDigest {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl ActorIdentifier {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl SocketPath {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
 #[cfg(feature = "nota-text")]
 impl SignalRequest {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
@@ -713,6 +1461,17 @@ impl RuntimeEvent {
 
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
+impl Rejected {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
 impl RejectionReason {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -735,7 +1494,139 @@ impl RecordIntent {
 
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
+impl ObserveIntent {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl SubscribeIntent {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
 impl RecordAccepted {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl ObservationReturned {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl SubscriptionStarted {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl PushSignal {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl PushSemaResult {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl PushedToSema {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl MailResolved {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl WriteEntry {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl ReadEntries {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl OpenSubscription {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl CloseSubscription {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
@@ -790,6 +1681,17 @@ impl SubscriptionClosed {
 
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
+impl Snapshot {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
 impl SnapshotReady {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
@@ -801,7 +1703,84 @@ impl SnapshotReady {
 
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
+impl MailSent {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl MessageAccepted {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl MessageCommitted {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl MessageFailed {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
 impl Entry {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl Topic {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl Topics {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl Description {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
@@ -835,6 +1814,28 @@ impl Magnitude {
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
 impl Query {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl RecordIdentifier {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl SubscriptionToken {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }

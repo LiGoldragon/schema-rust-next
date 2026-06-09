@@ -14,13 +14,19 @@ pub type Path = std::string::String;
 pub use nota_next::{NotaDecode, NotaDecodeError, NotaEncode, NotaSource};
 
 #[rustfmt::skip]
-pub type Topic = String;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Topic(String);
 
 #[rustfmt::skip]
-pub type Topics = Vec<Topic>;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Topics(Vec<Topic>);
 
 #[rustfmt::skip]
-pub type Description = String;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Description(String);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -28,7 +34,9 @@ pub type Description = String;
 pub struct Summary(Description);
 
 #[rustfmt::skip]
-pub type RecordIdentifier = Integer;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RecordIdentifier(Integer);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -49,7 +57,9 @@ pub struct Query {
 }
 
 #[rustfmt::skip]
-pub type RecordSet = Vec<Entry>;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RecordSet(Vec<Entry>);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -110,6 +120,63 @@ pub enum Output {
 }
 
 #[rustfmt::skip]
+impl Topic {
+    pub fn new(payload: impl Into<String>) -> Self {
+        Self(payload.into())
+    }
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<String> for Topic {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Topics {
+    pub fn new(payload: Vec<Topic>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Vec<Topic> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Vec<Topic> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Vec<Topic>> for Topics {
+    fn from(payload: Vec<Topic>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Description {
+    pub fn new(payload: impl Into<String>) -> Self {
+        Self(payload.into())
+    }
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<String> for Description {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl Summary {
     pub fn new(payload: Description) -> Self {
         Self(payload)
@@ -129,6 +196,44 @@ impl From<Description> for Summary {
 }
 
 #[rustfmt::skip]
+impl RecordIdentifier {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Integer> for RecordIdentifier {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl RecordSet {
+    pub fn new(payload: Vec<Entry>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Vec<Entry> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Vec<Entry> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Vec<Entry>> for RecordSet {
+    fn from(payload: Vec<Entry>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl Input {
     pub fn record(payload: Entry) -> Self {
         Self::Record(payload)
@@ -140,11 +245,11 @@ impl Input {
 
 #[rustfmt::skip]
 impl Output {
-    pub fn record_accepted(payload: RecordIdentifier) -> Self {
-        Self::RecordAccepted(payload)
+    pub fn record_accepted(payload: Integer) -> Self {
+        Self::RecordAccepted(RecordIdentifier::new(payload))
     }
-    pub fn records_observed(payload: RecordSet) -> Self {
-        Self::RecordsObserved(payload)
+    pub fn records_observed(payload: Vec<Entry>) -> Self {
+        Self::RecordsObserved(RecordSet::new(payload))
     }
 }
 
@@ -163,8 +268,66 @@ impl From<Query> for Input {
 }
 
 #[rustfmt::skip]
+impl From<RecordIdentifier> for Output {
+    fn from(payload: RecordIdentifier) -> Self {
+        Self::RecordAccepted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<RecordSet> for Output {
+    fn from(payload: RecordSet) -> Self {
+        Self::RecordsObserved(payload)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl Topic {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl Topics {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl Description {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
 #[cfg(feature = "nota-text")]
 impl Summary {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl RecordIdentifier {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
@@ -187,6 +350,17 @@ impl Entry {
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
 impl Query {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl RecordSet {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }

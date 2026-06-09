@@ -214,7 +214,7 @@ fn emitter_builds_rust_module_data_before_rendering_text() {
     let topic = module
         .declaration_named("Topic")
         .expect("Topic declaration exists");
-    assert!(matches!(topic.value(), RustTypeDeclaration::Alias(_)));
+    assert!(matches!(topic.value(), RustTypeDeclaration::Newtype(_)));
 
     let summary = module
         .declaration_named("Summary")
@@ -239,16 +239,16 @@ fn generated_objects_expose_named_constructors_and_newtype_payload_accessors() {
     let code = RustEmitter::default().emit_code_from_schema(&schema);
     let source = code.as_str();
 
-    assert!(source.contains("pub type Topic = String;"));
-    assert!(source.contains("pub type Topics = Vec<Topic>;"));
-    assert!(source.contains("pub type Description = String;"));
+    assert!(source.contains("pub struct Topic(String);"));
+    assert!(source.contains("pub struct Topics(Vec<Topic>);"));
+    assert!(source.contains("pub struct Description(String);"));
     assert!(source.contains("pub struct Summary(Description);"));
     assert!(source.contains("impl Summary {"));
     assert!(source.contains("pub fn new(payload: Description) -> Self"));
     assert!(source.contains("pub fn payload(&self) -> &Description"));
     assert!(source.contains("pub fn into_payload(self) -> Description"));
     assert!(source.contains("pub fn record(payload: Entry) -> Self"));
-    assert!(source.contains("pub fn record_accepted(payload: RecordIdentifier) -> Self"));
+    assert!(source.contains("pub fn record_accepted(payload: Integer) -> Self"));
 }
 
 #[test]
@@ -602,16 +602,16 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
     assert!(code.contains("    CommandEffect,"));
     assert!(code.contains("    NexusWork,"));
     assert!(code.contains("impl triad_runtime::NexusAction for NexusAction"));
-    assert!(code.contains("type SemaWrite = CommandSemaWrite;"));
-    assert!(code.contains("type SemaRead = CommandSemaRead;"));
-    assert!(code.contains("type Effect = CommandEffect;"));
+    assert!(code.contains("type SemaWrite = SemaWriteInput;"));
+    assert!(code.contains("type SemaRead = SemaReadInput;"));
+    assert!(code.contains("type Effect = NexusEffectCommand;"));
     assert!(code.contains("type Work = NexusWork;"));
     assert!(code.contains("fn into_next_step(self) -> NexusRunnerNextStep"));
     assert!(code.contains("impl triad_runtime::NexusWork for NexusWork {}"));
-    assert!(code.contains("impl triad_runtime::SemaWriteInput for CommandSemaWrite {}"));
-    assert!(code.contains("impl triad_runtime::SemaReadInput for CommandSemaRead {}"));
-    assert!(code.contains("impl triad_runtime::NexusEffectCommand for CommandEffect {}"));
-    assert!(code.contains("impl triad_runtime::NexusEffectResult for EffectCompleted {}"));
+    assert!(code.contains("impl triad_runtime::SemaWriteInput for SemaWriteInput {}"));
+    assert!(code.contains("impl triad_runtime::SemaReadInput for SemaReadInput {}"));
+    assert!(code.contains("impl triad_runtime::NexusEffectCommand for NexusEffectCommand {}"));
+    assert!(code.contains("impl triad_runtime::NexusEffectResult for NexusEffectResult {}"));
     assert!(
         code.contains("Self::CommandSemaWrite(input) => triad_runtime::NextStep::SemaWrite(input)")
     );
@@ -630,19 +630,19 @@ fn nexus_runner_shape_emits_total_projection_and_generated_adapter() {
     assert!(code.contains("fn continuation_limit(&self) -> triad_runtime::ContinuationLimit"));
     assert_code_contains(
         code,
-        "fn apply_sema_write(&mut self, origin_route: OriginRoute, input: CommandSemaWrite) -> impl std::future::Future<Output = SemaWriteCompleted> + Send + '_;",
+        "fn apply_sema_write(&mut self, origin_route: OriginRoute, input: SemaWriteInput) -> impl std::future::Future<Output = SemaWriteOutput> + Send + '_;",
     );
     assert_code_contains(
         code,
-        "fn observe_sema_read(&mut self, origin_route: OriginRoute, input: CommandSemaRead) -> impl std::future::Future<Output = SemaReadCompleted> + Send + '_;",
+        "fn observe_sema_read(&mut self, origin_route: OriginRoute, input: SemaReadInput) -> impl std::future::Future<Output = SemaReadOutput> + Send + '_;",
     );
     assert_code_contains(
         code,
-        "fn run_effect(&mut self, input: CommandEffect) -> impl std::future::Future<Output = EffectCompleted> + Send + '_;",
+        "fn run_effect(&mut self, input: NexusEffectCommand) -> impl std::future::Future<Output = NexusEffectResult> + Send + '_;",
     );
     assert_code_contains(
         code,
-        "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ReplyToSignal;",
+        "fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> Output;",
     );
     assert!(code.contains("let runner = triad_runtime::Runner::new(self.continuation_limit());"));
     assert!(code.contains("let reply = runner.drive(&mut runner_adapter, first_work).await;"));
@@ -1005,9 +1005,9 @@ fn generated_trace_identity_is_typed_from_interface_headers() {
 #[test]
 fn compiled_fixture_is_usable_rust() {
     let entry = generated::Entry {
-        topics: vec![String::from("schema")],
+        topics: generated::Topics::new(vec![generated::Topic::new("schema")]),
         kind: generated::Kind::Decision,
-        description: String::from("schema drives rust"),
+        description: generated::Description::new("schema drives rust"),
         magnitude: generated::Magnitude::Maximum,
     };
     let input = generated::Input::Record(entry);
@@ -1052,9 +1052,12 @@ fn generated_input_parses_cli_nota_and_emits_nota() {
 
     match &input {
         generated::Input::Record(entry) => {
-            assert_eq!(entry.topics[0], "schema");
+            assert_eq!(entry.topics.payload()[0], generated::Topic::new("schema"));
             assert_eq!(entry.kind, generated::Kind::Constraint);
-            assert_eq!(entry.description, "agent's clarified intent");
+            assert_eq!(
+                entry.description,
+                generated::Description::new("agent's clarified intent")
+            );
             assert_eq!(entry.magnitude, generated::Magnitude::Maximum);
         }
         generated::Input::Observe(_) => panic!("expected record"),
@@ -1185,7 +1188,7 @@ impl generated::MessageProcessedHook<generated::Output> for MailHook {
 fn generated_processed_mail_events_are_typed_without_root_dispatch_traits() {
     assert_eq!(RuntimeError::StateRejected, RuntimeError::StateRejected);
     let mut hook = MailHook::new();
-    let reply = generated::Output::RecordsObserved(vec![]);
+    let reply = generated::Output::RecordsObserved(generated::RecordSet::new(vec![]));
 
     let processed = generated::MessageProcessed::new(
         generated::MessageIdentifier(77),
@@ -1201,7 +1204,7 @@ fn generated_processed_mail_events_are_typed_without_root_dispatch_traits() {
         vec![generated::MessageProcessed {
             identifier: generated::MessageIdentifier(77),
             origin_route: generated::OriginRoute(701),
-            reply: generated::Output::RecordsObserved(vec![]),
+            reply: generated::Output::RecordsObserved(generated::RecordSet::new(vec![])),
         }],
     );
 }
@@ -1222,9 +1225,9 @@ impl generated::UpgradeFrom<PreviousEntry> for generated::Entry {
 
     fn upgrade_from(previous: PreviousEntry) -> Result<Self, Self::Error> {
         Ok(Self {
-            topics: vec![previous.topic],
+            topics: generated::Topics::new(vec![generated::Topic::new(previous.topic)]),
             kind: generated::Kind::Clarification,
-            description: previous.description,
+            description: generated::Description::new(previous.description),
             magnitude: generated::Magnitude::High,
         })
     }
@@ -1286,10 +1289,10 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     // Collection payloads in a root output variant.
     assert!(code.contains("Projected(std::collections::BTreeMap<NodeName, NodeConfig>),"));
     assert!(code.contains("Listed(Vec<NodeName>),"));
-    // Bare bindings remain aliases even when they are used inside
-    // collection positions; the aliased scalar supplies the ordering.
-    assert!(code.contains("pub type NodeName = String;"));
-    assert!(code.contains("pub type NodeConfig = String;"));
+    // Bare bindings are distinct newtypes (no aliases); a newtype used as a
+    // map key supplies its own ordering via the derived Ord.
+    assert!(code.contains("pub struct NodeName(String);"));
+    assert!(code.contains("pub struct NodeConfig(String);"));
     assert_generated_fixture("collections_generated.rs", code);
 }
 
@@ -1309,14 +1312,23 @@ fn generated_collection_struct_round_trips_through_nota() {
     // Author a Cluster carrying all three collection kinds, encode it
     // to NOTA, parse it back, and confirm the value survives.
     let cluster = collections_generated::Cluster {
-        services: vec!["dns".to_owned(), "mail".to_owned()],
+        services: vec![
+            collections_generated::Service::new("dns"),
+            collections_generated::Service::new("mail"),
+        ],
         nodes: {
             let mut nodes = std::collections::BTreeMap::new();
-            nodes.insert("alpha".to_owned(), "primary".to_owned());
-            nodes.insert("beta".to_owned(), "replica".to_owned());
+            nodes.insert(
+                collections_generated::NodeName::new("alpha"),
+                collections_generated::NodeConfig::new("primary"),
+            );
+            nodes.insert(
+                collections_generated::NodeName::new("beta"),
+                collections_generated::NodeConfig::new("replica"),
+            );
             nodes
         },
-        cache: Some("warm".to_owned()),
+        cache: Some(collections_generated::NodeConfig::new("warm")),
         healthy: true,
         config_path: "/tmp/cluster.nota".to_owned(),
     };
@@ -1351,7 +1363,10 @@ fn generated_collection_struct_round_trips_through_nota() {
 #[test]
 fn generated_collection_payload_root_variant_round_trips_to_nota_and_rkyv() {
     let mut projection = std::collections::BTreeMap::new();
-    projection.insert("alpha".to_owned(), "primary".to_owned());
+    projection.insert(
+        collections_generated::NodeName::new("alpha"),
+        collections_generated::NodeConfig::new("primary"),
+    );
     let output = collections_generated::Output::Projected(projection);
 
     // NOTA round-trip through the root enum codec.

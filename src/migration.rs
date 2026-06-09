@@ -469,6 +469,7 @@ impl ToTokens for TypeRenderer<'_> {
             TypeReference::Integer => quote! { i64 }.to_tokens(tokens),
             TypeReference::Boolean => quote! { bool }.to_tokens(tokens),
             TypeReference::Path => quote! { String }.to_tokens(tokens),
+            TypeReference::Bytes => quote! { Bytes }.to_tokens(tokens),
             TypeReference::Plain(name) => {
                 Ident::new(name.as_str(), Span::call_site()).to_tokens(tokens)
             }

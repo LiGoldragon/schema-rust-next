@@ -2,17 +2,8 @@
 [(Record Entry) (Observe Query)]
 [(RecordAccepted SemaReceipt) (RecordsStashed StashResult) (Error ErrorReport)]
 {
-  NexusWork [(SignalArrived SignalArrived) (SemaWriteCompleted SemaWriteCompleted) (SemaReadCompleted SemaReadCompleted) (EffectCompleted EffectCompleted)]
-  SignalArrived Input
-  SemaWriteCompleted SemaWriteOutput
-  SemaReadCompleted SemaReadOutput
-  EffectCompleted NexusEffectResult
-  NexusAction [(CommandSemaWrite CommandSemaWrite) (CommandSemaRead CommandSemaRead) (ReplyToSignal ReplyToSignal) (CommandEffect CommandEffect) (Continue Continue)]
-  CommandSemaWrite SemaWriteInput
-  CommandSemaRead SemaReadInput
-  ReplyToSignal Output
-  CommandEffect NexusEffectCommand
-  Continue NexusWork
+  NexusWork [(SignalArrived Input) (SemaWriteCompleted SemaWriteOutput) (SemaReadCompleted SemaReadOutput) (EffectCompleted NexusEffectResult)]
+  NexusAction [(CommandSemaWrite SemaWriteInput) (CommandSemaRead SemaReadInput) (ReplyToSignal Output) (CommandEffect NexusEffectCommand) (Continue NexusWork)]
   NexusEffectCommand [(Stash StashRequest)]
   NexusEffectResult [(Stashed StashResult)]
   SemaWriteInput [(Record Entry)]

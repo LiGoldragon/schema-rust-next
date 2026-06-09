@@ -10,20 +10,24 @@ pub type Boolean = bool;
 pub type Path = std::string::String;
 
 #[rustfmt::skip]
-pub type Topic = String;
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Topic(String);
 
 #[rustfmt::skip]
-pub type Topics = Vec<Topic>;
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Topics(Vec<Topic>);
 
 #[rustfmt::skip]
-pub type Description = String;
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Description(String);
 
 #[rustfmt::skip]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Summary(Description);
 
 #[rustfmt::skip]
-pub type RecordIdentifier = Integer;
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RecordIdentifier(Integer);
 
 #[rustfmt::skip]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -42,7 +46,8 @@ pub struct Query {
 }
 
 #[rustfmt::skip]
-pub type RecordSet = Vec<Entry>;
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RecordSet(Vec<Entry>);
 
 #[rustfmt::skip]
 #[derive(
@@ -99,6 +104,63 @@ pub enum Output {
 }
 
 #[rustfmt::skip]
+impl Topic {
+    pub fn new(payload: impl Into<String>) -> Self {
+        Self(payload.into())
+    }
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<String> for Topic {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Topics {
+    pub fn new(payload: Vec<Topic>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Vec<Topic> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Vec<Topic> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Vec<Topic>> for Topics {
+    fn from(payload: Vec<Topic>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Description {
+    pub fn new(payload: impl Into<String>) -> Self {
+        Self(payload.into())
+    }
+    pub fn payload(&self) -> &String {
+        &self.0
+    }
+    pub fn into_payload(self) -> String {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<String> for Description {
+    fn from(payload: String) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl Summary {
     pub fn new(payload: Description) -> Self {
         Self(payload)
@@ -118,6 +180,44 @@ impl From<Description> for Summary {
 }
 
 #[rustfmt::skip]
+impl RecordIdentifier {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Integer> for RecordIdentifier {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl RecordSet {
+    pub fn new(payload: Vec<Entry>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Vec<Entry> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Vec<Entry> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Vec<Entry>> for RecordSet {
+    fn from(payload: Vec<Entry>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl Input {
     pub fn record(payload: Entry) -> Self {
         Self::Record(payload)
@@ -129,11 +229,11 @@ impl Input {
 
 #[rustfmt::skip]
 impl Output {
-    pub fn record_accepted(payload: RecordIdentifier) -> Self {
-        Self::RecordAccepted(payload)
+    pub fn record_accepted(payload: Integer) -> Self {
+        Self::RecordAccepted(RecordIdentifier::new(payload))
     }
-    pub fn records_observed(payload: RecordSet) -> Self {
-        Self::RecordsObserved(payload)
+    pub fn records_observed(payload: Vec<Entry>) -> Self {
+        Self::RecordsObserved(RecordSet::new(payload))
     }
 }
 
@@ -148,6 +248,20 @@ impl From<Entry> for Input {
 impl From<Query> for Input {
     fn from(payload: Query) -> Self {
         Self::Observe(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<RecordIdentifier> for Output {
+    fn from(payload: RecordIdentifier) -> Self {
+        Self::RecordAccepted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<RecordSet> for Output {
+    fn from(payload: RecordSet) -> Self {
+        Self::RecordsObserved(payload)
     }
 }
 

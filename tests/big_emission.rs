@@ -181,7 +181,6 @@ impl<'fixture> BigRustFixture<'fixture> {
         let found = declarations
             .iter()
             .any(|declaration| match declaration.value() {
-                TypeDeclaration::Alias(declaration) => declaration.name.as_str() == name,
                 TypeDeclaration::Struct(declaration) => declaration.name.as_str() == name,
                 TypeDeclaration::Newtype(declaration) => declaration.name.as_str() == name,
                 TypeDeclaration::Enum(declaration) => declaration.name.as_str() == name,
@@ -293,7 +292,7 @@ fn generated_big_rust_contains_the_current_schema_stack_surfaces() {
     assert!(triad.contains("pub enum SignalRequest"));
     assert!(triad.contains("pub enum NexusRequest"));
     assert!(triad.contains("pub enum SemaRequest"));
-    assert!(triad.contains("pub type PushSemaResult = SemaReply;"));
+    assert!(triad.contains("pub struct PushSemaResult(SemaReply);"));
     assert!(triad.contains("pub struct EntryWritten"));
     assert!(triad.contains("pub enum RuntimeEvent"));
     assert!(
@@ -350,7 +349,9 @@ fn compiled_reactive_generated_rust_builds_signal_frame_streaming_events() {
         signal_frame::ExchangeLane::Acceptor,
         signal_frame::LaneSequence::first(),
     );
-    let event = triad_large_generated::RuntimeEvent::MessageCommitted(9);
+    let event = triad_large_generated::RuntimeEvent::MessageCommitted(
+        triad_large_generated::MessageCommitted::new(triad_large_generated::CommitSequence::new(9)),
+    );
 
     let frame = event.clone().into_subscription_frame(
         event_identifier,

@@ -1,7 +1,7 @@
 use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{ToTokens, quote};
 use schema_next::{
-    AliasDeclaration, Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, ImportResolver,
+    Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, ImportResolver,
     Name, NewtypeDeclaration, ResolvedImport, Schema, SchemaEngine, SchemaError, SchemaIdentity,
     SchemaSource, StreamDeclaration, StructDeclaration, TypeDeclaration, TypeReference, Visibility,
 };
@@ -776,7 +776,6 @@ impl LowerToRust<RustDeclaration> for Declaration {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RustTypeDeclaration {
-    Alias(RustAlias),
     Struct(RustStruct),
     Enum(RustEnum),
     Newtype(RustNewtype),
@@ -785,9 +784,6 @@ pub enum RustTypeDeclaration {
 impl LowerToRust<RustTypeDeclaration> for TypeDeclaration {
     fn lower_to_rust(&self, context: &RustLoweringContext) -> RustTypeDeclaration {
         match self {
-            TypeDeclaration::Alias(declaration) => {
-                RustTypeDeclaration::Alias(declaration.lower_to_rust(context))
-            }
             TypeDeclaration::Struct(declaration) => {
                 RustTypeDeclaration::Struct(declaration.lower_to_rust(context))
             }
@@ -797,31 +793,6 @@ impl LowerToRust<RustTypeDeclaration> for TypeDeclaration {
             TypeDeclaration::Newtype(declaration) => {
                 RustTypeDeclaration::Newtype(declaration.lower_to_rust(context))
             }
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RustAlias {
-    name: Name,
-    reference: TypeReference,
-}
-
-impl RustAlias {
-    pub fn name(&self) -> &Name {
-        &self.name
-    }
-
-    pub fn reference(&self) -> &TypeReference {
-        &self.reference
-    }
-}
-
-impl LowerToRust<RustAlias> for AliasDeclaration {
-    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustAlias {
-        RustAlias {
-            name: self.name.clone(),
-            reference: self.reference.clone(),
         }
     }
 }
@@ -1129,7 +1100,8 @@ impl RustRenderContext {
             TypeReference::String
             | TypeReference::Integer
             | TypeReference::Boolean
-            | TypeReference::Path => false,
+            | TypeReference::Path
+            | TypeReference::Bytes => false,
         }
     }
 }
@@ -1176,6 +1148,7 @@ impl ToTokens for RustTypeReferenceTokens<'_> {
             TypeReference::Integer => quote! { Integer }.to_tokens(tokens),
             TypeReference::Boolean => quote! { Boolean }.to_tokens(tokens),
             TypeReference::Path => quote! { Path }.to_tokens(tokens),
+            TypeReference::Bytes => quote! { Bytes }.to_tokens(tokens),
             TypeReference::Plain(name) => RustIdentifier::new(name.as_str()).to_tokens(tokens),
             TypeReference::Vector(inner) => {
                 let inner = Self::new(inner);
@@ -3030,10 +3003,6 @@ impl<'declaration, 'context> RustDeclarationTokens<'declaration, 'context> {
 impl ToTokens for RustDeclarationTokens<'_, '_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self.declaration.value() {
-            RustTypeDeclaration::Alias(value) => {
-                RustAliasTokens::new(value, self.declaration.visibility(), self.context)
-                    .to_tokens(tokens)
-            }
             RustTypeDeclaration::Struct(value) => {
                 RustStructTokens::new(value, self.declaration.visibility(), self.context)
                     .to_tokens(tokens)
@@ -3047,38 +3016,6 @@ impl ToTokens for RustDeclarationTokens<'_, '_> {
                     .to_tokens(tokens)
             }
         }
-    }
-}
-
-struct RustAliasTokens<'alias, 'context> {
-    alias: &'alias RustAlias,
-    visibility: Visibility,
-    context: &'context RustRenderContext,
-}
-
-impl<'alias, 'context> RustAliasTokens<'alias, 'context> {
-    fn new(
-        alias: &'alias RustAlias,
-        visibility: Visibility,
-        context: &'context RustRenderContext,
-    ) -> Self {
-        Self {
-            alias,
-            visibility,
-            context,
-        }
-    }
-}
-
-impl ToTokens for RustAliasTokens<'_, '_> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let visibility = self.context.visibility_tokens(self.visibility);
-        let name = RustIdentifier::new(self.alias.name().as_str());
-        let reference = RustTypeReferenceTokens::new(self.alias.reference());
-        quote! {
-            #visibility type #name = #reference;
-        }
-        .to_tokens(tokens);
     }
 }
 
@@ -3326,9 +3263,6 @@ impl<'schema> CollectionScan<'schema> {
         let mut names = Vec::new();
         for declaration in self.schema.namespace() {
             match declaration.value() {
-                TypeDeclaration::Alias(declaration) => {
-                    Self::collect_alias_map_keys(declaration, &mut names);
-                }
                 TypeDeclaration::Struct(declaration) => {
                     Self::collect_declaration_map_keys(declaration, &mut names);
                 }
@@ -3344,10 +3278,6 @@ impl<'schema> CollectionScan<'schema> {
             Self::collect_enum_map_keys(root, &mut names);
         }
         names
-    }
-
-    fn collect_alias_map_keys(declaration: &AliasDeclaration, names: &mut Vec<String>) {
-        Self::collect_map_keys(&declaration.reference, names);
     }
 
     fn collect_enum_map_keys(declaration: &EnumDeclaration, names: &mut Vec<String>) {
@@ -3374,6 +3304,7 @@ impl<'schema> CollectionScan<'schema> {
             | TypeReference::Integer
             | TypeReference::Boolean
             | TypeReference::Path
+            | TypeReference::Bytes
             | TypeReference::Plain(_) => {}
             TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
                 Self::collect_map_keys(inner, names);
@@ -3760,37 +3691,19 @@ impl RustModuleRenderer {
         declarations: &[RustDeclaration],
         root_enums: &[RustEnum],
     ) {
-        let alias_names = self.alias_names(declarations);
         for declaration in declarations {
             if let RustTypeDeclaration::Enum(value) = declaration.value() {
-                self.emit_enum_payload_from_impls_for(value, &alias_names);
+                self.emit_enum_payload_from_impls_for(value);
             }
         }
         for root_enum in root_enums {
-            self.emit_enum_payload_from_impls_for(root_enum, &alias_names);
+            self.emit_enum_payload_from_impls_for(root_enum);
         }
     }
 
-    fn alias_names<'declaration>(
-        &self,
-        declarations: &'declaration [RustDeclaration],
-    ) -> Vec<&'declaration str> {
-        declarations
-            .iter()
-            .filter_map(|declaration| match declaration.value() {
-                RustTypeDeclaration::Alias(_) => Some(declaration.name().as_str()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    fn emit_enum_payload_from_impls_for(
-        &mut self,
-        declaration: &RustEnum,
-        alias_names: &[&str],
-    ) -> bool {
+    fn emit_enum_payload_from_impls_for(&mut self, declaration: &RustEnum) -> bool {
         let mut emitted = false;
-        for variant in self.unique_non_alias_plain_payload_variants(declaration, alias_names) {
+        for variant in self.unique_plain_payload_variants(declaration) {
             let Some(payload) = self.plain_payload_name(variant) else {
                 continue;
             };
@@ -3901,20 +3814,6 @@ impl RustModuleRenderer {
             .collect()
     }
 
-    fn unique_non_alias_plain_payload_variants<'declaration>(
-        &self,
-        declaration: &'declaration RustEnum,
-        alias_names: &[&str],
-    ) -> Vec<&'declaration RustEnumVariant> {
-        self.unique_plain_payload_variants(declaration)
-            .into_iter()
-            .filter(|variant| {
-                self.plain_payload_name(variant)
-                    .is_none_or(|payload| !alias_names.contains(&payload))
-            })
-            .collect()
-    }
-
     fn plain_payload_name<'variant>(
         &self,
         variant: &'variant RustEnumVariant,
@@ -3931,7 +3830,6 @@ impl RustModuleRenderer {
         }
         for declaration in declarations {
             match declaration.value() {
-                RustTypeDeclaration::Alias(_) => continue,
                 RustTypeDeclaration::Enum(enumeration) if enumeration.has_only_unit_variants() => {
                     self.emit_nota_copy_inherent_bridge(declaration.name().as_str());
                 }
@@ -4617,7 +4515,6 @@ impl RustModuleRenderer {
         if self.runtime_planes().emits_sema() {
             if let Some(root) = self.sema_write_input_root(declarations, root_enums) {
                 self.push_role_trait_impl(
-                    declarations,
                     &mut role_impls,
                     root.name().as_str(),
                     "triad_runtime::SemaWriteInput",
@@ -4625,7 +4522,6 @@ impl RustModuleRenderer {
             }
             if let Some(root) = self.sema_write_output_root(declarations, root_enums) {
                 self.push_role_trait_impl(
-                    declarations,
                     &mut role_impls,
                     root.name().as_str(),
                     "triad_runtime::SemaWriteOutput",
@@ -4633,7 +4529,6 @@ impl RustModuleRenderer {
             }
             if let Some(root) = self.sema_read_input_root(declarations, root_enums) {
                 self.push_role_trait_impl(
-                    declarations,
                     &mut role_impls,
                     root.name().as_str(),
                     "triad_runtime::SemaReadInput",
@@ -4641,7 +4536,6 @@ impl RustModuleRenderer {
             }
             if let Some(root) = self.sema_read_output_root(declarations, root_enums) {
                 self.push_role_trait_impl(
-                    declarations,
                     &mut role_impls,
                     root.name().as_str(),
                     "triad_runtime::SemaReadOutput",
@@ -4671,21 +4565,19 @@ impl RustModuleRenderer {
             return;
         }
         if self.local_runtime_role_type_exists(declarations, root_enums, type_name) {
-            self.push_role_trait_impl(declarations, role_impls, type_name, trait_name);
+            self.push_role_trait_impl(role_impls, type_name, trait_name);
         }
     }
 
     fn push_role_trait_impl(
         &self,
-        declarations: &[RustDeclaration],
         role_impls: &mut Vec<RuntimeRoleTraitImpl>,
         type_name: &str,
         trait_name: &'static str,
     ) {
-        let canonical_type_name = self
-            .declaration_alias_target(declarations, type_name)
-            .unwrap_or(type_name)
-            .to_owned();
+        // Newtypes are distinct, so a type is its own canonical role type —
+        // there is no transparent alias to resolve through.
+        let canonical_type_name = type_name.to_owned();
         if !role_impls
             .iter()
             .any(|role_impl| role_impl.matches(&canonical_type_name, trait_name))
@@ -4698,42 +4590,15 @@ impl RustModuleRenderer {
         }
     }
 
-    fn declaration_alias_target<'schema>(
-        &self,
-        declarations: &'schema [RustDeclaration],
-        type_name: &str,
-    ) -> Option<&'schema str> {
-        declarations
-            .iter()
-            .find(|declaration| declaration.name().as_str() == type_name)
-            .and_then(|declaration| match declaration.value() {
-                RustTypeDeclaration::Alias(alias) => match alias.reference() {
-                    TypeReference::Plain(target) => Some(target.as_str()),
-                    _ => None,
-                },
-                _ => None,
-            })
-    }
-
     fn local_runtime_role_type_exists(
         &self,
         declarations: &[RustDeclaration],
         root_enums: &[RustEnum],
         type_name: &str,
     ) -> bool {
-        if self
-            .declaration_enum_named(declarations, type_name)
+        self.declaration_enum_named(declarations, type_name)
             .is_some()
             || self.root_enum_named(root_enums, type_name).is_some()
-        {
-            return true;
-        }
-
-        self.declaration_alias_target(declarations, type_name)
-            .is_some_and(|target| {
-                self.declaration_enum_named(declarations, target).is_some()
-                    || self.root_enum_named(root_enums, target).is_some()
-            })
     }
 
     fn emit_nexus_runner_next_step_projection(&mut self, shape: &NexusRunnerShape) {
@@ -5060,28 +4925,6 @@ impl RustModuleRenderer {
             .map(ToOwned::to_owned)
     }
 
-    fn type_name_matches_plain_or_alias(
-        &self,
-        declarations: &[RustDeclaration],
-        type_name: &str,
-        expected_type_name: &str,
-    ) -> bool {
-        if type_name == expected_type_name {
-            return true;
-        }
-        declarations.iter().any(|declaration| {
-            declaration.name().as_str() == type_name
-                && matches!(
-                    declaration.value(),
-                    RustTypeDeclaration::Alias(alias)
-                        if matches!(
-                            alias.reference(),
-                            TypeReference::Plain(target) if target.as_str() == expected_type_name
-                        )
-                )
-        })
-    }
-
     fn nexus_runner_shape(&self, declarations: &[RustDeclaration]) -> Option<NexusRunnerShape> {
         let nexus_work = self.declaration_enum_named(declarations, "NexusWork")?;
         let nexus_action = self.declaration_enum_named(declarations, "NexusAction")?;
@@ -5098,9 +4941,9 @@ impl RustModuleRenderer {
         let effect_result_type = self.variant_plain_payload_name(nexus_work, "EffectCompleted");
         let continue_type = self.variant_plain_payload_name(nexus_action, "Continue");
         let has_continue_variant = self.enum_has_variant_named(nexus_action, "Continue");
-        let has_continue = continue_type.as_deref().is_some_and(|type_name| {
-            self.type_name_matches_plain_or_alias(declarations, type_name, "NexusWork")
-        });
+        let has_continue = continue_type
+            .as_deref()
+            .is_some_and(|type_name| type_name == "NexusWork");
 
         if self.enum_has_variant_named(nexus_action, "CommandSemaWrite")
             != sema_write_input_type.is_some()
@@ -5444,6 +5287,7 @@ impl RustModuleRenderer {
             TypeReference::Integer => "Integer".to_owned(),
             TypeReference::Boolean => "Boolean".to_owned(),
             TypeReference::Path => "Path".to_owned(),
+            TypeReference::Bytes => "Bytes".to_owned(),
             TypeReference::Plain(name) => name.as_str().to_owned(),
             TypeReference::Vector(inner) => format!("Vec<{}>", self.rust_type(inner)),
             TypeReference::Map(key, value) => format!(
