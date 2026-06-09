@@ -132,13 +132,18 @@ pub struct Topic(String);
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Digest(Bytes);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Cluster {
     pub services: Vec<Service>,
     pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,
     pub cache: Option<NodeConfig>,
     pub healthy: Boolean,
     pub config_path: Path,
-    pub digest: Bytes,
+    pub digest: Digest,
 }
 
 #[rustfmt::skip]
@@ -253,6 +258,25 @@ impl From<String> for Topic {
 }
 
 #[rustfmt::skip]
+impl Digest {
+    pub fn new(payload: Bytes) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Bytes {
+        &self.0
+    }
+    pub fn into_payload(self) -> Bytes {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Bytes> for Digest {
+    fn from(payload: Bytes) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl Input {
     pub fn register(payload: Cluster) -> Self {
         Self::Register(payload)
@@ -333,6 +357,17 @@ impl Query {
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
 impl Topic {
+    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+        <Self as NotaDecode>::from_nota_block(block)
+    }
+    pub fn to_nota(&self) -> String {
+        <Self as NotaEncode>::to_nota(self)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl Digest {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }

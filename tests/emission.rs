@@ -1331,7 +1331,9 @@ fn generated_collection_struct_round_trips_through_nota() {
         cache: Some(collections_generated::NodeConfig::new("warm")),
         healthy: true,
         config_path: "/tmp/cluster.nota".to_owned(),
-        digest: collections_generated::Bytes::new(vec![0xde, 0xad, 0xbe, 0xef]),
+        digest: collections_generated::Digest::new(collections_generated::Bytes::new(vec![
+            0xde, 0xad, 0xbe, 0xef,
+        ])),
     };
 
     let encoded = cluster.to_nota();
@@ -1350,7 +1352,7 @@ fn generated_collection_struct_round_trips_through_nota() {
         cache: None,
         healthy: false,
         config_path: "/tmp/empty.nota".to_owned(),
-        digest: collections_generated::Bytes::new(Vec::new()),
+        digest: collections_generated::Digest::new(collections_generated::Bytes::new(Vec::new())),
     };
     let empty_encoded = empty.to_nota();
     let empty_parsed = collections_generated::Cluster::from_nota_block(

@@ -6,5 +6,6 @@
   Service String
   Query Topic
   Topic String
-  Cluster { services (Vec Service) nodes (Map (NodeName NodeConfig)) cache (Optional NodeConfig) healthy Boolean configPath Path digest Bytes }
+  Digest Bytes
+  Cluster { services (Vec Service) nodes (Map (NodeName NodeConfig)) cache (Optional NodeConfig) healthy Boolean configPath Path digest Digest }
 }
