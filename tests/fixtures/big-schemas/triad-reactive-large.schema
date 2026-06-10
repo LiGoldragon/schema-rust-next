@@ -8,20 +8,20 @@
  (SemaOut SemaReply)
  (AdminOut AdminReply)
  (Event RuntimeEvent)
- (Rejected Rejected)]
+ (Rejected)]
 {
   CommitSequence Integer
   DatabaseDigest Integer
   ActorIdentifier String
   SocketPath String
-  SignalRequest [(RecordIntent RecordIntent) (ObserveIntent ObserveIntent) (SubscribeIntent SubscribeIntent opens RuntimeEventStream)]
-  SignalReply [(RecordAccepted RecordAccepted) (ObservationReturned ObservationReturned) (SubscriptionStarted SubscriptionStarted)]
-  NexusRequest [(PushSignal PushSignal) (PushSemaResult PushSemaResult) ResolveMail ExpireMail]
-  NexusReply [(PushedToSema PushedToSema) (MailResolved MailResolved) MailExpired]
-  SemaRequest [(WriteEntry WriteEntry) (ReadEntries ReadEntries) (OpenSubscription OpenSubscription) (CloseSubscription CloseSubscription)]
-  SemaReply [(EntryWritten EntryWritten) (EntriesRead EntriesRead) (SubscriptionOpened SubscriptionOpened) (SubscriptionClosed SubscriptionClosed)]
-  AdminRequest [Drain Pause Resume (Snapshot Snapshot)]
-  AdminReply [Drained Paused Resumed (SnapshotReady SnapshotReady)]
+  SignalRequest [(RecordIntent) (ObserveIntent) (SubscribeIntent SubscribeIntent opens RuntimeEventStream)]
+  SignalReply [(RecordAccepted) (ObservationReturned) (SubscriptionStarted)]
+  NexusRequest [(PushSignal) (PushSemaResult) ResolveMail ExpireMail]
+  NexusReply [(PushedToSema) (MailResolved) MailExpired]
+  SemaRequest [(WriteEntry) (ReadEntries) (OpenSubscription) (CloseSubscription)]
+  SemaReply [(EntryWritten) (EntriesRead) (SubscriptionOpened) (SubscriptionClosed)]
+  AdminRequest [Drain Pause Resume (Snapshot)]
+  AdminReply [Drained Paused Resumed (SnapshotReady)]
   RuntimeEvent [(MailSent MailSent belongs RuntimeEventStream) (MessageAccepted MessageAccepted belongs RuntimeEventStream) (MessageCommitted MessageCommitted belongs RuntimeEventStream) (MessageFailed MessageFailed belongs RuntimeEventStream)]
   RuntimeEventStream (Stream { token SubscriptionToken opened SubscriptionStarted event RuntimeEvent close SubscriptionToken })
   Rejected RejectionReason

@@ -138,11 +138,13 @@ visibility-tagged declarations: `(Public Name Value)` or `(Private Name
 Value)`. The emitter must project that boundary into Rust instead of
 flattening every type into the same public surface.
 
-The active fixtures use the current enum-body signature shape: square brackets
-contain one vector element type, so unit variants are bare symbols and
-data-carrying variants are parenthesized records such as `(Record Entry)`.
-This emitter sees the typed source/schema data from `schema-next` and must not
-grow a second parser for the authored form.
+The active fixtures should use the compact schema signature shape: square
+brackets contain one vector element type, so unit variants are bare symbols,
+same-named data-carrying variants use self-tagged records such as `(Record)`,
+and explicit `(Variant PayloadType)` records are reserved for intentionally
+different names. Root headers should prefer exported operation names or shallow
+inline operation payloads. This emitter sees the typed source/schema data from
+`schema-next` and must not grow a second parser for the authored form.
 
 ## Constraints
 
