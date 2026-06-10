@@ -83,13 +83,14 @@
             touch $out
           '';
           generated-mail-events = pkgs.runCommand "schema-rust-next-generated-mail-events" { } ''
-            grep -R "pub struct MessageIdentifier(pub Integer)" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
-            grep -R "pub struct OriginRoute(pub Integer)" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub struct MessageIdentifier(Integer)" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "impl MessageIdentifier" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "pub struct OriginRoute(Integer)" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "impl OriginRoute" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub mod schema" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub enum Plane" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "Sema(super::Sema<SemaRoot>)" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub mod signal" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
-            grep -R "impl OriginRoute" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub enum MessageRoot" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub struct MessageSent" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub origin_route: OriginRoute" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
