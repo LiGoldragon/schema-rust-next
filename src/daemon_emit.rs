@@ -1360,10 +1360,7 @@ impl GeneratedDaemonRuntimeTokens {
         // runtime ask-methods share an identical `SendError` translation; emit
         // each through `owner_connection_message` / `owner_connection_method`.
         let meta_message = if self.has_meta_tier {
-            Self::owner_connection_message(
-                quote!(MetaConnection),
-                quote!(handle_meta_connection),
-            )
+            Self::owner_connection_message(quote!(MetaConnection), quote!(handle_meta_connection))
         } else {
             quote! {}
         };
@@ -1376,10 +1373,7 @@ impl GeneratedDaemonRuntimeTokens {
             quote! {}
         };
         let meta_connection_method = if self.has_meta_tier {
-            Self::owner_connection_method(
-                quote!(handle_meta_connection),
-                quote!(MetaConnection),
-            )
+            Self::owner_connection_method(quote!(handle_meta_connection), quote!(MetaConnection))
         } else {
             quote! {}
         };
@@ -1669,10 +1663,7 @@ impl GeneratedDaemonRuntimeTokens {
     /// Emit one owner-only connection `Message<T>` impl on `EngineActor` routing
     /// to the named component hook — the shared shape for the meta and upgrade
     /// tiers.
-    fn owner_connection_message(
-        message_type: TokenStream,
-        hook: TokenStream,
-    ) -> TokenStream {
+    fn owner_connection_message(message_type: TokenStream, hook: TokenStream) -> TokenStream {
         quote! {
             pub struct #message_type {
                 connection: AcceptedConnection,
@@ -1695,10 +1686,7 @@ impl GeneratedDaemonRuntimeTokens {
     /// Emit one runtime ask-method that forwards an accepted owner-only
     /// connection to the engine actor and translates the `SendError` — the
     /// shared shape for the meta and upgrade tiers.
-    fn owner_connection_method(
-        method: TokenStream,
-        message_type: TokenStream,
-    ) -> TokenStream {
+    fn owner_connection_method(method: TokenStream, message_type: TokenStream) -> TokenStream {
         quote! {
             async fn #method(
                 &self,

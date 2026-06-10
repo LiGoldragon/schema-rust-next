@@ -1,8 +1,8 @@
 use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{ToTokens, quote};
 use schema_next::{
-    Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, ImportResolver,
-    Name, NewtypeDeclaration, ResolvedImport, Schema, SchemaEngine, SchemaError, SchemaIdentity,
+    Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, ImportResolver, Name,
+    NewtypeDeclaration, ResolvedImport, Schema, SchemaEngine, SchemaError, SchemaIdentity,
     SchemaSource, StreamDeclaration, StructDeclaration, TypeDeclaration, TypeReference, Visibility,
 };
 
@@ -3341,10 +3341,12 @@ impl<'schema> CollectionScan<'schema> {
     }
 
     fn enum_uses_bytes(declaration: &EnumDeclaration) -> bool {
-        declaration
-            .variants
-            .iter()
-            .any(|variant| variant.payload.as_ref().is_some_and(Self::reference_uses_bytes))
+        declaration.variants.iter().any(|variant| {
+            variant
+                .payload
+                .as_ref()
+                .is_some_and(Self::reference_uses_bytes)
+        })
     }
 
     fn reference_uses_bytes(reference: &TypeReference) -> bool {

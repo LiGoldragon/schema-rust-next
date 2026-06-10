@@ -46,8 +46,12 @@ fn component_decoded_shape() -> NexusDaemonShape {
 
 fn upgrade_tier_shape() -> NexusDaemonShape {
     NexusDaemonShape::new("test-daemon", WorkingListenerTier::new("signal"))
-        .with_meta_tier(MetaListenerTier::new(SocketModeBits::new(OWNER_ONLY_SOCKET_MODE)))
-        .with_upgrade_tier(UpgradeListenerTier::new(SocketModeBits::new(OWNER_ONLY_SOCKET_MODE)))
+        .with_meta_tier(MetaListenerTier::new(SocketModeBits::new(
+            OWNER_ONLY_SOCKET_MODE,
+        )))
+        .with_upgrade_tier(UpgradeListenerTier::new(SocketModeBits::new(
+            OWNER_ONLY_SOCKET_MODE,
+        )))
 }
 
 fn upgrade_only_shape() -> NexusDaemonShape {
@@ -126,15 +130,15 @@ fn single_listener_daemon_emits_the_async_single_listener_spine() {
         "impl<Daemon: ComponentDaemon> Actor for EngineActor<Daemon>",
     );
     assert_code_contains(code, "engine: ActorRef<EngineActor<Daemon>>");
-    assert_code_contains(
-        code,
-        "EngineActor::<Daemon>::spawn(EngineActor { engine })",
-    );
+    assert_code_contains(code, "EngineActor::<Daemon>::spawn(EngineActor { engine })");
     assert_code_contains(
         code,
         "Daemon::handle_working_input(&mut self.engine, message.input, &message.context).await",
     );
-    assert_code_contains(code, "self.engine.ask(WorkingInput { input, context }).await");
+    assert_code_contains(
+        code,
+        "self.engine.ask(WorkingInput { input, context }).await",
+    );
     assert_code_contains(code, "read_body_async(self.connection.stream_mut())");
     assert_code_contains(code, "write_body_async(");
     // The single-listener async daemon has no sync listener, no meta tier, and
@@ -279,10 +283,7 @@ fn declared_stream_emits_async_subscription_support() {
     );
     assert_code_contains(code, "pub struct EngineActor<Daemon: ComponentDaemon>");
     assert_code_contains(code, "engine: ActorRef<EngineActor<Daemon>>");
-    assert_code_contains(
-        code,
-        "EngineActor::<Daemon>::spawn(EngineActor { engine })",
-    );
+    assert_code_contains(code, "EngineActor::<Daemon>::spawn(EngineActor { engine })");
     assert_code_contains(code, "subscriptions: EmittedSubscriptions<Daemon>");
     assert_code_contains(code, "pub struct WorkingOutcome<Daemon: ComponentDaemon>");
     assert_code_contains(code, "output: Output");
@@ -363,7 +364,10 @@ fn upgrade_listener_tier_emits_the_third_listener_alongside_meta() {
 
     // The binder binds a third `AsyncListenerSocket` from the upgrade socket path,
     // owner-only at the declared mode.
-    assert_code_contains(code, "let mut listener_sockets = std::vec![working_socket];");
+    assert_code_contains(
+        code,
+        "let mut listener_sockets = std::vec![working_socket];",
+    );
     assert_code_contains(
         code,
         "let upgrade_socket_path = configuration.upgrade_socket_path().ok_or(DaemonError::MissingUpgradeSocket)?.to_path_buf();",
@@ -384,7 +388,10 @@ fn upgrade_listener_tier_emits_the_third_listener_alongside_meta() {
         code,
         "Daemon::handle_upgrade_connection(&mut self.engine, message.connection).await",
     );
-    assert_code_contains(code, "self.engine.ask(UpgradeConnection { connection }).await");
+    assert_code_contains(
+        code,
+        "self.engine.ask(UpgradeConnection { connection }).await",
+    );
 
     // The multi-listener runtime routes all three tiers.
     assert_code_contains(
