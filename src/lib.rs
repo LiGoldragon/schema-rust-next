@@ -4333,74 +4333,25 @@ impl RustModuleRenderer {
         self.emit_item_tokens(RustScalarAliasTokens::new(alias).into_token_stream());
     }
 
-    /// Emits the `Bytes` scalar as a newtype over `Vec<u8>` carrying its own
-    /// lowercase-hex NOTA codec (`[deadbeef]`), NOT a transparent `Vec<u8>`
-    /// alias (whose blanket codec would render `[1 2 3 …]`). The struct +
-    /// accessors are always emitted; the hex codec follows the module's
-    /// NOTA surface.
+    /// Emits the `Bytes` scalar as a local storage newtype over `Vec<u8>`.
+    /// The inner value is nota-next's byte scalar, so the generated type can
+    /// derive NOTA codecs instead of emitting a local implementation.
     fn emit_bytes_scalar(&mut self) {
-        let gate = match &self.nota_surface {
-            NotaSurface::AlwaysEnabled | NotaSurface::Disabled => None,
-            NotaSurface::FeatureGated { feature } => Some(quote! {
-                #[cfg(feature = #feature)]
-            }),
+        let nota_gate = match &self.nota_surface {
+            NotaSurface::AlwaysEnabled | NotaSurface::Disabled => quote! {},
+            NotaSurface::FeatureGated { feature } => quote! {
+                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+            },
         };
-        let codec = if self.nota_surface.emits_nota() {
-            quote! {
-                #gate
-                impl Bytes {
-                    fn from_hex(text: &str) -> Result<Self, nota_next::NotaDecodeError> {
-                        if !text.len().is_multiple_of(2) {
-                            return Err(nota_next::NotaDecodeError::Parse(format!(
-                                "Bytes hex literal has odd length: {text}"
-                            )));
-                        }
-                        let mut bytes = Vec::with_capacity(text.len() / 2);
-                        for pair in text.as_bytes().chunks_exact(2) {
-                            let high = Self::hex_digit(pair[0])?;
-                            let low = Self::hex_digit(pair[1])?;
-                            bytes.push((high << 4) | low);
-                        }
-                        Ok(Self(bytes))
-                    }
-
-                    fn hex_digit(digit: u8) -> Result<u8, nota_next::NotaDecodeError> {
-                        match digit {
-                            b'0'..=b'9' => Ok(digit - b'0'),
-                            b'a'..=b'f' => Ok(digit - b'a' + 10),
-                            other => Err(nota_next::NotaDecodeError::Parse(format!(
-                                "Bytes hex literal has a non-hex digit: {other}"
-                            ))),
-                        }
-                    }
-                }
-
-                #gate
-                impl nota_next::NotaEncode for Bytes {
-                    fn to_nota(&self) -> String {
-                        let mut hex = String::with_capacity(self.0.len() * 2);
-                        for byte in &self.0 {
-                            hex.push_str(&format!("{byte:02x}"));
-                        }
-                        nota_next::NotaEncode::to_nota(&hex)
-                    }
-                }
-
-                #gate
-                impl nota_next::NotaDecode for Bytes {
-                    fn from_nota_block(
-                        block: &nota_next::Block,
-                    ) -> Result<Self, nota_next::NotaDecodeError> {
-                        let hex = <String as nota_next::NotaDecode>::from_nota_block(block)?;
-                        Self::from_hex(&hex)
-                    }
-                }
-            }
+        let nota_derives = if self.nota_surface.includes_nota_in_derive() {
+            quote! { nota_next::NotaDecode, nota_next::NotaEncode, }
         } else {
             quote! {}
         };
         self.emit_item_tokens(quote! {
+            #nota_gate
             #[derive(
+                #nota_derives
                 rkyv::Archive,
                 rkyv::Serialize,
                 rkyv::Deserialize,
@@ -4412,95 +4363,45 @@ impl RustModuleRenderer {
                 Ord,
                 Hash,
             )]
-            pub struct Bytes(Vec<u8>);
+            pub struct Bytes(nota_next::ByteSequence);
 
             impl Bytes {
                 pub fn new(payload: Vec<u8>) -> Self {
-                    Self(payload)
+                    Self(nota_next::ByteSequence::new(payload))
                 }
 
                 pub fn payload(&self) -> &[u8] {
-                    &self.0
+                    self.0.payload()
                 }
 
                 pub fn into_payload(self) -> Vec<u8> {
-                    self.0
+                    self.0.into_payload()
                 }
             }
-
-            #codec
         });
     }
 
     /// Emits the generic fixed-size `FixedBytes<const WIDTH: usize>([u8; WIDTH])`
     /// that `(Bytes N)` references lower to (`FixedBytes<N>`). One generic type
-    /// serves every width, with the same lowercase-hex codec as `Bytes` but a
-    /// length check (the orphan rule blocks a codec on a bare `[u8; N]`).
+    /// serves every width; the inner value is nota-next's fixed byte scalar, so
+    /// the generated type can derive NOTA codecs instead of emitting a local
+    /// implementation.
     fn emit_fixed_bytes_scalar(&mut self) {
-        let gate = match &self.nota_surface {
-            NotaSurface::AlwaysEnabled | NotaSurface::Disabled => None,
-            NotaSurface::FeatureGated { feature } => Some(quote! {
-                #[cfg(feature = #feature)]
-            }),
+        let nota_gate = match &self.nota_surface {
+            NotaSurface::AlwaysEnabled | NotaSurface::Disabled => quote! {},
+            NotaSurface::FeatureGated { feature } => quote! {
+                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+            },
         };
-        let codec = if self.nota_surface.emits_nota() {
-            quote! {
-                #gate
-                impl<const WIDTH: usize> FixedBytes<WIDTH> {
-                    fn from_hex(text: &str) -> Result<Self, nota_next::NotaDecodeError> {
-                        if text.len() != WIDTH * 2 {
-                            return Err(nota_next::NotaDecodeError::Parse(format!(
-                                "FixedBytes<{}> expected {} hex digits, found {}",
-                                WIDTH,
-                                WIDTH * 2,
-                                text.len()
-                            )));
-                        }
-                        let mut bytes = [0u8; WIDTH];
-                        for (index, pair) in text.as_bytes().chunks_exact(2).enumerate() {
-                            bytes[index] =
-                                (Self::hex_digit(pair[0])? << 4) | Self::hex_digit(pair[1])?;
-                        }
-                        Ok(Self(bytes))
-                    }
-
-                    fn hex_digit(digit: u8) -> Result<u8, nota_next::NotaDecodeError> {
-                        match digit {
-                            b'0'..=b'9' => Ok(digit - b'0'),
-                            b'a'..=b'f' => Ok(digit - b'a' + 10),
-                            other => Err(nota_next::NotaDecodeError::Parse(format!(
-                                "FixedBytes hex literal has a non-hex digit: {other}"
-                            ))),
-                        }
-                    }
-                }
-
-                #gate
-                impl<const WIDTH: usize> nota_next::NotaEncode for FixedBytes<WIDTH> {
-                    fn to_nota(&self) -> String {
-                        let mut hex = String::with_capacity(WIDTH * 2);
-                        for byte in &self.0 {
-                            hex.push_str(&format!("{byte:02x}"));
-                        }
-                        nota_next::NotaEncode::to_nota(&hex)
-                    }
-                }
-
-                #gate
-                impl<const WIDTH: usize> nota_next::NotaDecode for FixedBytes<WIDTH> {
-                    fn from_nota_block(
-                        block: &nota_next::Block,
-                    ) -> Result<Self, nota_next::NotaDecodeError> {
-                        let hex = <String as nota_next::NotaDecode>::from_nota_block(block)?;
-                        Self::from_hex(&hex)
-                    }
-                }
-            }
+        let nota_derives = if self.nota_surface.includes_nota_in_derive() {
+            quote! { nota_next::NotaDecode, nota_next::NotaEncode, }
         } else {
             quote! {}
         };
         self.emit_item_tokens(quote! {
+            #nota_gate
             #[derive(
+                #nota_derives
                 rkyv::Archive,
                 rkyv::Serialize,
                 rkyv::Deserialize,
@@ -4512,23 +4413,21 @@ impl RustModuleRenderer {
                 Ord,
                 Hash,
             )]
-            pub struct FixedBytes<const WIDTH: usize>([u8; WIDTH]);
+            pub struct FixedBytes<const WIDTH: usize>(nota_next::FixedByteSequence<WIDTH>);
 
             impl<const WIDTH: usize> FixedBytes<WIDTH> {
                 pub fn new(payload: [u8; WIDTH]) -> Self {
-                    Self(payload)
+                    Self(nota_next::FixedByteSequence::new(payload))
                 }
 
                 pub fn payload(&self) -> &[u8; WIDTH] {
-                    &self.0
+                    self.0.payload()
                 }
 
                 pub fn into_payload(self) -> [u8; WIDTH] {
-                    self.0
+                    self.0.into_payload()
                 }
             }
-
-            #codec
         });
     }
 

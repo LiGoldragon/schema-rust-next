@@ -9,6 +9,7 @@ pub type Boolean = bool;
 #[rustfmt::skip]
 pub type Path = std::string::String;
 #[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(
     rkyv::Archive,
     rkyv::Serialize,
@@ -21,74 +22,21 @@ pub type Path = std::string::String;
     Ord,
     Hash,
 )]
-pub struct Bytes(Vec<u8>);
+pub struct Bytes(nota_next::ByteSequence);
 #[rustfmt::skip]
 impl Bytes {
     pub fn new(payload: Vec<u8>) -> Self {
-        Self(payload)
+        Self(nota_next::ByteSequence::new(payload))
     }
     pub fn payload(&self) -> &[u8] {
-        &self.0
+        self.0.payload()
     }
     pub fn into_payload(self) -> Vec<u8> {
-        self.0
+        self.0.into_payload()
     }
 }
 #[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl Bytes {
-    fn from_hex(text: &str) -> Result<Self, nota_next::NotaDecodeError> {
-        if !text.len().is_multiple_of(2) {
-            return Err(
-                nota_next::NotaDecodeError::Parse(
-                    format!("Bytes hex literal has odd length: {text}"),
-                ),
-            );
-        }
-        let mut bytes = Vec::with_capacity(text.len() / 2);
-        for pair in text.as_bytes().chunks_exact(2) {
-            let high = Self::hex_digit(pair[0])?;
-            let low = Self::hex_digit(pair[1])?;
-            bytes.push((high << 4) | low);
-        }
-        Ok(Self(bytes))
-    }
-    fn hex_digit(digit: u8) -> Result<u8, nota_next::NotaDecodeError> {
-        match digit {
-            b'0'..=b'9' => Ok(digit - b'0'),
-            b'a'..=b'f' => Ok(digit - b'a' + 10),
-            other => {
-                Err(
-                    nota_next::NotaDecodeError::Parse(
-                        format!("Bytes hex literal has a non-hex digit: {other}"),
-                    ),
-                )
-            }
-        }
-    }
-}
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl nota_next::NotaEncode for Bytes {
-    fn to_nota(&self) -> String {
-        let mut hex = String::with_capacity(self.0.len() * 2);
-        for byte in &self.0 {
-            hex.push_str(&format!("{byte:02x}"));
-        }
-        nota_next::NotaEncode::to_nota(&hex)
-    }
-}
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl nota_next::NotaDecode for Bytes {
-    fn from_nota_block(
-        block: &nota_next::Block,
-    ) -> Result<Self, nota_next::NotaDecodeError> {
-        let hex = <String as nota_next::NotaDecode>::from_nota_block(block)?;
-        Self::from_hex(&hex)
-    }
-}
-#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(
     rkyv::Archive,
     rkyv::Serialize,
@@ -101,72 +49,17 @@ impl nota_next::NotaDecode for Bytes {
     Ord,
     Hash,
 )]
-pub struct FixedBytes<const WIDTH: usize>([u8; WIDTH]);
+pub struct FixedBytes<const WIDTH: usize>(nota_next::FixedByteSequence<WIDTH>);
 #[rustfmt::skip]
 impl<const WIDTH: usize> FixedBytes<WIDTH> {
     pub fn new(payload: [u8; WIDTH]) -> Self {
-        Self(payload)
+        Self(nota_next::FixedByteSequence::new(payload))
     }
     pub fn payload(&self) -> &[u8; WIDTH] {
-        &self.0
+        self.0.payload()
     }
     pub fn into_payload(self) -> [u8; WIDTH] {
-        self.0
-    }
-}
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl<const WIDTH: usize> FixedBytes<WIDTH> {
-    fn from_hex(text: &str) -> Result<Self, nota_next::NotaDecodeError> {
-        if text.len() != WIDTH * 2 {
-            return Err(
-                nota_next::NotaDecodeError::Parse(
-                    format!(
-                        "FixedBytes<{}> expected {} hex digits, found {}", WIDTH, WIDTH *
-                        2, text.len()
-                    ),
-                ),
-            );
-        }
-        let mut bytes = [0u8; WIDTH];
-        for (index, pair) in text.as_bytes().chunks_exact(2).enumerate() {
-            bytes[index] = (Self::hex_digit(pair[0])? << 4) | Self::hex_digit(pair[1])?;
-        }
-        Ok(Self(bytes))
-    }
-    fn hex_digit(digit: u8) -> Result<u8, nota_next::NotaDecodeError> {
-        match digit {
-            b'0'..=b'9' => Ok(digit - b'0'),
-            b'a'..=b'f' => Ok(digit - b'a' + 10),
-            other => {
-                Err(
-                    nota_next::NotaDecodeError::Parse(
-                        format!("FixedBytes hex literal has a non-hex digit: {other}"),
-                    ),
-                )
-            }
-        }
-    }
-}
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl<const WIDTH: usize> nota_next::NotaEncode for FixedBytes<WIDTH> {
-    fn to_nota(&self) -> String {
-        let mut hex = String::with_capacity(WIDTH * 2);
-        for byte in &self.0 {
-            hex.push_str(&format!("{byte:02x}"));
-        }
-        nota_next::NotaEncode::to_nota(&hex)
-    }
-}
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl<const WIDTH: usize> nota_next::NotaDecode for FixedBytes<WIDTH> {
-    fn from_nota_block(
-        block: &nota_next::Block,
-    ) -> Result<Self, nota_next::NotaDecodeError> {
-        let hex = <String as nota_next::NotaDecode>::from_nota_block(block)?;
-        Self::from_hex(&hex)
+        self.0.into_payload()
     }
 }
 
