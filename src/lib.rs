@@ -321,7 +321,7 @@ impl RustModule {
                 writer.blank();
             }
         }
-        writer.emit_domain_scope_relation_support(&self.relations);
+        writer.emit_domain_scope_relation_support(&self.relations, &self.declarations);
 
         if writer.emits_short_headers() {
             writer.emit_short_headers(&self.root_enums);
@@ -3229,6 +3229,10 @@ impl ScopeEnumModel {
             .variants()
             .iter()
             .map(|variant| {
+                let payload_source = variant
+                    .payload()
+                    .and_then(TypeReference::plain_name)
+                    .map(|name| name.as_str().to_owned());
                 let payload_scope = variant
                     .payload()
                     .and_then(TypeReference::plain_name)
@@ -3238,7 +3242,11 @@ impl ScopeEnumModel {
                         Self::push_model(payload, emitted.clone(), false, declarations, models);
                         emitted
                     });
-                ScopeEnumVariantModel::new(variant.name().as_str().to_owned(), payload_scope)
+                ScopeEnumVariantModel::new(
+                    variant.name().as_str().to_owned(),
+                    payload_source,
+                    payload_scope,
+                )
             })
             .collect();
         models.push(Self {
@@ -3265,18 +3273,68 @@ impl ScopeEnumModel {
     fn child_scope_name(name: &Name) -> String {
         format!("{}Scope", name.as_str())
     }
+
+    fn model_named<'model>(
+        models: &'model [Self],
+        emitted_name: &str,
+    ) -> Option<&'model ScopeEnumModel> {
+        models
+            .iter()
+            .find(|model| model.emitted_name.as_str() == emitted_name)
+    }
+
+    fn constructor_tokens(&self, models: &[Self], path: &[Name]) -> TokenStream {
+        let (head, tail) = path
+            .split_first()
+            .unwrap_or_else(|| panic!("empty scope relation path for {}", self.emitted_name));
+        let variant = self
+            .variants
+            .iter()
+            .find(|variant| variant.name.as_str() == head.as_str())
+            .unwrap_or_else(|| {
+                panic!(
+                    "scope relation path segment {} is not a variant of {}",
+                    head.as_str(),
+                    self.emitted_name
+                )
+            });
+        let scope_name = RustIdentifier::new(&self.emitted_name);
+        let variant_name = RustIdentifier::new(&variant.name);
+        match &variant.payload_scope {
+            Some(payload_scope) => {
+                let payload_name = RustIdentifier::new(payload_scope);
+                let payload_model = Self::model_named(models, payload_scope)
+                    .unwrap_or_else(|| panic!("missing scope model for payload {}", payload_scope));
+                let payload = if tail.is_empty() {
+                    quote! { #payload_name::All }
+                } else {
+                    payload_model.constructor_tokens(models, tail)
+                };
+                quote! { #scope_name::#variant_name(#payload) }
+            }
+            None if tail.is_empty() => quote! { #scope_name::#variant_name },
+            None => {
+                panic!(
+                    "scope relation path continues past leaf {}::{}",
+                    self.emitted_name, variant.name
+                )
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ScopeEnumVariantModel {
     name: String,
+    payload_source: Option<String>,
     payload_scope: Option<String>,
 }
 
 impl ScopeEnumVariantModel {
-    fn new(name: String, payload_scope: Option<String>) -> Self {
+    fn new(name: String, payload_source: Option<String>, payload_scope: Option<String>) -> Self {
         Self {
             name,
+            payload_source,
             payload_scope,
         }
     }
@@ -3316,7 +3374,7 @@ impl ToTokens for ScopeFamilyTokens<'_, '_, '_> {
             .iter()
             .rev()
             .map(|model| ScopeEnumTokens::new(model, self.visibility, self.context));
-        let path_tokens = models.iter().map(ScopePathImplTokens::new);
+        let operation_tokens = models.iter().map(ScopeOperationImplTokens::new);
         let nota_tokens = if self.context.nota_surface.emits_nota() {
             let bridge =
                 NotaInherentBridgeTokens::borrowed(self.newtype.name().as_str(), self.context);
@@ -3331,7 +3389,7 @@ impl ToTokens for ScopeFamilyTokens<'_, '_, '_> {
         };
         quote! {
             #(#enum_tokens)*
-            #(#path_tokens)*
+            #(#operation_tokens)*
             #nota_tokens
         }
         .to_tokens(tokens);
@@ -3389,104 +3447,75 @@ impl ToTokens for ScopeEnumTokens<'_, '_> {
     }
 }
 
-struct ScopePathImplTokens<'model> {
+struct ScopeOperationImplTokens<'model> {
     model: &'model ScopeEnumModel,
 }
 
-impl<'model> ScopePathImplTokens<'model> {
+impl<'model> ScopeOperationImplTokens<'model> {
     fn new(model: &'model ScopeEnumModel) -> Self {
         Self { model }
     }
 }
 
-impl ToTokens for ScopePathImplTokens<'_> {
+impl ToTokens for ScopeOperationImplTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = RustIdentifier::new(&self.model.emitted_name);
-        let type_name = self.model.emitted_name.as_str();
-        let path_arms = self.model.variants.iter().map(|variant| {
-            let variant_name = RustIdentifier::new(&variant.name);
-            let segment = Literal::string(&variant.name);
-            match &variant.payload_scope {
-                Some(_) => quote! {
-                    Self::#variant_name(payload) => {
-                        let mut path = vec![String::from(#segment)];
-                        path.extend(payload.path_segments());
-                        path
-                    }
-                },
-                None => quote! {
-                    Self::#variant_name => vec![String::from(#segment)],
-                },
-            }
-        });
-        let all_path_arm = (!self.model.root).then(|| {
-            quote! {
-                Self::All => Vec::new(),
-            }
-        });
-        let path_match_arms = all_path_arm.into_iter().chain(path_arms);
-
+        let source = RustIdentifier::new(&self.model.source_name);
         let from_arms = self.model.variants.iter().map(|variant| {
             let variant_name = RustIdentifier::new(&variant.name);
-            let segment = Literal::string(&variant.name);
-            match &variant.payload_scope {
-                Some(payload_scope) => {
-                    let payload = RustIdentifier::new(payload_scope);
-                    quote! {
-                        #segment => {
-                            if tail.is_empty() {
-                                Some(Self::#variant_name(#payload::All))
-                            } else {
-                                #payload::try_from_path(tail).map(Self::#variant_name)
-                            }
-                        }
-                    }
-                }
+            match &variant.payload_source {
+                Some(_) => quote! {
+                    #source::#variant_name(payload) => Self::#variant_name(payload.into()),
+                },
                 None => quote! {
-                    #segment if tail.is_empty() => Some(Self::#variant_name),
+                    #source::#variant_name => Self::#variant_name,
                 },
             }
         });
-        let empty_arm = if self.model.root {
-            quote! {
-                if path.is_empty() {
-                    return None;
-                }
+        let contains_arms = self.model.variants.iter().map(|variant| {
+            let variant_name = RustIdentifier::new(&variant.name);
+            match &variant.payload_scope {
+                Some(_) => quote! {
+                    (Self::#variant_name(left), Self::#variant_name(right)) => {
+                        left.contains_scope(right)
+                    }
+                },
+                None => quote! {
+                    (Self::#variant_name, Self::#variant_name) => true,
+                },
             }
-        } else {
+        });
+        let all_contains_arm = (!self.model.root).then(|| {
             quote! {
-                if path.is_empty() {
-                    return Some(Self::All);
-                }
+                (Self::All, _) => true,
             }
-        };
-        let root_from_path = self.model.root.then(|| {
+        });
+        let contains_domain = self.model.root.then(|| {
             quote! {
-                pub fn from_path(path: Vec<String>) -> Self {
-                    Self::try_from_path(&path).unwrap_or_else(|| {
-                        panic!("invalid {} path {:?}", #type_name, path)
-                    })
+                pub fn contains_domain(&self, domain: &#source) -> bool {
+                    self.contains_scope(&domain.clone().into())
                 }
             }
         });
         quote! {
-            impl #name {
-                #root_from_path
-
-                pub fn try_from_path(path: &[String]) -> Option<Self> {
-                    #empty_arm
-                    let (head, tail) = path.split_first()?;
-                    match head.as_str() {
+            impl From<#source> for #name {
+                fn from(value: #source) -> Self {
+                    match value {
                         #(#from_arms)*
-                        _ => None,
+                    }
+                }
+            }
+
+            impl #name {
+                pub fn contains_scope(&self, scope: &Self) -> bool {
+                    match (self, scope) {
+                        #all_contains_arm
+                        #(#contains_arms)*
+                        _ => false,
                     }
                 }
 
-                pub fn path_segments(&self) -> Vec<String> {
-                    match self {
-                        #(#path_match_arms)*
-                    }
-                }
+                #contains_domain
             }
         }
         .to_tokens(tokens);
@@ -3651,20 +3680,33 @@ impl ToTokens for RustEnumVariantTokens<'_> {
     }
 }
 
-struct DomainScopeRelationSupportTokens<'relation> {
+struct DomainScopeRelationSupportTokens<'relation, 'model> {
     relations: &'relation [RustRelation],
+    root: &'model ScopeEnumModel,
+    models: &'model [ScopeEnumModel],
 }
 
-impl<'relation> DomainScopeRelationSupportTokens<'relation> {
-    fn new(relations: &'relation [RustRelation]) -> Self {
-        Self { relations }
+impl<'relation, 'model> DomainScopeRelationSupportTokens<'relation, 'model> {
+    fn new(
+        relations: &'relation [RustRelation],
+        root: &'model ScopeEnumModel,
+        models: &'model [ScopeEnumModel],
+    ) -> Self {
+        Self {
+            relations,
+            root,
+            models,
+        }
     }
 }
 
-impl ToTokens for DomainScopeRelationSupportTokens<'_> {
+impl ToTokens for DomainScopeRelationSupportTokens<'_, '_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let classes = self.relations.iter().map(|relation| {
-            let scopes = relation.values().iter().map(DomainScopePathTokens::new);
+            let scopes = relation
+                .values()
+                .iter()
+                .map(|value| DomainScopeValueTokens::new(value, self.root, self.models));
             quote! { vec![#(#scopes),*] }
         });
         quote! {
@@ -3692,26 +3734,31 @@ impl ToTokens for DomainScopeRelationSupportTokens<'_> {
     }
 }
 
-struct DomainScopePathTokens<'value> {
+struct DomainScopeValueTokens<'value, 'model> {
     value: &'value RustRelationValue,
+    root: &'model ScopeEnumModel,
+    models: &'model [ScopeEnumModel],
 }
 
-impl<'value> DomainScopePathTokens<'value> {
-    fn new(value: &'value RustRelationValue) -> Self {
-        Self { value }
+impl<'value, 'model> DomainScopeValueTokens<'value, 'model> {
+    fn new(
+        value: &'value RustRelationValue,
+        root: &'model ScopeEnumModel,
+        models: &'model [ScopeEnumModel],
+    ) -> Self {
+        Self {
+            value,
+            root,
+            models,
+        }
     }
 }
 
-impl ToTokens for DomainScopePathTokens<'_> {
+impl ToTokens for DomainScopeValueTokens<'_, '_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let segments = self.value.path().iter().map(|name| {
-            let segment = Literal::string(name.as_str());
-            quote! { String::from(#segment) }
-        });
-        quote! {
-            DomainScope::from_path(vec![#(#segments),*])
-        }
-        .to_tokens(tokens);
+        self.root
+            .constructor_tokens(self.models, self.value.path())
+            .to_tokens(tokens);
     }
 }
 
@@ -4607,11 +4654,31 @@ impl RustModuleRenderer {
         self.blank();
     }
 
-    fn emit_domain_scope_relation_support(&mut self, relations: &[RustRelation]) {
+    fn emit_domain_scope_relation_support(
+        &mut self,
+        relations: &[RustRelation],
+        declarations: &[RustDeclaration],
+    ) {
         if relations.is_empty() {
             return;
         }
-        self.emit_item_tokens(DomainScopeRelationSupportTokens::new(relations).into_token_stream());
+        let Some((root, models)) = declarations
+            .iter()
+            .filter_map(|declaration| match declaration.value() {
+                RustTypeDeclaration::Newtype(value) if value.is_scope_of() => Some(value),
+                _ => None,
+            })
+            .find_map(|newtype| {
+                let models = ScopeEnumModel::from_scope_newtype(newtype, declarations)?;
+                let root = models.iter().find(|model| model.root)?.clone();
+                Some((root, models))
+            })
+        else {
+            return;
+        };
+        self.emit_item_tokens(
+            DomainScopeRelationSupportTokens::new(relations, &root, &models).into_token_stream(),
+        );
         self.blank();
     }
 

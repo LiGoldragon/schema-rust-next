@@ -186,17 +186,28 @@ fn emits_domain_scope_equivalence_expansion_from_relations() {
     assert_code_contains(generated.as_str(), "pub enum HardwareScope");
     assert_code_contains(generated.as_str(), "pub enum SoftwareScope");
     assert_code_contains(generated.as_str(), "impl DomainScope");
+    assert_code_contains(generated.as_str(), "impl From<Domain> for DomainScope");
+    assert_code_contains(generated.as_str(), "All");
     assert_code_contains(
         generated.as_str(),
-        "pub fn from_path(path: Vec<String>) -> Self",
+        "impl From<Technology> for TechnologyScope",
     );
-    assert_code_contains(generated.as_str(), "All");
-    assert_code_contains(generated.as_str(), "Self::Technology(TechnologyScope::All)");
+    assert_code_contains(
+        generated.as_str(),
+        "pub fn contains_scope(&self, scope: &Self) -> bool",
+    );
+    assert_code_contains(
+        generated.as_str(),
+        "pub fn contains_domain(&self, domain: &Domain) -> bool",
+    );
     assert_code_contains(generated.as_str(), "nota_next::NotaDecode");
     assert_code_contains(generated.as_str(), "nota_next::NotaEncode");
     assert_code_contains(generated.as_str(), "fn to_nota(&self) -> String");
     assert_code_excludes(generated.as_str(), "fn nota_path_from_block");
     assert_code_excludes(generated.as_str(), "impl NotaEncode for DomainScope");
+    assert_code_excludes(generated.as_str(), "pub fn from_path");
+    assert_code_excludes(generated.as_str(), "pub fn try_from_path");
+    assert_code_excludes(generated.as_str(), "pub fn path_segments");
     assert_code_contains(generated.as_str(), "pub fn expand(&self) -> ScopeSet");
     assert_code_contains(
         generated.as_str(),
@@ -204,11 +215,11 @@ fn emits_domain_scope_equivalence_expansion_from_relations() {
     );
     assert_code_contains(
         generated.as_str(),
-        "DomainScope::from_path(vec![String::from(\"Technology\"), String::from(\"Hardware\"), String::from(\"Networking\")])",
+        "DomainScope::Technology(TechnologyScope::Hardware(HardwareScope::Networking))",
     );
     assert_code_contains(
         generated.as_str(),
-        "DomainScope::from_path(vec![String::from(\"Technology\"), String::from(\"Software\"), String::from(\"Distributed\"), String::from(\"Networking\")])",
+        "DomainScope::Technology(TechnologyScope::Software(SoftwareScope::Distributed(DistributedScope::Networking)))",
     );
 }
 
