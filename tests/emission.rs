@@ -166,12 +166,21 @@ fn emits_domain_scope_equivalence_expansion_from_relations() {
         .expect("schema source lowers");
     let generated = RustEmitter::default().emit_code_from_schema(&schema);
 
+    assert_code_contains(generated.as_str(), "pub enum DomainScope");
+    assert_code_contains(generated.as_str(), "pub enum TechnologyScope");
+    assert_code_contains(generated.as_str(), "pub enum HardwareScope");
+    assert_code_contains(generated.as_str(), "pub enum SoftwareScope");
     assert_code_contains(generated.as_str(), "impl DomainScope");
     assert_code_contains(
         generated.as_str(),
         "pub fn from_path(path: Vec<String>) -> Self",
     );
-    assert_code_contains(generated.as_str(), "Self::new(DomainPath::new(path))");
+    assert_code_contains(
+        generated.as_str(),
+        "Self::Technology(TechnologyScope::This)",
+    );
+    assert_code_contains(generated.as_str(), "impl NotaEncode for DomainScope");
+    assert_code_contains(generated.as_str(), "fn to_nota(&self) -> String");
     assert_code_contains(generated.as_str(), "pub fn expand(&self) -> ScopeSet");
     assert_code_contains(
         generated.as_str(),

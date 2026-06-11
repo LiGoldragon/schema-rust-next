@@ -294,7 +294,7 @@ impl RustModule {
         }
 
         for declaration in &self.declarations {
-            writer.emit_type(declaration);
+            writer.emit_type(declaration, &self.declarations);
             writer.blank();
         }
 
@@ -892,6 +892,17 @@ impl RustNewtype {
     pub fn reference(&self) -> &TypeReference {
         &self.reference
     }
+
+    fn scope_root_name(&self) -> Option<&Name> {
+        let TypeReference::ScopeOf(reference) = &self.reference else {
+            return None;
+        };
+        reference.plain_name()
+    }
+
+    fn is_scope_of(&self) -> bool {
+        self.scope_root_name().is_some()
+    }
 }
 
 impl LowerToRust<RustNewtype> for NewtypeDeclaration {
@@ -1103,6 +1114,20 @@ impl RustRenderContext {
         self.derive_attributes(enumeration.has_only_unit_variants(), false)
     }
 
+    fn scope_enum_type_attributes(&self) -> Vec<TokenStream> {
+        vec![quote! {
+            #[derive(
+                rkyv::Archive,
+                rkyv::Serialize,
+                rkyv::Deserialize,
+                Clone,
+                Debug,
+                PartialEq,
+                Eq,
+            )]
+        }]
+    }
+
     fn derive_attributes(&self, includes_copy: bool, includes_ordering: bool) -> Vec<TokenStream> {
         let mut attributes = Vec::new();
         if let NotaSurface::FeatureGated { feature } = &self.nota_surface {
@@ -1184,9 +1209,9 @@ impl RustRenderContext {
                 .private_type_names
                 .iter()
                 .any(|private_name| private_name == name.as_str()),
-            TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
-                self.references_private_type(inner)
-            }
+            TypeReference::Vector(inner)
+            | TypeReference::Optional(inner)
+            | TypeReference::ScopeOf(inner) => self.references_private_type(inner),
             TypeReference::Map(key, value) => {
                 self.references_private_type(key) || self.references_private_type(value)
             }
@@ -1261,6 +1286,17 @@ impl ToTokens for RustTypeReferenceTokens<'_> {
                 let inner = Self::new(inner);
                 quote! { Option<#inner> }.to_tokens(tokens);
             }
+            TypeReference::ScopeOf(inner) => match inner.plain_name() {
+                Some(name) => {
+                    let scope_name = format!("{}Scope", name);
+                    let name = RustIdentifier::new(&scope_name);
+                    name.to_tokens(tokens);
+                }
+                None => {
+                    let inner = Self::new(inner);
+                    quote! { #inner }.to_tokens(tokens);
+                }
+            },
         }
     }
 }
@@ -3160,6 +3196,399 @@ impl ToTokens for RustNewtypeTokens<'_, '_> {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ScopeEnumModel {
+    source_name: String,
+    emitted_name: String,
+    root: bool,
+    variants: Vec<ScopeEnumVariantModel>,
+}
+
+impl ScopeEnumModel {
+    fn from_scope_newtype(
+        newtype: &RustNewtype,
+        declarations: &[RustDeclaration],
+    ) -> Option<Vec<Self>> {
+        let root_name = newtype.scope_root_name()?;
+        let root = Self::enum_named(declarations, root_name.as_str())?;
+        let mut models = Vec::new();
+        Self::push_model(
+            root,
+            newtype.name().as_str().to_owned(),
+            true,
+            declarations,
+            &mut models,
+        );
+        Some(models)
+    }
+
+    fn push_model(
+        source: &RustEnum,
+        emitted_name: String,
+        root: bool,
+        declarations: &[RustDeclaration],
+        models: &mut Vec<Self>,
+    ) {
+        if models
+            .iter()
+            .any(|model: &Self| model.source_name == source.name().as_str())
+        {
+            return;
+        }
+        let variants = source
+            .variants()
+            .iter()
+            .map(|variant| {
+                let payload_scope = variant
+                    .payload()
+                    .and_then(TypeReference::plain_name)
+                    .and_then(|name| Self::enum_named(declarations, name.as_str()))
+                    .map(|payload| {
+                        let emitted = Self::child_scope_name(payload.name());
+                        Self::push_model(payload, emitted.clone(), false, declarations, models);
+                        emitted
+                    });
+                ScopeEnumVariantModel::new(variant.name().as_str().to_owned(), payload_scope)
+            })
+            .collect();
+        models.push(Self {
+            source_name: source.name().as_str().to_owned(),
+            emitted_name,
+            root,
+            variants,
+        });
+    }
+
+    fn enum_named<'declaration>(
+        declarations: &'declaration [RustDeclaration],
+        name: &str,
+    ) -> Option<&'declaration RustEnum> {
+        declarations
+            .iter()
+            .find(|declaration| declaration.name().as_str() == name)
+            .and_then(|declaration| match declaration.value() {
+                RustTypeDeclaration::Enum(value) => Some(value),
+                _ => None,
+            })
+    }
+
+    fn child_scope_name(name: &Name) -> String {
+        format!("{}Scope", name.as_str())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ScopeEnumVariantModel {
+    name: String,
+    payload_scope: Option<String>,
+}
+
+impl ScopeEnumVariantModel {
+    fn new(name: String, payload_scope: Option<String>) -> Self {
+        Self {
+            name,
+            payload_scope,
+        }
+    }
+}
+
+struct ScopeFamilyTokens<'newtype, 'declarations, 'context> {
+    newtype: &'newtype RustNewtype,
+    declarations: &'declarations [RustDeclaration],
+    visibility: Visibility,
+    context: &'context RustRenderContext,
+}
+
+impl<'newtype, 'declarations, 'context> ScopeFamilyTokens<'newtype, 'declarations, 'context> {
+    fn new(
+        newtype: &'newtype RustNewtype,
+        declarations: &'declarations [RustDeclaration],
+        visibility: Visibility,
+        context: &'context RustRenderContext,
+    ) -> Self {
+        Self {
+            newtype,
+            declarations,
+            visibility,
+            context,
+        }
+    }
+}
+
+impl ToTokens for ScopeFamilyTokens<'_, '_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let Some(models) = ScopeEnumModel::from_scope_newtype(self.newtype, self.declarations)
+        else {
+            RustNewtypeTokens::new(self.newtype, self.visibility, self.context).to_tokens(tokens);
+            return;
+        };
+        let enum_tokens = models
+            .iter()
+            .rev()
+            .map(|model| ScopeEnumTokens::new(model, self.visibility, self.context));
+        let path_tokens = models.iter().map(ScopePathImplTokens::new);
+        let codec_tokens = ScopeRootCodecTokens::new(self.newtype.name().as_str(), self.context);
+        quote! {
+            #(#enum_tokens)*
+            #(#path_tokens)*
+            #codec_tokens
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct ScopeEnumTokens<'model, 'context> {
+    model: &'model ScopeEnumModel,
+    visibility: Visibility,
+    context: &'context RustRenderContext,
+}
+
+impl<'model, 'context> ScopeEnumTokens<'model, 'context> {
+    fn new(
+        model: &'model ScopeEnumModel,
+        visibility: Visibility,
+        context: &'context RustRenderContext,
+    ) -> Self {
+        Self {
+            model,
+            visibility,
+            context,
+        }
+    }
+}
+
+impl ToTokens for ScopeEnumTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let attributes = self.context.scope_enum_type_attributes();
+        let visibility = self.context.visibility_tokens(self.visibility);
+        let name = RustIdentifier::new(&self.model.emitted_name);
+        let this = (!self.model.root).then(|| {
+            quote! {
+                #[doc(hidden)]
+                This,
+            }
+        });
+        let variants = self.model.variants.iter().map(|variant| {
+            let variant_name = RustIdentifier::new(&variant.name);
+            match &variant.payload_scope {
+                Some(payload_scope) => {
+                    let payload = RustIdentifier::new(payload_scope);
+                    quote! { #variant_name(#payload), }
+                }
+                None => quote! { #variant_name, },
+            }
+        });
+        quote! {
+            #(#attributes)*
+            #visibility enum #name {
+                #this
+                #(#variants)*
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct ScopePathImplTokens<'model> {
+    model: &'model ScopeEnumModel,
+}
+
+impl<'model> ScopePathImplTokens<'model> {
+    fn new(model: &'model ScopeEnumModel) -> Self {
+        Self { model }
+    }
+}
+
+impl ToTokens for ScopePathImplTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = RustIdentifier::new(&self.model.emitted_name);
+        let type_name = self.model.emitted_name.as_str();
+        let path_arms = self.model.variants.iter().map(|variant| {
+            let variant_name = RustIdentifier::new(&variant.name);
+            let segment = Literal::string(&variant.name);
+            match &variant.payload_scope {
+                Some(_) => quote! {
+                    Self::#variant_name(payload) => {
+                        let mut path = vec![String::from(#segment)];
+                        path.extend(payload.path_segments());
+                        path
+                    }
+                },
+                None => quote! {
+                    Self::#variant_name => vec![String::from(#segment)],
+                },
+            }
+        });
+        let this_path_arm = (!self.model.root).then(|| {
+            quote! {
+                Self::This => Vec::new(),
+            }
+        });
+        let path_match_arms = this_path_arm.into_iter().chain(path_arms);
+
+        let from_arms = self.model.variants.iter().map(|variant| {
+            let variant_name = RustIdentifier::new(&variant.name);
+            let segment = Literal::string(&variant.name);
+            match &variant.payload_scope {
+                Some(payload_scope) => {
+                    let payload = RustIdentifier::new(payload_scope);
+                    quote! {
+                        #segment => {
+                            if tail.is_empty() {
+                                Some(Self::#variant_name(#payload::This))
+                            } else {
+                                #payload::try_from_path(tail).map(Self::#variant_name)
+                            }
+                        }
+                    }
+                }
+                None => quote! {
+                    #segment if tail.is_empty() => Some(Self::#variant_name),
+                },
+            }
+        });
+        let empty_arm = if self.model.root {
+            quote! {
+                if path.is_empty() {
+                    return None;
+                }
+            }
+        } else {
+            quote! {
+                if path.is_empty() {
+                    return Some(Self::This);
+                }
+            }
+        };
+        let root_from_path = self.model.root.then(|| {
+            quote! {
+                pub fn from_path(path: Vec<String>) -> Self {
+                    Self::try_from_path(&path).unwrap_or_else(|| {
+                        panic!("invalid {} path {:?}", #type_name, path)
+                    })
+                }
+            }
+        });
+        quote! {
+            impl #name {
+                #root_from_path
+
+                pub fn try_from_path(path: &[String]) -> Option<Self> {
+                    #empty_arm
+                    let (head, tail) = path.split_first()?;
+                    match head.as_str() {
+                        #(#from_arms)*
+                        _ => None,
+                    }
+                }
+
+                pub fn path_segments(&self) -> Vec<String> {
+                    match self {
+                        #(#path_match_arms)*
+                    }
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct ScopeRootCodecTokens<'name, 'context> {
+    name: &'name str,
+    context: &'context RustRenderContext,
+}
+
+impl<'name, 'context> ScopeRootCodecTokens<'name, 'context> {
+    fn new(name: &'name str, context: &'context RustRenderContext) -> Self {
+        Self { name, context }
+    }
+}
+
+impl ToTokens for ScopeRootCodecTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        if !self.context.nota_surface.emits_nota() {
+            return;
+        }
+        let gate = self.context.nota_feature_gate();
+        let name = RustIdentifier::new(self.name);
+        let type_name = self.name;
+        quote! {
+            #gate
+            impl #name {
+                pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+                    <Self as NotaDecode>::from_nota_block(block)
+                }
+
+                pub fn to_nota(&self) -> String {
+                    <Self as NotaEncode>::to_nota(self)
+                }
+
+                fn nota_path_from_block(block: &nota_next::Block) -> Result<Vec<String>, NotaDecodeError> {
+                    if let Some(segment) = block.demote_to_string() {
+                        return Ok(vec![segment.to_owned()]);
+                    }
+                    let children = nota_next::NotaBlock::new(block).expect_children(
+                        nota_next::Delimiter::Parenthesis,
+                        #type_name,
+                        2,
+                    )?;
+                    let head = children[0]
+                        .demote_to_string()
+                        .ok_or(NotaDecodeError::ExpectedAtom {
+                            type_name: "scope segment",
+                        })?;
+                    let mut path = vec![head.to_owned()];
+                    path.extend(Self::nota_path_from_block(&children[1])?);
+                    Ok(path)
+                }
+
+                fn nota_path_to_string(path: &[String]) -> String {
+                    match path {
+                        [] => String::new(),
+                        [segment] => segment.clone(),
+                        [head, tail @ ..] => format!("({} {})", head, Self::nota_path_to_string(tail)),
+                    }
+                }
+            }
+
+            #gate
+            impl NotaDecode for #name {
+                fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
+                    let path = Self::nota_path_from_block(block)?;
+                    Self::try_from_path(&path).ok_or_else(|| NotaDecodeError::InvalidValue {
+                        type_name: #type_name,
+                        value: Self::nota_path_to_string(&path),
+                        reason: String::from("path does not match the scoped enum tree"),
+                    })
+                }
+            }
+
+            #gate
+            impl NotaEncode for #name {
+                fn to_nota(&self) -> String {
+                    Self::nota_path_to_string(&self.path_segments())
+                }
+            }
+
+            #gate
+            impl std::str::FromStr for #name {
+                type Err = NotaDecodeError;
+                fn from_str(source: &str) -> Result<Self, Self::Err> {
+                    NotaSource::new(source).parse::<Self>()
+                }
+            }
+
+            #gate
+            impl std::fmt::Display for #name {
+                fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    formatter.write_str(&<Self as NotaEncode>::to_nota(self))
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
 struct RustStructTokens<'structure, 'context> {
     structure: &'structure RustStruct,
     visibility: Visibility,
@@ -3336,10 +3765,6 @@ impl ToTokens for DomainScopeRelationSupportTokens<'_> {
         });
         quote! {
             impl DomainScope {
-                pub fn from_path(path: Vec<String>) -> Self {
-                    Self::new(DomainPath::new(path))
-                }
-
                 pub fn expand(&self) -> ScopeSet {
                     let mut scopes = vec![self.clone()];
                     for relation in Self::equivalence_relations() {
@@ -3495,9 +3920,9 @@ impl<'schema> CollectionScan<'schema> {
     fn reference_uses_bytes(reference: &TypeReference) -> bool {
         match reference {
             TypeReference::Bytes => true,
-            TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
-                Self::reference_uses_bytes(inner)
-            }
+            TypeReference::Vector(inner)
+            | TypeReference::Optional(inner)
+            | TypeReference::ScopeOf(inner) => Self::reference_uses_bytes(inner),
             TypeReference::Map(key, value) => {
                 Self::reference_uses_bytes(key) || Self::reference_uses_bytes(value)
             }
@@ -3549,9 +3974,9 @@ impl<'schema> CollectionScan<'schema> {
     fn reference_uses_fixed_bytes(reference: &TypeReference) -> bool {
         match reference {
             TypeReference::FixedBytes(_) => true,
-            TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
-                Self::reference_uses_fixed_bytes(inner)
-            }
+            TypeReference::Vector(inner)
+            | TypeReference::Optional(inner)
+            | TypeReference::ScopeOf(inner) => Self::reference_uses_fixed_bytes(inner),
             TypeReference::Map(key, value) => {
                 Self::reference_uses_fixed_bytes(key) || Self::reference_uses_fixed_bytes(value)
             }
@@ -3591,7 +4016,9 @@ impl<'schema> CollectionScan<'schema> {
             | TypeReference::Bytes
             | TypeReference::FixedBytes(_)
             | TypeReference::Plain(_) => {}
-            TypeReference::Vector(inner) | TypeReference::Optional(inner) => {
+            TypeReference::Vector(inner)
+            | TypeReference::Optional(inner)
+            | TypeReference::ScopeOf(inner) => {
                 Self::collect_map_keys(inner, names);
             }
             TypeReference::Map(key, value) => {
@@ -4138,8 +4565,17 @@ impl RustModuleRenderer {
         self.blank();
     }
 
-    fn emit_type(&mut self, declaration: &RustDeclaration) {
+    fn emit_type(&mut self, declaration: &RustDeclaration, declarations: &[RustDeclaration]) {
         let context = self.render_context();
+        if let RustTypeDeclaration::Newtype(newtype) = declaration.value()
+            && newtype.is_scope_of()
+        {
+            self.emit_item_tokens(
+                ScopeFamilyTokens::new(newtype, declarations, declaration.visibility(), &context)
+                    .into_token_stream(),
+            );
+            return;
+        }
         self.emit_item_tokens(
             RustDeclarationTokens::new(declaration, &context).into_token_stream(),
         );
@@ -4163,7 +4599,7 @@ impl RustModuleRenderer {
         let newtypes: Vec<_> = declarations
             .iter()
             .filter_map(|declaration| match declaration.value() {
-                RustTypeDeclaration::Newtype(value) => Some(value),
+                RustTypeDeclaration::Newtype(value) if !value.is_scope_of() => Some(value),
                 _ => None,
             })
             .collect();
@@ -4221,7 +4657,7 @@ impl RustModuleRenderer {
         let newtypes: Vec<_> = declarations
             .iter()
             .filter_map(|declaration| match declaration.value() {
-                RustTypeDeclaration::Newtype(value) => Some(value),
+                RustTypeDeclaration::Newtype(value) if !value.is_scope_of() => Some(value),
                 _ => None,
             })
             .collect();
@@ -4337,6 +4773,7 @@ impl RustModuleRenderer {
                 RustTypeDeclaration::Enum(enumeration) if enumeration.has_only_unit_variants() => {
                     self.emit_nota_copy_inherent_bridge(declaration.name().as_str());
                 }
+                RustTypeDeclaration::Newtype(newtype) if newtype.is_scope_of() => {}
                 RustTypeDeclaration::Struct(_)
                 | RustTypeDeclaration::Enum(_)
                 | RustTypeDeclaration::Newtype(_) => {
@@ -5801,6 +6238,10 @@ impl RustModuleRenderer {
                 self.rust_type(value)
             ),
             TypeReference::Optional(inner) => format!("Option<{}>", self.rust_type(inner)),
+            TypeReference::ScopeOf(inner) => match inner.plain_name() {
+                Some(name) => format!("{name}Scope"),
+                None => self.rust_type(inner),
+            },
         }
     }
 }

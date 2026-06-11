@@ -485,6 +485,13 @@ impl ToTokens for TypeRenderer<'_> {
                 let inner = TypeRenderer::new(inner);
                 quote! { Option<#inner> }.to_tokens(tokens);
             }
+            TypeReference::ScopeOf(inner) => match inner.plain_name() {
+                Some(name) => {
+                    let name = Ident::new(&format!("{name}Scope"), Span::call_site());
+                    quote! { #name }.to_tokens(tokens);
+                }
+                None => TypeRenderer::new(inner).to_tokens(tokens),
+            },
             TypeReference::Map(key, value) => {
                 let key = TypeRenderer::new(key);
                 let value = TypeRenderer::new(value);

@@ -3,8 +3,7 @@
 []
 {
   Domain [(Technology [(Hardware [Networking]) (Software [(Distributed [Networking])])])]
-  DomainPath (Vec String)
-  DomainScope DomainPath
+  DomainScope (ScopeOf Domain)
   ScopeSet (Vec DomainScope)
 }
 [(Equivalence [(Technology Hardware Networking) (Technology Software Distributed Networking)])]
