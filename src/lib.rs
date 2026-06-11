@@ -314,7 +314,6 @@ impl RustModule {
             &self.declarations,
             writer.emitted_root_enums(&self.root_enums),
         );
-        writer.emit_nota_type_bridges(&self.declarations);
         if writer.emits_root_enums() {
             for root_enum in &self.root_enums {
                 writer.emit_nota_root_enum_support(root_enum);
@@ -417,9 +416,8 @@ impl Default for RustEmissionOptions {
 
 impl RustEmissionOptions {
     /// Always emit `nota_next::NotaDecode` / `nota_next::NotaEncode`
-    /// derives, the inherent `from_nota_block` / `to_nota` bridges, the
-    /// root `FromStr` / `Display` impls, and the `use nota_next::*`
-    /// pull-in — without any cargo-feature gate.
+    /// derives, the root `FromStr` / `Display` impls, and the `use
+    /// nota_next::*` pull-in — without any cargo-feature gate.
     pub fn always_enabled_nota() -> Self {
         Self {
             nota_surface: NotaSurface::AlwaysEnabled,
@@ -429,11 +427,10 @@ impl RustEmissionOptions {
 
     /// Emit the NOTA surface guarded by `#[cfg_attr(feature = "<feature>",
     /// derive(...))]` on data types and `#[cfg(feature = "<feature>")]`
-    /// on the inherent bridges, FromStr/Display impls, and the
-    /// `use nota_next::*` items. Consumers enable the feature only in
-    /// text-facing crates (CLI, launcher) and leave it off in
-    /// daemon-only crates so `nota-next` stays out of the binary-only
-    /// dependency closure.
+    /// on FromStr/Display impls and the `use nota_next::*` items.
+    /// Consumers enable the feature only in text-facing crates (CLI,
+    /// launcher) and leave it off in daemon-only crates so `nota-next`
+    /// stays out of the binary-only dependency closure.
     pub fn feature_gated_nota(feature: impl Into<String>) -> Self {
         Self {
             nota_surface: NotaSurface::FeatureGated {
@@ -445,11 +442,9 @@ impl RustEmissionOptions {
 
     /// Emit no NOTA surface at all. The generated source contains no
     /// `nota_next::*` references, no `FromStr` / `Display` impls
-    /// (since both depend on `NotaDecode` / `NotaEncode`), and no
-    /// inherent `from_nota_block` / `to_nota` bridge methods. The
-    /// resulting Rust file compiles without `nota-next` in the
-    /// dependency closure. This is the daemon-only / binary-only
-    /// shape.
+    /// (since both depend on `NotaDecode` / `NotaEncode`). The resulting
+    /// Rust file compiles without `nota-next` in the dependency closure.
+    /// This is the daemon-only / binary-only shape.
     pub fn binary_only() -> Self {
         Self {
             nota_surface: NotaSurface::Disabled,
@@ -1675,73 +1670,6 @@ impl<'name> ScreamingName<'name> {
 /// takes `self` by value and borrows for the encode call; every other noun
 /// borrows `&self`.
 #[derive(Clone, Copy)]
-enum NotaEncodeReceiver {
-    Borrowed,
-    Owned,
-}
-
-impl NotaEncodeReceiver {
-    fn to_nota_method(self) -> TokenStream {
-        match self {
-            Self::Borrowed => quote! {
-                pub fn to_nota(&self) -> String {
-                    <Self as NotaEncode>::to_nota(self)
-                }
-            },
-            Self::Owned => quote! {
-                pub fn to_nota(self) -> String {
-                    <Self as NotaEncode>::to_nota(&self)
-                }
-            },
-        }
-    }
-}
-
-/// Renders the inherent NOTA bridge (`from_nota_block` + `to_nota`) on a
-/// generated noun, gated by the context's NOTA feature gate. The noun is
-/// named by identity; the receiver mode selects the `to_nota` shape.
-struct NotaInherentBridgeTokens<'name, 'context> {
-    name: &'name str,
-    receiver: NotaEncodeReceiver,
-    context: &'context RustRenderContext,
-}
-
-impl<'name, 'context> NotaInherentBridgeTokens<'name, 'context> {
-    fn borrowed(name: &'name str, context: &'context RustRenderContext) -> Self {
-        Self {
-            name,
-            receiver: NotaEncodeReceiver::Borrowed,
-            context,
-        }
-    }
-
-    fn owned(name: &'name str, context: &'context RustRenderContext) -> Self {
-        Self {
-            name,
-            receiver: NotaEncodeReceiver::Owned,
-            context,
-        }
-    }
-}
-
-impl ToTokens for NotaInherentBridgeTokens<'_, '_> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let gate = self.context.nota_feature_gate();
-        let name = RustIdentifier::new(self.name);
-        let to_nota = self.receiver.to_nota_method();
-        quote! {
-            #gate
-            impl #name {
-                pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-                    <Self as NotaDecode>::from_nota_block(block)
-                }
-                #to_nota
-            }
-        }
-        .to_tokens(tokens);
-    }
-}
-
 /// Renders the root-enum `FromStr` + `Display` NOTA surface, each gated by
 /// the context's NOTA feature gate.
 struct NotaRootEnumStringSupportTokens<'name, 'context> {
@@ -3376,12 +3304,9 @@ impl ToTokens for ScopeFamilyTokens<'_, '_, '_> {
             .map(|model| ScopeEnumTokens::new(model, self.visibility, self.context));
         let operation_tokens = models.iter().map(ScopeOperationImplTokens::new);
         let nota_tokens = if self.context.nota_surface.emits_nota() {
-            let bridge =
-                NotaInherentBridgeTokens::borrowed(self.newtype.name().as_str(), self.context);
             let string_support =
                 NotaRootEnumStringSupportTokens::new(self.newtype.name().as_str(), self.context);
             quote! {
-                #bridge
                 #string_support
             }
         } else {
@@ -4466,7 +4391,7 @@ impl RustModuleRenderer {
         self.emit_item_tokens(quote! {
             #gate
             pub use nota_next::{
-                NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
+                NotaDecodeError, NotaEncode, NotaSource,
             };
         });
     }
@@ -4660,50 +4585,11 @@ impl RustModuleRenderer {
         }
     }
 
-    fn emit_nota_type_bridges(&mut self, declarations: &[RustDeclaration]) {
-        if !self.nota_surface.emits_nota() {
-            return;
-        }
-        for declaration in declarations {
-            match declaration.value() {
-                RustTypeDeclaration::Enum(enumeration) if enumeration.has_only_unit_variants() => {
-                    self.emit_nota_copy_inherent_bridge(declaration.name().as_str());
-                }
-                RustTypeDeclaration::Newtype(newtype) if newtype.is_scope_of() => {}
-                RustTypeDeclaration::Struct(_)
-                | RustTypeDeclaration::Enum(_)
-                | RustTypeDeclaration::Newtype(_) => {
-                    self.emit_nota_inherent_bridge(declaration.name().as_str());
-                }
-            }
-            self.blank();
-        }
-    }
-
-    fn emit_nota_inherent_bridge(&mut self, name: &str) {
-        let context = self.render_context();
-        self.emit_item_tokens(
-            NotaInherentBridgeTokens::borrowed(name, &context).into_token_stream(),
-        );
-    }
-
-    fn emit_nota_copy_inherent_bridge(&mut self, name: &str) {
-        let context = self.render_context();
-        self.emit_item_tokens(NotaInherentBridgeTokens::owned(name, &context).into_token_stream());
-    }
-
     fn emit_nota_root_enum_support(&mut self, root_enum: &RustEnum) {
         if !self.nota_surface.emits_nota() {
             return;
         }
         let context = self.render_context();
-        let bridge = if root_enum.has_only_unit_variants() {
-            NotaInherentBridgeTokens::owned(root_enum.name().as_str(), &context)
-        } else {
-            NotaInherentBridgeTokens::borrowed(root_enum.name().as_str(), &context)
-        };
-        self.emit_item_tokens(bridge.into_token_stream());
-        self.blank();
         self.emit_item_tokens(
             NotaRootEnumStringSupportTokens::new(root_enum.name().as_str(), &context)
                 .into_token_stream(),
@@ -5084,17 +4970,11 @@ impl RustModuleRenderer {
             self.emit_item_tokens(
                 RuntimeCopyNewtypeTokens::new("MessageIdentifier", &context).into_token_stream(),
             );
-            if self.nota_surface.emits_nota() {
-                self.emit_nota_copy_inherent_bridge("MessageIdentifier");
-            }
             self.blank();
         }
         self.emit_item_tokens(
             RuntimeCopyNewtypeTokens::new("OriginRoute", &context).into_token_stream(),
         );
-        if self.nota_surface.emits_nota() {
-            self.emit_nota_copy_inherent_bridge("OriginRoute");
-        }
         self.blank();
         if self.emits_all_runtime_planes() {
             self.emit_signal_message_root_support(root_enums);

@@ -202,7 +202,8 @@ fn emits_domain_scope_equivalence_expansion_from_relations() {
     );
     assert_code_contains(generated.as_str(), "nota_next::NotaDecode");
     assert_code_contains(generated.as_str(), "nota_next::NotaEncode");
-    assert_code_contains(generated.as_str(), "fn to_nota(&self) -> String");
+    assert_code_excludes(generated.as_str(), "fn to_nota(&self) -> String");
+    assert_code_excludes(generated.as_str(), "from_nota_block");
     assert_code_excludes(generated.as_str(), "fn nota_path_from_block");
     assert_code_excludes(generated.as_str(), "impl NotaEncode for DomainScope");
     assert_code_excludes(generated.as_str(), "pub fn from_path");
@@ -1223,14 +1224,20 @@ fn generated_signal_roots_emit_typed_message_sent_events() {
             .expect("origin route decodes through shared codec"),
         generated::OriginRoute::new(900)
     );
-    assert_eq!(generated::OriginRoute::new(900).to_nota(), "900");
+    assert_eq!(
+        generated::NotaEncode::to_nota(&generated::OriginRoute::new(900)),
+        "900"
+    );
     assert_eq!(
         generated::NotaSource::new("42")
             .parse::<generated::MessageIdentifier>()
             .expect("message identifier decodes through shared codec"),
         generated::MessageIdentifier::new(42)
     );
-    assert_eq!(generated::MessageIdentifier::new(42).to_nota(), "42");
+    assert_eq!(
+        generated::NotaEncode::to_nota(&generated::MessageIdentifier::new(42)),
+        "42"
+    );
     assert_ne!(
         event.origin_route(),
         generated::OriginRoute::new(event.identifier.payload()),
@@ -1311,7 +1318,10 @@ impl UpgradeEvent {
                 previous,
             )?;
         Ok(Self {
-            description: format!("accepted previous Entry as {}", entry.to_nota()),
+            description: format!(
+                "accepted previous Entry as {}",
+                generated::NotaEncode::to_nota(&entry)
+            ),
         })
     }
 }
@@ -1410,13 +1420,10 @@ fn generated_collection_struct_round_trips_through_nota() {
         ),
     };
 
-    let encoded = cluster.to_nota();
-    let parsed = collections_generated::Cluster::from_nota_block(
-        &collections_generated::NotaSource::new(&encoded)
-            .parse_root()
-            .expect("cluster nota parses"),
-    )
-    .expect("cluster decodes");
+    let encoded = collections_generated::NotaEncode::to_nota(&cluster);
+    let parsed = collections_generated::NotaSource::new(&encoded)
+        .parse::<collections_generated::Cluster>()
+        .expect("cluster decodes");
 
     assert_eq!(parsed, cluster);
     // The empty / None forms also round-trip.
@@ -1431,13 +1438,10 @@ fn generated_collection_struct_round_trips_through_nota() {
             collections_generated::FixedBytes::new([0u8; 4]),
         ),
     };
-    let empty_encoded = empty.to_nota();
-    let empty_parsed = collections_generated::Cluster::from_nota_block(
-        &collections_generated::NotaSource::new(&empty_encoded)
-            .parse_root()
-            .expect("empty cluster nota parses"),
-    )
-    .expect("empty cluster decodes");
+    let empty_encoded = collections_generated::NotaEncode::to_nota(&empty);
+    let empty_parsed = collections_generated::NotaSource::new(&empty_encoded)
+        .parse::<collections_generated::Cluster>()
+        .expect("empty cluster decodes");
     assert_eq!(empty_parsed, empty);
 }
 
@@ -1451,7 +1455,7 @@ fn generated_collection_payload_root_variant_round_trips_to_nota_and_rkyv() {
     let output = collections_generated::Output::Projected(projection);
 
     // NOTA round-trip through the root enum codec.
-    let encoded = output.to_nota();
+    let encoded = collections_generated::NotaEncode::to_nota(&output);
     let parsed = encoded
         .parse::<collections_generated::Output>()
         .expect("projected output parses");
