@@ -49,6 +49,21 @@ fn assert_code_contains(code: &str, expected: &str) {
     );
 }
 
+fn assert_code_excludes(code: &str, unexpected: &str) {
+    let compact_code = code
+        .chars()
+        .filter(|character| !character.is_whitespace() && *character != ',')
+        .collect::<String>();
+    let compact_unexpected = unexpected
+        .chars()
+        .filter(|character| !character.is_whitespace() && *character != ',')
+        .collect::<String>();
+    assert!(
+        !compact_code.contains(&compact_unexpected),
+        "generated code must exclude {unexpected:?}"
+    );
+}
+
 /// Assert a `pattern => NexusAction::from(result)` projection arm is emitted,
 /// tolerating prettyplease's optional `=> { ... }` block-wrapping of a long
 /// arm body. The pattern and the `NexusAction::from(result)` mapping must
@@ -175,12 +190,13 @@ fn emits_domain_scope_equivalence_expansion_from_relations() {
         generated.as_str(),
         "pub fn from_path(path: Vec<String>) -> Self",
     );
-    assert_code_contains(
-        generated.as_str(),
-        "Self::Technology(TechnologyScope::This)",
-    );
-    assert_code_contains(generated.as_str(), "impl NotaEncode for DomainScope");
+    assert_code_contains(generated.as_str(), "All");
+    assert_code_contains(generated.as_str(), "Self::Technology(TechnologyScope::All)");
+    assert_code_contains(generated.as_str(), "nota_next::NotaDecode");
+    assert_code_contains(generated.as_str(), "nota_next::NotaEncode");
     assert_code_contains(generated.as_str(), "fn to_nota(&self) -> String");
+    assert_code_excludes(generated.as_str(), "fn nota_path_from_block");
+    assert_code_excludes(generated.as_str(), "impl NotaEncode for DomainScope");
     assert_code_contains(generated.as_str(), "pub fn expand(&self) -> ScopeSet");
     assert_code_contains(
         generated.as_str(),

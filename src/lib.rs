@@ -1115,17 +1115,7 @@ impl RustRenderContext {
     }
 
     fn scope_enum_type_attributes(&self) -> Vec<TokenStream> {
-        vec![quote! {
-            #[derive(
-                rkyv::Archive,
-                rkyv::Serialize,
-                rkyv::Deserialize,
-                Clone,
-                Debug,
-                PartialEq,
-                Eq,
-            )]
-        }]
+        self.derive_attributes(false, false)
     }
 
     fn derive_attributes(&self, includes_copy: bool, includes_ordering: bool) -> Vec<TokenStream> {
@@ -3327,11 +3317,22 @@ impl ToTokens for ScopeFamilyTokens<'_, '_, '_> {
             .rev()
             .map(|model| ScopeEnumTokens::new(model, self.visibility, self.context));
         let path_tokens = models.iter().map(ScopePathImplTokens::new);
-        let codec_tokens = ScopeRootCodecTokens::new(self.newtype.name().as_str(), self.context);
+        let nota_tokens = if self.context.nota_surface.emits_nota() {
+            let bridge =
+                NotaInherentBridgeTokens::borrowed(self.newtype.name().as_str(), self.context);
+            let string_support =
+                NotaRootEnumStringSupportTokens::new(self.newtype.name().as_str(), self.context);
+            quote! {
+                #bridge
+                #string_support
+            }
+        } else {
+            TokenStream::new()
+        };
         quote! {
             #(#enum_tokens)*
             #(#path_tokens)*
-            #codec_tokens
+            #nota_tokens
         }
         .to_tokens(tokens);
     }
@@ -3362,10 +3363,9 @@ impl ToTokens for ScopeEnumTokens<'_, '_> {
         let attributes = self.context.scope_enum_type_attributes();
         let visibility = self.context.visibility_tokens(self.visibility);
         let name = RustIdentifier::new(&self.model.emitted_name);
-        let this = (!self.model.root).then(|| {
+        let all = (!self.model.root).then(|| {
             quote! {
-                #[doc(hidden)]
-                This,
+                All,
             }
         });
         let variants = self.model.variants.iter().map(|variant| {
@@ -3381,7 +3381,7 @@ impl ToTokens for ScopeEnumTokens<'_, '_> {
         quote! {
             #(#attributes)*
             #visibility enum #name {
-                #this
+                #all
                 #(#variants)*
             }
         }
@@ -3419,12 +3419,12 @@ impl ToTokens for ScopePathImplTokens<'_> {
                 },
             }
         });
-        let this_path_arm = (!self.model.root).then(|| {
+        let all_path_arm = (!self.model.root).then(|| {
             quote! {
-                Self::This => Vec::new(),
+                Self::All => Vec::new(),
             }
         });
-        let path_match_arms = this_path_arm.into_iter().chain(path_arms);
+        let path_match_arms = all_path_arm.into_iter().chain(path_arms);
 
         let from_arms = self.model.variants.iter().map(|variant| {
             let variant_name = RustIdentifier::new(&variant.name);
@@ -3435,7 +3435,7 @@ impl ToTokens for ScopePathImplTokens<'_> {
                     quote! {
                         #segment => {
                             if tail.is_empty() {
-                                Some(Self::#variant_name(#payload::This))
+                                Some(Self::#variant_name(#payload::All))
                             } else {
                                 #payload::try_from_path(tail).map(Self::#variant_name)
                             }
@@ -3456,7 +3456,7 @@ impl ToTokens for ScopePathImplTokens<'_> {
         } else {
             quote! {
                 if path.is_empty() {
-                    return Some(Self::This);
+                    return Some(Self::All);
                 }
             }
         };
@@ -3486,102 +3486,6 @@ impl ToTokens for ScopePathImplTokens<'_> {
                     match self {
                         #(#path_match_arms)*
                     }
-                }
-            }
-        }
-        .to_tokens(tokens);
-    }
-}
-
-struct ScopeRootCodecTokens<'name, 'context> {
-    name: &'name str,
-    context: &'context RustRenderContext,
-}
-
-impl<'name, 'context> ScopeRootCodecTokens<'name, 'context> {
-    fn new(name: &'name str, context: &'context RustRenderContext) -> Self {
-        Self { name, context }
-    }
-}
-
-impl ToTokens for ScopeRootCodecTokens<'_, '_> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        if !self.context.nota_surface.emits_nota() {
-            return;
-        }
-        let gate = self.context.nota_feature_gate();
-        let name = RustIdentifier::new(self.name);
-        let type_name = self.name;
-        quote! {
-            #gate
-            impl #name {
-                pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-                    <Self as NotaDecode>::from_nota_block(block)
-                }
-
-                pub fn to_nota(&self) -> String {
-                    <Self as NotaEncode>::to_nota(self)
-                }
-
-                fn nota_path_from_block(block: &nota_next::Block) -> Result<Vec<String>, NotaDecodeError> {
-                    if let Some(segment) = block.demote_to_string() {
-                        return Ok(vec![segment.to_owned()]);
-                    }
-                    let children = nota_next::NotaBlock::new(block).expect_children(
-                        nota_next::Delimiter::Parenthesis,
-                        #type_name,
-                        2,
-                    )?;
-                    let head = children[0]
-                        .demote_to_string()
-                        .ok_or(NotaDecodeError::ExpectedAtom {
-                            type_name: "scope segment",
-                        })?;
-                    let mut path = vec![head.to_owned()];
-                    path.extend(Self::nota_path_from_block(&children[1])?);
-                    Ok(path)
-                }
-
-                fn nota_path_to_string(path: &[String]) -> String {
-                    match path {
-                        [] => String::new(),
-                        [segment] => segment.clone(),
-                        [head, tail @ ..] => format!("({} {})", head, Self::nota_path_to_string(tail)),
-                    }
-                }
-            }
-
-            #gate
-            impl NotaDecode for #name {
-                fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-                    let path = Self::nota_path_from_block(block)?;
-                    Self::try_from_path(&path).ok_or_else(|| NotaDecodeError::InvalidValue {
-                        type_name: #type_name,
-                        value: Self::nota_path_to_string(&path),
-                        reason: String::from("path does not match the scoped enum tree"),
-                    })
-                }
-            }
-
-            #gate
-            impl NotaEncode for #name {
-                fn to_nota(&self) -> String {
-                    Self::nota_path_to_string(&self.path_segments())
-                }
-            }
-
-            #gate
-            impl std::str::FromStr for #name {
-                type Err = NotaDecodeError;
-                fn from_str(source: &str) -> Result<Self, Self::Err> {
-                    NotaSource::new(source).parse::<Self>()
-                }
-            }
-
-            #gate
-            impl std::fmt::Display for #name {
-                fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    formatter.write_str(&<Self as NotaEncode>::to_nota(self))
                 }
             }
         }
