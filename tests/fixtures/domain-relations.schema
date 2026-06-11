@@ -3,8 +3,7 @@
 []
 {
   Domain [(Technology [(Hardware [Networking]) (Software [(Distributed [Networking])])])]
-  DomainSegment [Technology Hardware Networking Software Distributed]
-  DomainPath (Vec DomainSegment)
+  DomainPath (Vec String)
   DomainScope DomainPath
   ScopeSet (Vec DomainScope)
 }

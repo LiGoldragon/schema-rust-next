@@ -143,6 +143,14 @@ impl ModuleEmission {
         Self::wire_contract_module("lib")
     }
 
+    pub fn declaration_module(module: impl Into<String>) -> Self {
+        Self::new(
+            module,
+            RustEmissionOptions::feature_gated_nota("nota-text")
+                .with_target(RustEmissionTarget::DeclarationModule),
+        )
+    }
+
     pub fn wire_contract_module(module: impl Into<String>) -> Self {
         Self::new(
             module,

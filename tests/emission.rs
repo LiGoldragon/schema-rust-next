@@ -169,7 +169,7 @@ fn emits_domain_scope_equivalence_expansion_from_relations() {
     assert_code_contains(generated.as_str(), "impl DomainScope");
     assert_code_contains(
         generated.as_str(),
-        "pub fn from_path(path: Vec<DomainSegment>) -> Self",
+        "pub fn from_path(path: Vec<String>) -> Self",
     );
     assert_code_contains(generated.as_str(), "Self::new(DomainPath::new(path))");
     assert_code_contains(generated.as_str(), "pub fn expand(&self) -> ScopeSet");
@@ -179,11 +179,11 @@ fn emits_domain_scope_equivalence_expansion_from_relations() {
     );
     assert_code_contains(
         generated.as_str(),
-        "DomainScope::from_path(vec![DomainSegment::Technology, DomainSegment::Hardware, DomainSegment::Networking])",
+        "DomainScope::from_path(vec![String::from(\"Technology\"), String::from(\"Hardware\"), String::from(\"Networking\")])",
     );
     assert_code_contains(
         generated.as_str(),
-        "DomainScope::from_path(vec![DomainSegment::Technology, DomainSegment::Software, DomainSegment::Distributed, DomainSegment::Networking])",
+        "DomainScope::from_path(vec![String::from(\"Technology\"), String::from(\"Software\"), String::from(\"Distributed\"), String::from(\"Networking\")])",
     );
 }
 

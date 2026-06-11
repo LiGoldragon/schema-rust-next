@@ -298,18 +298,28 @@ impl RustModule {
             writer.blank();
         }
 
-        for root_enum in &self.root_enums {
-            writer.emit_root_enum(root_enum);
-            writer.blank();
+        if writer.emits_root_enums() {
+            for root_enum in &self.root_enums {
+                writer.emit_root_enum(root_enum);
+                writer.blank();
+            }
         }
 
         writer.emit_newtype_inherent_impls(&self.declarations);
-        writer.emit_enum_variant_constructors(&self.declarations, &self.root_enums);
-        writer.emit_enum_payload_from_impls(&self.declarations, &self.root_enums);
+        writer.emit_enum_variant_constructors(
+            &self.declarations,
+            writer.emitted_root_enums(&self.root_enums),
+        );
+        writer.emit_enum_payload_from_impls(
+            &self.declarations,
+            writer.emitted_root_enums(&self.root_enums),
+        );
         writer.emit_nota_type_bridges(&self.declarations);
-        for root_enum in &self.root_enums {
-            writer.emit_nota_root_enum_support(root_enum);
-            writer.blank();
+        if writer.emits_root_enums() {
+            for root_enum in &self.root_enums {
+                writer.emit_nota_root_enum_support(root_enum);
+                writer.blank();
+            }
         }
         writer.emit_domain_scope_relation_support(&self.relations);
 
@@ -463,6 +473,9 @@ impl RustEmissionOptions {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RustEmissionTarget {
+    /// Schema declarations plus local inherent/codec support, with no root
+    /// input/output enums and no Signal/Nexus/SEMA runtime plane.
+    DeclarationModule,
     /// External signal or meta-signal wire vocabulary plus codecs only.
     WireContract,
     /// Bootstrap all-in-one runtime emission for unsplit schemas.
@@ -493,18 +506,23 @@ impl RustEmissionTarget {
     fn emits_wire_frame(self) -> bool {
         match self {
             Self::WireContract | Self::SignalRuntime | Self::ComponentRuntime => true,
-            Self::NexusRuntime | Self::SemaRuntime => false,
+            Self::DeclarationModule | Self::NexusRuntime | Self::SemaRuntime => false,
         }
     }
 
     fn runtime_planes(self) -> RuntimePlaneSet {
         match self {
+            Self::DeclarationModule => RuntimePlaneSet::none(),
             Self::WireContract => RuntimePlaneSet::none(),
             Self::ComponentRuntime => RuntimePlaneSet::all(),
             Self::SignalRuntime => RuntimePlaneSet::signal_only(),
             Self::NexusRuntime => RuntimePlaneSet::nexus_only(),
             Self::SemaRuntime => RuntimePlaneSet::sema_only(),
         }
+    }
+
+    fn emits_root_enums(self) -> bool {
+        !matches!(self, Self::DeclarationModule)
     }
 }
 
@@ -3318,7 +3336,7 @@ impl ToTokens for DomainScopeRelationSupportTokens<'_> {
         });
         quote! {
             impl DomainScope {
-                pub fn from_path(path: Vec<DomainSegment>) -> Self {
+                pub fn from_path(path: Vec<String>) -> Self {
                     Self::new(DomainPath::new(path))
                 }
 
@@ -3358,8 +3376,8 @@ impl<'value> DomainScopePathTokens<'value> {
 impl ToTokens for DomainScopePathTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let segments = self.value.path().iter().map(|name| {
-            let variant = RustIdentifier::new(name.as_str());
-            quote! { DomainSegment::#variant }
+            let segment = Literal::string(name.as_str());
+            quote! { String::from(#segment) }
         });
         quote! {
             DomainScope::from_path(vec![#(#segments),*])
@@ -3834,6 +3852,18 @@ impl RustModuleRenderer {
 
     fn emits_short_headers(&self) -> bool {
         self.emits_wire_frame()
+    }
+
+    fn emits_root_enums(&self) -> bool {
+        self.target.emits_root_enums()
+    }
+
+    fn emitted_root_enums<'root>(&self, root_enums: &'root [RustEnum]) -> &'root [RustEnum] {
+        if self.emits_root_enums() {
+            root_enums
+        } else {
+            &[]
+        }
     }
 
     fn runtime_planes(&self) -> RuntimePlaneSet {
