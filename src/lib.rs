@@ -3490,6 +3490,36 @@ impl ToTokens for ScopeOperationImplTokens<'_> {
                 (Self::All, _) => true,
             }
         });
+        let contains_scope_body = if self
+            .model
+            .variants
+            .iter()
+            .all(|variant| variant.payload_scope.is_none())
+        {
+            let all_pattern = (!self.model.root).then(|| {
+                quote! {
+                    (Self::All, _)
+                }
+            });
+            let leaf_patterns = self.model.variants.iter().map(|variant| {
+                let variant_name = RustIdentifier::new(&variant.name);
+                quote! {
+                    (Self::#variant_name, Self::#variant_name)
+                }
+            });
+            let patterns = all_pattern.into_iter().chain(leaf_patterns);
+            quote! {
+                matches!((self, scope), #(#patterns)|*)
+            }
+        } else {
+            quote! {
+                match (self, scope) {
+                    #all_contains_arm
+                    #(#contains_arms)*
+                    _ => false,
+                }
+            }
+        };
         let contains_domain = self.model.root.then(|| {
             quote! {
                 pub fn contains_domain(&self, domain: &#source) -> bool {
@@ -3508,11 +3538,7 @@ impl ToTokens for ScopeOperationImplTokens<'_> {
 
             impl #name {
                 pub fn contains_scope(&self, scope: &Self) -> bool {
-                    match (self, scope) {
-                        #all_contains_arm
-                        #(#contains_arms)*
-                        _ => false,
-                    }
+                    #contains_scope_body
                 }
 
                 #contains_domain
