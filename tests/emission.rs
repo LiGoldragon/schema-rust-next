@@ -1,3 +1,4 @@
+use schema_next::{SchemaEngine, SchemaIdentity, SchemaSourceArtifact};
 use schema_rust_next::{
     LowerToRust, NotaSurface, RustEmissionOptions, RustEmissionTarget, RustEmitter,
     RustLoweringContext, RustSchemaLowering, RustTypeDeclaration,
@@ -150,6 +151,40 @@ fn emits_rust_source_as_a_separate_artifact() {
             .contains("pub fn record(payload: Entry) -> Self")
     );
     assert_generated_fixture("spirit_generated.rs", generated.code.as_str());
+}
+
+#[test]
+fn emits_domain_scope_equivalence_expansion_from_relations() {
+    let source = FixtureSchema::new("domain-relations.schema").read();
+    let artifact = SchemaSourceArtifact::from_schema_text(&source).expect("schema source decodes");
+    let schema = artifact
+        .source()
+        .lower(
+            &SchemaEngine::default(),
+            SchemaIdentity::new("example:domain", "0.1.0"),
+        )
+        .expect("schema source lowers");
+    let generated = RustEmitter::default().emit_code_from_schema(&schema);
+
+    assert_code_contains(generated.as_str(), "impl DomainScope");
+    assert_code_contains(
+        generated.as_str(),
+        "pub fn from_path(path: Vec<DomainSegment>) -> Self",
+    );
+    assert_code_contains(generated.as_str(), "Self::new(DomainPath::new(path))");
+    assert_code_contains(generated.as_str(), "pub fn expand(&self) -> ScopeSet");
+    assert_code_contains(
+        generated.as_str(),
+        "if relation.iter().any(|scope| scope == self)",
+    );
+    assert_code_contains(
+        generated.as_str(),
+        "DomainScope::from_path(vec![DomainSegment::Technology, DomainSegment::Hardware, DomainSegment::Networking])",
+    );
+    assert_code_contains(
+        generated.as_str(),
+        "DomainScope::from_path(vec![DomainSegment::Technology, DomainSegment::Software, DomainSegment::Distributed, DomainSegment::Networking])",
+    );
 }
 
 #[test]

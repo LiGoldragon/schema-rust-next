@@ -2,8 +2,9 @@ use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{ToTokens, quote};
 use schema_next::{
     Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, ImportResolver, Name,
-    NewtypeDeclaration, ResolvedImport, Schema, SchemaEngine, SchemaError, SchemaIdentity,
-    SchemaSource, StreamDeclaration, StructDeclaration, TypeDeclaration, TypeReference, Visibility,
+    NewtypeDeclaration, RelationDeclaration, RelationValue, ResolvedImport, Schema, SchemaEngine,
+    SchemaError, SchemaIdentity, SchemaSource, StreamDeclaration, StructDeclaration,
+    TypeDeclaration, TypeReference, Visibility,
 };
 
 pub mod build;
@@ -221,6 +222,7 @@ pub struct RustModule {
     declarations: Vec<RustDeclaration>,
     root_enums: Vec<RustEnum>,
     streams: Vec<StreamDeclaration>,
+    relations: Vec<RustRelation>,
     support: RustSupportModel,
     options: RustEmissionOptions,
 }
@@ -257,6 +259,10 @@ impl RustModule {
 
     pub fn streams(&self) -> &[StreamDeclaration] {
         &self.streams
+    }
+
+    pub fn relations(&self) -> &[RustRelation] {
+        &self.relations
     }
 
     pub fn declaration_named(&self, name: &str) -> Option<&RustDeclaration> {
@@ -305,6 +311,7 @@ impl RustModule {
             writer.emit_nota_root_enum_support(root_enum);
             writer.blank();
         }
+        writer.emit_domain_scope_relation_support(&self.relations);
 
         if writer.emits_short_headers() {
             writer.emit_short_headers(&self.root_enums);
@@ -359,6 +366,11 @@ impl LowerToRust<RustModule> for Schema {
             declarations,
             root_enums,
             streams: self.streams().to_vec(),
+            relations: self
+                .relations()
+                .iter()
+                .map(|relation| relation.lower_to_rust(context))
+                .collect(),
             support: <Self as LowerToRust<RustSupportModel>>::lower_to_rust(self, context),
             options: context.options(),
         }
@@ -745,6 +757,51 @@ impl LowerToRust<RustImport> for ResolvedImport {
     fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustImport {
         RustImport {
             use_item: self.use_item(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RustRelation {
+    Equivalence(Vec<RustRelationValue>),
+}
+
+impl RustRelation {
+    pub fn values(&self) -> &[RustRelationValue] {
+        match self {
+            Self::Equivalence(values) => values,
+        }
+    }
+}
+
+impl LowerToRust<RustRelation> for RelationDeclaration {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustRelation {
+        match self {
+            RelationDeclaration::Equivalence(values) => RustRelation::Equivalence(
+                values
+                    .iter()
+                    .map(|value| value.lower_to_rust(context))
+                    .collect(),
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustRelationValue {
+    path: Vec<Name>,
+}
+
+impl RustRelationValue {
+    pub fn path(&self) -> &[Name] {
+        &self.path
+    }
+}
+
+impl LowerToRust<RustRelationValue> for RelationValue {
+    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustRelationValue {
+        RustRelationValue {
+            path: self.path().to_vec(),
         }
     }
 }
@@ -3243,6 +3300,74 @@ impl ToTokens for RustEnumVariantTokens<'_> {
     }
 }
 
+struct DomainScopeRelationSupportTokens<'relation> {
+    relations: &'relation [RustRelation],
+}
+
+impl<'relation> DomainScopeRelationSupportTokens<'relation> {
+    fn new(relations: &'relation [RustRelation]) -> Self {
+        Self { relations }
+    }
+}
+
+impl ToTokens for DomainScopeRelationSupportTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let classes = self.relations.iter().map(|relation| {
+            let scopes = relation.values().iter().map(DomainScopePathTokens::new);
+            quote! { vec![#(#scopes),*] }
+        });
+        quote! {
+            impl DomainScope {
+                pub fn from_path(path: Vec<DomainSegment>) -> Self {
+                    Self::new(DomainPath::new(path))
+                }
+
+                pub fn expand(&self) -> ScopeSet {
+                    let mut scopes = vec![self.clone()];
+                    for relation in Self::equivalence_relations() {
+                        if relation.iter().any(|scope| scope == self) {
+                            for scope in relation {
+                                if !scopes.iter().any(|existing| existing == &scope) {
+                                    scopes.push(scope);
+                                }
+                            }
+                        }
+                    }
+                    ScopeSet::new(scopes)
+                }
+
+                pub fn equivalence_relations() -> Vec<Vec<DomainScope>> {
+                    vec![#(#classes),*]
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+struct DomainScopePathTokens<'value> {
+    value: &'value RustRelationValue,
+}
+
+impl<'value> DomainScopePathTokens<'value> {
+    fn new(value: &'value RustRelationValue) -> Self {
+        Self { value }
+    }
+}
+
+impl ToTokens for DomainScopePathTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let segments = self.value.path().iter().map(|name| {
+            let variant = RustIdentifier::new(name.as_str());
+            quote! { DomainSegment::#variant }
+        });
+        quote! {
+            DomainScope::from_path(vec![#(#segments),*])
+        }
+        .to_tokens(tokens);
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct RustModulePath {
     schema_name: Name,
@@ -4109,6 +4234,14 @@ impl RustModuleRenderer {
             EnumVariantConstructorsTokens::new(declaration.name(), &constructors)
                 .into_token_stream(),
         );
+        self.blank();
+    }
+
+    fn emit_domain_scope_relation_support(&mut self, relations: &[RustRelation]) {
+        if relations.is_empty() {
+            return;
+        }
+        self.emit_item_tokens(DomainScopeRelationSupportTokens::new(relations).into_token_stream());
         self.blank();
     }
 

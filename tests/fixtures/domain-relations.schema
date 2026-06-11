@@ -1,0 +1,11 @@
+{}
+[]
+[]
+{
+  Domain [(Technology [(Hardware [Networking]) (Software [(Distributed [Networking])])])]
+  DomainSegment [Technology Hardware Networking Software Distributed]
+  DomainPath (Vec DomainSegment)
+  DomainScope DomainPath
+  ScopeSet (Vec DomainScope)
+}
+[(Equivalence [(Technology Hardware Networking) (Technology Software Distributed Networking)])]
