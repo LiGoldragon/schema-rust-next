@@ -1,10 +1,10 @@
 use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{ToTokens, quote};
 use schema_next::{
-    Declaration, EnumDeclaration, EnumVariant, FieldDeclaration, ImportResolver, Name,
-    NewtypeDeclaration, RelationDeclaration, RelationValue, ResolvedImport, Schema, SchemaEngine,
-    SchemaError, SchemaIdentity, SchemaSource, StreamDeclaration, StructDeclaration,
-    TypeDeclaration, TypeReference, Visibility,
+    Declaration, EnumDeclaration, EnumVariant, FamilyDeclaration, FamilyKey, FieldDeclaration,
+    ImportResolver, Name, NewtypeDeclaration, RelationDeclaration, RelationValue, ResolvedImport,
+    Schema, SchemaEngine, SchemaError, SchemaIdentity, SchemaSource, StreamDeclaration,
+    StructDeclaration, TypeDeclaration, TypeReference, Visibility,
 };
 
 pub mod build;
@@ -223,6 +223,7 @@ pub struct RustModule {
     root_enums: Vec<RustEnum>,
     streams: Vec<StreamDeclaration>,
     relations: Vec<RustRelation>,
+    versioned_store: RustVersionedStore,
     support: RustSupportModel,
     options: RustEmissionOptions,
 }
@@ -263,6 +264,10 @@ impl RustModule {
 
     pub fn relations(&self) -> &[RustRelation] {
         &self.relations
+    }
+
+    pub fn versioned_store(&self) -> &RustVersionedStore {
+        &self.versioned_store
     }
 
     pub fn declaration_named(&self, name: &str) -> Option<&RustDeclaration> {
@@ -321,6 +326,9 @@ impl RustModule {
             }
         }
         writer.emit_domain_scope_relation_support(&self.relations, &self.declarations);
+        if !self.versioned_store.is_empty() {
+            writer.emit_record_family_support(&self.versioned_store);
+        }
 
         if writer.emits_short_headers() {
             writer.emit_short_headers(&self.root_enums);
@@ -380,6 +388,9 @@ impl LowerToRust<RustModule> for Schema {
                 .iter()
                 .map(|relation| relation.lower_to_rust(context))
                 .collect(),
+            versioned_store: <Self as LowerToRust<RustVersionedStore>>::lower_to_rust(
+                self, context,
+            ),
             support: <Self as LowerToRust<RustSupportModel>>::lower_to_rust(self, context),
             options: context.options(),
         }
@@ -815,6 +826,110 @@ impl LowerToRust<RustRelationValue> for RelationValue {
     fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustRelationValue {
         RustRelationValue {
             path: self.path().to_vec(),
+        }
+    }
+}
+
+/// The component's versioned store as seen by Rust emission: the store
+/// name derived from the schema identity's component name, plus one
+/// [`RustRecordFamily`] per declared record family. Empty when the
+/// schema declares no families, in which case no families surface is
+/// emitted at all.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustVersionedStore {
+    store_name: String,
+    families: Vec<RustRecordFamily>,
+}
+
+impl RustVersionedStore {
+    pub fn store_name(&self) -> &str {
+        &self.store_name
+    }
+
+    pub fn families(&self) -> &[RustRecordFamily] {
+        &self.families
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.families.is_empty()
+    }
+}
+
+impl LowerToRust<RustVersionedStore> for Schema {
+    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustVersionedStore {
+        RustVersionedStore {
+            store_name: self.identity().component().as_str().to_owned(),
+            families: self
+                .families()
+                .iter()
+                .map(|declaration| RustRecordFamily {
+                    declaration: declaration.clone(),
+                    schema_hash: *self
+                        .family_closure(declaration.record.as_str())
+                        .expect("family record closure builds for a verified schema")
+                        .content_hash()
+                        .expect("family closure archives for content hashing")
+                        .as_bytes(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// One declared record family plus its generation-time content
+/// identity: the blake3 hash of the family record's schema closure,
+/// computed while the semantic schema is in hand. The emitted artifact
+/// pins this hash as a constant, so any schema edit that moves the
+/// closure shows up as a generated-code change under the build driver's
+/// freshness check.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustRecordFamily {
+    declaration: FamilyDeclaration,
+    schema_hash: [u8; 32],
+}
+
+impl RustRecordFamily {
+    pub fn name(&self) -> &Name {
+        &self.declaration.name
+    }
+
+    pub fn record(&self) -> &Name {
+        &self.declaration.record
+    }
+
+    pub fn table(&self) -> &str {
+        self.declaration.table.as_str()
+    }
+
+    pub fn key(&self) -> FamilyKey {
+        self.declaration.key
+    }
+
+    pub fn schema_hash(&self) -> &[u8; 32] {
+        &self.schema_hash
+    }
+
+    fn constant_identifier(&self) -> Ident {
+        Ident::new(
+            &ScreamingName::new(self.name()).screaming(),
+            Span::call_site(),
+        )
+    }
+
+    fn constructor_identifier(&self) -> Ident {
+        let constructor_name = self.name().field_name();
+        if RustKeyword::new(&constructor_name).is_reserved() {
+            Ident::new_raw(&constructor_name, Span::call_site())
+        } else {
+            Ident::new(&constructor_name, Span::call_site())
+        }
+    }
+
+    fn descriptor_type(&self) -> TokenStream {
+        let record = RustIdentifier::new(self.record().as_str());
+        match self.key() {
+            FamilyKey::Domain => quote! { sema_engine::TableDescriptor<#record> },
+            FamilyKey::Identified => quote! { sema_engine::IdentifiedTableDescriptor<#record> },
         }
     }
 }
@@ -3747,6 +3862,143 @@ impl RustModulePath {
     }
 }
 
+/// The `family_identity` module: one 32-byte schema-hash constant per
+/// declared record family, SCREAMING_SNAKE-named after the family, on
+/// the `short_header` module precedent. The values are computed at
+/// generation time from each family record's schema closure, so the
+/// generated artifact pins the per-family version identity and a schema
+/// edit surfaces as a constant move under the freshness check.
+struct FamilyIdentityModuleTokens<'store> {
+    families: &'store [RustRecordFamily],
+}
+
+impl<'store> FamilyIdentityModuleTokens<'store> {
+    fn new(families: &'store [RustRecordFamily]) -> Self {
+        Self { families }
+    }
+}
+
+impl ToTokens for FamilyIdentityModuleTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let constants = self.families.iter().map(|family| {
+            let constant = family.constant_identifier();
+            let bytes = family
+                .schema_hash()
+                .iter()
+                .map(|byte| Literal::u8_unsuffixed(*byte));
+            quote! { pub const #constant: [u8; 32] = [#(#bytes),*]; }
+        });
+        quote! {
+            pub mod family_identity {
+                #(#constants)*
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+/// The closed `RecordFamily` sum over the component's declared record
+/// families, with the whole version-control surface attached: the store
+/// name and `versioning_policy` constructor, one descriptor constructor
+/// per family returning the matching `sema_engine` table descriptor,
+/// and the `decode` dispatch from a stored `FamilyIdentity` plus rkyv
+/// bytes into the typed sum. Unknown families and schema-hash drift are
+/// typed [`RecordFamilyError`] values, never a fallback.
+struct RecordFamilyEnumTokens<'store> {
+    store: &'store RustVersionedStore,
+}
+
+impl<'store> RecordFamilyEnumTokens<'store> {
+    fn new(store: &'store RustVersionedStore) -> Self {
+        Self { store }
+    }
+}
+
+impl ToTokens for RecordFamilyEnumTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let variants = self.store.families().iter().map(|family| {
+            let variant = RustIdentifier::new(family.name().as_str());
+            let record = RustIdentifier::new(family.record().as_str());
+            quote! { #variant(#record), }
+        });
+        let descriptor_constructors = self.store.families().iter().map(|family| {
+            let constructor = family.constructor_identifier();
+            let descriptor_type = family.descriptor_type();
+            let descriptor_head = match family.key() {
+                FamilyKey::Domain => quote! { sema_engine::TableDescriptor::new },
+                FamilyKey::Identified => quote! { sema_engine::IdentifiedTableDescriptor::new },
+            };
+            let table = Literal::string(family.table());
+            let family_name = Literal::string(family.name().as_str());
+            let constant = family.constant_identifier();
+            quote! {
+                pub fn #constructor() -> #descriptor_type {
+                    #descriptor_head(
+                        sema_engine::TableName::new(#table),
+                        sema_engine::FamilyName::new(#family_name),
+                        sema_engine::SchemaHash::new(family_identity::#constant),
+                    )
+                }
+            }
+        });
+        let decode_arms = self.store.families().iter().map(|family| {
+            let variant = RustIdentifier::new(family.name().as_str());
+            let record = RustIdentifier::new(family.record().as_str());
+            let family_name = Literal::string(family.name().as_str());
+            let constant = family.constant_identifier();
+            quote! {
+                #family_name => {
+                    let generated = sema_engine::SchemaHash::new(family_identity::#constant);
+                    if identity.schema_hash() != generated {
+                        return Err(RecordFamilyError::SchemaHashMismatch {
+                            family: sema_engine::FamilyName::new(#family_name),
+                            stored: identity.schema_hash(),
+                            generated,
+                        });
+                    }
+                    let record = rkyv::from_bytes::<#record, rkyv::rancor::Error>(bytes)
+                        .map_err(|_| RecordFamilyError::RecordDecode {
+                            family: sema_engine::FamilyName::new(#family_name),
+                        })?;
+                    Ok(Self::#variant(record))
+                }
+            }
+        });
+        let store_name = Literal::string(self.store.store_name());
+        quote! {
+            #[derive(Clone, Debug, PartialEq)]
+            pub enum RecordFamily {
+                #(#variants)*
+            }
+
+            impl RecordFamily {
+                pub const STORE_NAME: &'static str = #store_name;
+
+                pub fn versioning_policy() -> sema_engine::VersioningPolicy {
+                    sema_engine::VersioningPolicy::new(
+                        sema_engine::VersionedStoreName::new(Self::STORE_NAME),
+                    )
+                }
+
+                #(#descriptor_constructors)*
+
+                pub fn decode(
+                    identity: &sema_engine::FamilyIdentity,
+                    bytes: &[u8],
+                ) -> Result<Self, RecordFamilyError> {
+                    match identity.family().as_str() {
+                        #(#decode_arms)*
+                        _ => Err(RecordFamilyError::UnknownFamily {
+                            family: identity.family().clone(),
+                        }),
+                    }
+                }
+            }
+        }
+        .to_tokens(tokens);
+    }
+}
+
 /// Decides which assembled schema type names appear as map keys.
 #[derive(Clone, Copy, Debug)]
 struct CollectionScan<'schema> {
@@ -4529,6 +4781,50 @@ impl RustModuleRenderer {
         self.emit_item_tokens(
             DomainScopeRelationSupportTokens::new(relations, &root, &models).into_token_stream(),
         );
+        self.blank();
+    }
+
+    /// Emit the record-family version-control surface for a schema that
+    /// declares families: the `family_identity` constant module pinning
+    /// each family's generation-time closure hash, the typed
+    /// `RecordFamilyError` enum, and the closed `RecordFamily` sum
+    /// carrying the store name, `versioning_policy`, the per-family
+    /// `sema_engine` table-descriptor constructors, and the `decode`
+    /// dispatch. Generated paths reference the real `sema_engine` crate
+    /// on the signal-frame precedent, so a consumer that declares
+    /// families depends on `sema-engine`.
+    fn emit_record_family_support(&mut self, store: &RustVersionedStore) {
+        self.emit_item_tokens(
+            FamilyIdentityModuleTokens::new(store.families()).into_token_stream(),
+        );
+        self.blank();
+        self.emit_item_tokens(quote! {
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            pub enum RecordFamilyError {
+                UnknownFamily { family: sema_engine::FamilyName },
+                SchemaHashMismatch {
+                    family: sema_engine::FamilyName,
+                    stored: sema_engine::SchemaHash,
+                    generated: sema_engine::SchemaHash,
+                },
+                RecordDecode { family: sema_engine::FamilyName },
+            }
+            impl std::fmt::Display for RecordFamilyError {
+                fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    match self {
+                        Self::UnknownFamily { family } => write!(formatter, "unknown record family {family}"),
+                        Self::SchemaHashMismatch { family, stored, generated } => write!(
+                            formatter,
+                            "schema hash mismatch for record family {family}: stored {stored}, generated {generated}",
+                        ),
+                        Self::RecordDecode { family } => write!(formatter, "failed to decode {family} record archive"),
+                    }
+                }
+            }
+            impl std::error::Error for RecordFamilyError {}
+        });
+        self.blank();
+        self.emit_item_tokens(RecordFamilyEnumTokens::new(store).into_token_stream());
         self.blank();
     }
 

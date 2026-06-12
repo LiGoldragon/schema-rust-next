@@ -263,6 +263,29 @@ inline operation payloads. This emitter sees the typed source/schema data from
   `AcceptPrevious<Previous>` trait surfaces. A changed type gets hand-written
   upgrade behavior on the generated noun; unchanged types do not need upgrade
   logic.
+- A schema that declares record families emits the version-control surface;
+  a schema without families emits nothing new. Lowering builds a
+  `RustVersionedStore` (store name from the schema identity's component name,
+  one `RustRecordFamily` per declaration) and computes each family's identity
+  at generation time as the blake3 content hash of
+  `Schema::family_closure(record)`. Emission renders the `family_identity`
+  module (one SCREAMING_SNAKE 32-byte constant per family, on the
+  `short_header` module precedent), the typed `RecordFamilyError` enum, and
+  the closed `RecordFamily` sum — one variant per family carrying the record
+  type — whose impl owns `STORE_NAME`, `versioning_policy()`, one snake_case
+  per-family constructor returning `sema_engine::TableDescriptor` (Domain key)
+  or `sema_engine::IdentifiedTableDescriptor` (Identified key), and
+  `decode(&sema_engine::FamilyIdentity, &[u8])`. Decode dispatches on the
+  family name, rejects schema-hash drift and unknown families with typed
+  errors, and rkyv-decodes the record payload. The constructors attach to the
+  `RecordFamily` sum rather than to each record type so imported record types
+  (Rust alias re-exports, which cannot take inherent impls) participate
+  identically. Generated paths reference the real `sema_engine` crate on the
+  signal-frame precedent, so declaring families adds `sema-engine` to the
+  consumer crate's dependencies. Freshness needs no new machinery: the pinned
+  constants are part of the generated artifact the build driver already
+  checks, so a schema edit that moves a family closure fails freshness until
+  regeneration.
 - Generated signal roots emit rkyv-derived data types, NOTA text conversion,
   short-header route triage, binary signal-frame encode/decode methods, and
   the universal `signal-frame` request/reply aliases and builders. Non-streaming

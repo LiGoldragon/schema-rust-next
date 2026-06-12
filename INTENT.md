@@ -144,5 +144,28 @@ emit as tuple newtypes.
 `.schema` fixtures into typed `Schema` values before comparing generated Rust.
 No assembled-schema text fixture is accepted as a normal input.
 
+*Declared record families emit the component's version-control surface.* Per
+Spirit wrjl (Decision): [The version-checking pipeline (built into component
+handling) detects schema-address mismatches between current code and stored
+data, walks the diff between addresses, and derives the migration operations
+... from the diff.] When a schema declares families, emission computes each
+family's identity at generation time — the blake3 content hash of
+`Schema::family_closure(record)` — and pins it as a 32-byte constant in the
+generated `family_identity` module, so the build driver's freshness check
+turns any schema edit that moves a family closure into a visible generated
+change. The generated `RecordFamily` enum is the closed sum over the declared
+families and carries the whole surface: per-family
+`sema_engine::TableDescriptor` / `IdentifiedTableDescriptor` constructors, the
+component `VersioningPolicy` with the store name taken from the schema
+identity's component name, and a `decode` from a stored
+`sema_engine::FamilyIdentity` plus rkyv bytes in which an unknown family or a
+schema-hash mismatch is a typed `RecordFamilyError`, never a fallback.
+Generated paths reference the real `sema_engine` crate on the signal-frame
+precedent; a schema that declares no families emits none of this. Per Spirit
+v0n6 (Clarification): [Everything reading NOTA-shaped structure above the raw
+structural parser must go through typed structural macro nodes] — the family
+metadata reaches this emitter only as typed `schema_next::FamilyDeclaration`
+data on the semantic `Schema` value, never as re-parsed schema text.
+
 This repository owns the Rust code-generation step and the shared build-driver
 orchestrator. It does not define schema semantics.
