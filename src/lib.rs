@@ -3858,7 +3858,6 @@ impl ToTokens for AppliedRootTokens<'_> {
         let name = RustIdentifier::new(self.root.name().as_str());
         let applied = RustTypeReferenceTokens::new(self.root.applied());
         quote! {
-            #[rustfmt::skip]
             pub type #name = #applied;
         }
         .to_tokens(tokens);

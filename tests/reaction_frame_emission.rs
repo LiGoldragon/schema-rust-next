@@ -14,7 +14,7 @@ mod support;
 use support::FixtureSchema;
 
 fn emit_reaction_frame() -> String {
-    let schema = FixtureSchema::new("reaction/reaction.schema").lower("reaction:reaction");
+    let schema = FixtureSchema::new("reaction/schema/reaction.schema").lower("reaction:reaction");
     let options = RustEmissionOptions::feature_gated_nota("nota-text")
         .with_target(RustEmissionTarget::DeclarationModule);
     RustEmitter::new(options)
