@@ -258,8 +258,9 @@ fn schema_subobjects_lower_themselves_into_rust_model_nouns() {
     let input = schema
         .input_and_output()
         .into_iter()
-        .find(|root| root.name.as_str() == "Input")
-        .expect("schema input root");
+        .find(|root| root.name().as_str() == "Input")
+        .and_then(schema_next::Root::as_enum)
+        .expect("schema input root enum");
     let rust_input = input.lower_to_rust(&context);
     assert_eq!(rust_input.name().as_str(), "Input");
     assert_eq!(rust_input.variants()[0].name().as_str(), "Record");

@@ -3,8 +3,8 @@ use quote::{ToTokens, quote};
 use schema_next::{
     Declaration, EnumDeclaration, EnumVariant, FamilyDeclaration, FamilyKey, FieldDeclaration,
     ImportResolver, Name, NewtypeDeclaration, RelationDeclaration, RelationValue, ResolvedImport,
-    Schema, SchemaEngine, SchemaError, SchemaIdentity, SchemaSource, StreamDeclaration,
-    StructDeclaration, TypeDeclaration, TypeReference, Visibility,
+    Root, RootApplication, Schema, SchemaEngine, SchemaError, SchemaIdentity, SchemaSource,
+    StreamDeclaration, StructDeclaration, TypeDeclaration, TypeReference, Visibility,
 };
 
 pub mod build;
@@ -221,6 +221,7 @@ pub struct RustModule {
     imports: Vec<RustImport>,
     declarations: Vec<RustDeclaration>,
     root_enums: Vec<RustEnum>,
+    applied_roots: Vec<RustAppliedRoot>,
     streams: Vec<StreamDeclaration>,
     relations: Vec<RustRelation>,
     versioned_store: RustVersionedStore,
@@ -310,6 +311,11 @@ impl RustModule {
             }
         }
 
+        for applied_root in &self.applied_roots {
+            writer.emit_applied_root(applied_root);
+            writer.blank();
+        }
+
         writer.emit_newtype_inherent_impls(&self.declarations);
         writer.emit_enum_variant_constructors(
             &self.declarations,
@@ -369,7 +375,14 @@ impl LowerToRust<RustModule> for Schema {
         let root_enums = self
             .input_and_output()
             .into_iter()
+            .filter_map(Root::as_enum)
             .map(|root| root.lower_to_rust(context))
+            .collect::<Vec<_>>();
+        let applied_roots = self
+            .input_and_output()
+            .into_iter()
+            .filter_map(Root::as_application)
+            .map(|application| application.lower_to_rust(context))
             .collect::<Vec<_>>();
         RustModule {
             file_path: RustModulePath::new(self.identity().component().clone()).to_file_path(),
@@ -382,6 +395,7 @@ impl LowerToRust<RustModule> for Schema {
                 .collect(),
             declarations,
             root_enums,
+            applied_roots,
             streams: self.streams().to_vec(),
             relations: self
                 .relations()
@@ -938,6 +952,7 @@ impl RustRecordFamily {
 pub struct RustDeclaration {
     visibility: Visibility,
     name: Name,
+    parameters: Vec<Name>,
     value: RustTypeDeclaration,
 }
 
@@ -950,6 +965,14 @@ impl RustDeclaration {
         &self.name
     }
 
+    /// The declaration's generic type parameters, in declared order. Empty
+    /// for an ordinary (non-parameterized) declaration; non-empty only for
+    /// a parameterized declaration such as the shared reaction frame's
+    /// `Work<Event, Write, Read, Effect>`.
+    pub fn parameters(&self) -> &[Name] {
+        &self.parameters
+    }
+
     pub fn value(&self) -> &RustTypeDeclaration {
         &self.value
     }
@@ -957,10 +980,16 @@ impl RustDeclaration {
 
 impl LowerToRust<RustDeclaration> for Declaration {
     fn lower_to_rust(&self, context: &RustLoweringContext) -> RustDeclaration {
+        let parameters = self.parameters().to_vec();
+        let mut value = self.value().lower_to_rust(context);
+        if let RustTypeDeclaration::Enum(enumeration) = &mut value {
+            enumeration.set_parameters(parameters.clone());
+        }
         RustDeclaration {
             visibility: self.visibility(),
             name: self.name().clone(),
-            value: self.value().lower_to_rust(context),
+            parameters,
+            value,
         }
     }
 }
@@ -1081,12 +1110,27 @@ impl LowerToRust<RustField> for FieldDeclaration {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustEnum {
     name: Name,
+    parameters: Vec<Name>,
     variants: Vec<RustEnumVariant>,
 }
 
 impl RustEnum {
     pub fn name(&self) -> &Name {
         &self.name
+    }
+
+    /// The enum's generic type parameters, in declared order. Empty for an
+    /// ordinary enum; non-empty for a parameterized frame enum such as
+    /// `Work<Event, Write, Read, Effect>`.
+    pub fn parameters(&self) -> &[Name] {
+        &self.parameters
+    }
+
+    /// Attach the owning declaration's generic parameters to this enum.
+    /// A bare `EnumDeclaration` carries no parameters — they live on the
+    /// outer `Declaration` head — so the declaration lowering injects them.
+    fn set_parameters(&mut self, parameters: Vec<Name>) {
+        self.parameters = parameters;
     }
 
     pub fn variants(&self) -> &[RustEnumVariant] {
@@ -1102,6 +1146,7 @@ impl LowerToRust<RustEnum> for EnumDeclaration {
     fn lower_to_rust(&self, context: &RustLoweringContext) -> RustEnum {
         RustEnum {
             name: self.name.clone(),
+            parameters: Vec::new(),
             variants: self
                 .variants
                 .iter()
@@ -1136,6 +1181,41 @@ impl LowerToRust<RustEnumVariant> for EnumVariant {
         RustEnumVariant {
             name: self.name.clone(),
             payload: self.payload.clone(),
+        }
+    }
+}
+
+/// A component root that applies an imported parameterized frame head at its
+/// Input/Output position — `(Work SignalInput SemaWriteOutput …)` — rather
+/// than spelling out an enum body. It lowers to a concrete Rust type alias
+/// `pub type <position> = <Head><Args>;` so the component refers to the
+/// fully-applied frame type by the position name while the imported head
+/// owns the generic definition. The applied reference is the field-position
+/// projection of the root, so it renders through the same
+/// [`RustTypeReferenceTokens`] path as any other applied type.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustAppliedRoot {
+    name: Name,
+    applied: TypeReference,
+}
+
+impl RustAppliedRoot {
+    pub fn name(&self) -> &Name {
+        &self.name
+    }
+
+    /// The fully-applied frame type this root aliases to, as an
+    /// `Application` reference carrying the head and its arguments.
+    pub fn applied(&self) -> &TypeReference {
+        &self.applied
+    }
+}
+
+impl LowerToRust<RustAppliedRoot> for RootApplication {
+    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustAppliedRoot {
+        RustAppliedRoot {
+            name: self.name().clone(),
+            applied: TypeReference::from(self),
         }
     }
 }
@@ -1315,6 +1395,9 @@ impl RustRenderContext {
             TypeReference::Map(key, value) => {
                 self.references_private_type(key) || self.references_private_type(value)
             }
+            TypeReference::Application { arguments, .. } => arguments
+                .iter()
+                .any(|argument| self.references_private_type(argument)),
             TypeReference::String
             | TypeReference::Integer
             | TypeReference::Boolean
@@ -1397,6 +1480,11 @@ impl ToTokens for RustTypeReferenceTokens<'_> {
                     quote! { #inner }.to_tokens(tokens);
                 }
             },
+            TypeReference::Application { head, arguments } => {
+                let head = RustIdentifier::new(head.name().as_str());
+                let arguments = arguments.iter().map(Self::new);
+                quote! { #head<#(#arguments),*> }.to_tokens(tokens);
+            }
         }
     }
 }
@@ -3707,6 +3795,7 @@ impl ToTokens for RustEnumTokens<'_, '_> {
         let attributes = self.attributes();
         let visibility = self.context.visibility_tokens(self.visibility);
         let name = RustIdentifier::new(self.enumeration.name().as_str());
+        let generics = RustGenericParameterTokens::new(self.enumeration.parameters());
         let variants = self
             .enumeration
             .variants()
@@ -3715,9 +3804,62 @@ impl ToTokens for RustEnumTokens<'_, '_> {
             .collect::<Vec<_>>();
         quote! {
             #(#attributes)*
-            #visibility enum #name {
+            #visibility enum #name #generics {
                 #(#variants)*
             }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+/// The `<P1, P2, …>` generic-parameter list emitted after a type name. An
+/// empty parameter slice emits nothing, so an ordinary enum stays a bare
+/// `enum Name { … }` while a parameterized frame enum becomes
+/// `enum Work<Event, Write, Read, Effect> { … }`.
+struct RustGenericParameterTokens<'parameter> {
+    parameters: &'parameter [Name],
+}
+
+impl<'parameter> RustGenericParameterTokens<'parameter> {
+    fn new(parameters: &'parameter [Name]) -> Self {
+        Self { parameters }
+    }
+}
+
+impl ToTokens for RustGenericParameterTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        if self.parameters.is_empty() {
+            return;
+        }
+        let parameters = self
+            .parameters
+            .iter()
+            .map(|parameter| RustIdentifier::new(parameter.as_str()).ident());
+        quote! { <#(#parameters),*> }.to_tokens(tokens);
+    }
+}
+
+/// `pub type <position> = <Head><Args>;` for a frame-applying root. The
+/// applied type renders through [`RustTypeReferenceTokens`], so the head
+/// name resolves to the imported frame alias and each argument to its
+/// component-local payload type.
+struct AppliedRootTokens<'root> {
+    root: &'root RustAppliedRoot,
+}
+
+impl<'root> AppliedRootTokens<'root> {
+    fn new(root: &'root RustAppliedRoot) -> Self {
+        Self { root }
+    }
+}
+
+impl ToTokens for AppliedRootTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = RustIdentifier::new(self.root.name().as_str());
+        let applied = RustTypeReferenceTokens::new(self.root.applied());
+        quote! {
+            #[rustfmt::skip]
+            pub type #name = #applied;
         }
         .to_tokens(tokens);
     }
@@ -4029,9 +4171,21 @@ impl<'schema> CollectionScan<'schema> {
             }
         }
         for root in self.schema.input_and_output() {
-            Self::collect_enum_map_keys(root, &mut names);
+            Self::collect_root_map_keys(root, &mut names);
         }
         names
+    }
+
+    /// Collect map-key type names from either root shape: an enum root walks
+    /// its variant payloads; an application root walks its applied arguments
+    /// (each a type reference) through the same key collector.
+    fn collect_root_map_keys(root: &Root, names: &mut Vec<String>) {
+        match root {
+            Root::Enum(declaration) => Self::collect_enum_map_keys(declaration, names),
+            Root::Application(application) => {
+                Self::collect_map_keys(&TypeReference::from(application.as_ref()), names);
+            }
+        }
     }
 
     /// Whether the schema references the `Bytes` scalar anywhere (directly or
@@ -4046,7 +4200,16 @@ impl<'schema> CollectionScan<'schema> {
                 .schema
                 .input_and_output()
                 .into_iter()
-                .any(Self::enum_uses_bytes)
+                .any(Self::root_uses_bytes)
+    }
+
+    fn root_uses_bytes(root: &Root) -> bool {
+        match root {
+            Root::Enum(declaration) => Self::enum_uses_bytes(declaration),
+            Root::Application(application) => {
+                Self::reference_uses_bytes(&TypeReference::from(application.as_ref()))
+            }
+        }
     }
 
     fn declaration_uses_bytes(declaration: &TypeDeclaration) -> bool {
@@ -4080,6 +4243,9 @@ impl<'schema> CollectionScan<'schema> {
             TypeReference::Map(key, value) => {
                 Self::reference_uses_bytes(key) || Self::reference_uses_bytes(value)
             }
+            TypeReference::Application { arguments, .. } => {
+                arguments.iter().any(Self::reference_uses_bytes)
+            }
             TypeReference::String
             | TypeReference::Integer
             | TypeReference::Boolean
@@ -4100,7 +4266,16 @@ impl<'schema> CollectionScan<'schema> {
                 .schema
                 .input_and_output()
                 .into_iter()
-                .any(Self::enum_uses_fixed_bytes)
+                .any(Self::root_uses_fixed_bytes)
+    }
+
+    fn root_uses_fixed_bytes(root: &Root) -> bool {
+        match root {
+            Root::Enum(declaration) => Self::enum_uses_fixed_bytes(declaration),
+            Root::Application(application) => {
+                Self::reference_uses_fixed_bytes(&TypeReference::from(application.as_ref()))
+            }
+        }
     }
 
     fn declaration_uses_fixed_bytes(declaration: &TypeDeclaration) -> bool {
@@ -4133,6 +4308,9 @@ impl<'schema> CollectionScan<'schema> {
             | TypeReference::ScopeOf(inner) => Self::reference_uses_fixed_bytes(inner),
             TypeReference::Map(key, value) => {
                 Self::reference_uses_fixed_bytes(key) || Self::reference_uses_fixed_bytes(value)
+            }
+            TypeReference::Application { arguments, .. } => {
+                arguments.iter().any(Self::reference_uses_fixed_bytes)
             }
             TypeReference::String
             | TypeReference::Integer
@@ -4184,6 +4362,11 @@ impl<'schema> CollectionScan<'schema> {
                 }
                 Self::collect_map_keys(key, names);
                 Self::collect_map_keys(value, names);
+            }
+            TypeReference::Application { arguments, .. } => {
+                for argument in arguments {
+                    Self::collect_map_keys(argument, names);
+                }
             }
         }
     }
@@ -4671,6 +4854,10 @@ impl RustModuleRenderer {
         self.emit_item_tokens(RustEnumTokens::root(root_enum, &context).into_token_stream());
     }
 
+    fn emit_applied_root(&mut self, applied_root: &RustAppliedRoot) {
+        self.emit_item_tokens(AppliedRootTokens::new(applied_root).into_token_stream());
+    }
+
     fn emit_enum_payload_from_impls(
         &mut self,
         declarations: &[RustDeclaration],
@@ -4687,6 +4874,13 @@ impl RustModuleRenderer {
     }
 
     fn emit_enum_payload_from_impls_for(&mut self, declaration: &RustEnum) -> bool {
+        // A parameterized frame enum's variant payloads are generic binders,
+        // not concrete payload types, so a `From<Binder> for Work` impl is
+        // meaningless and would not name its generics. Skip it — the frame's
+        // conversions are hand-written in the runtime crate.
+        if !declaration.parameters().is_empty() {
+            return false;
+        }
         let mut emitted = false;
         for variant in self.unique_plain_payload_variants(declaration) {
             let Some(payload) = self.plain_payload_name(variant) else {
@@ -4729,6 +4923,14 @@ impl RustModuleRenderer {
         declaration: &RustEnum,
         newtypes: &[&RustNewtype],
     ) {
+        // A parameterized frame enum (`Work<Event, …>`) carries its
+        // construction behaviour by hand in the runtime crate, not as
+        // schema-emitted inherent constructors: an emitted `impl Work { … }`
+        // would reference the undeclared generic binders. Schema emits the
+        // generic DATA enum only.
+        if !declaration.parameters().is_empty() {
+            return;
+        }
         let payload_variants: Vec<_> = declaration
             .variants()
             .iter()
@@ -6314,6 +6516,14 @@ impl RustModuleRenderer {
                 Some(name) => format!("{name}Scope"),
                 None => self.rust_type(inner),
             },
+            TypeReference::Application { head, arguments } => {
+                let arguments = arguments
+                    .iter()
+                    .map(|argument| self.rust_type(argument))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}<{arguments}>", head.name().as_str())
+            }
         }
     }
 }

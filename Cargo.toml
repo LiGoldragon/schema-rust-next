@@ -38,6 +38,18 @@ sema-engine = { git = "https://github.com/LiGoldragon/sema-engine.git", branch =
 signal-frame = { git = "https://github.com/LiGoldragon/signal-frame.git", branch = "main" }
 triad-runtime = { git = "https://github.com/LiGoldragon/triad-runtime.git", branch = "main" }
 
+# DESIGNER-PROTOTYPE SEAM — operator integrates the schema-next +
+# nota-next chain to their mains and DROPS these patches. They point
+# the dependency-seam crates at the step-1 (nota-next pascal head/body)
+# and step-5 (schema-next generics + reaction fixtures) worktrees so
+# this branch can build the reaction-frame emission before the upstream
+# chain lands on main.
+[patch."https://github.com/LiGoldragon/nota-next.git"]
+nota-next = { path = "/home/li/wt/github.com/LiGoldragon/nota-next/pascal-head-body-shape" }
+
+[patch."https://github.com/LiGoldragon/schema-next.git"]
+schema-next = { path = "/home/li/wt/github.com/LiGoldragon/schema-next/schema-generics" }
+
 [lints.rust]
 unsafe_code = "forbid"
 unused      = { level = "warn", priority = -1 }
