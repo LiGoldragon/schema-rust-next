@@ -419,11 +419,16 @@ impl ToTokens for DaemonImportsTokens<'_> {
             Some(working) => quote! { use #working::{Input, Output, SignalFrameError}; },
             None => quote! {},
         };
+        let tcp_runtime_import = if has_tcp_tier {
+            quote! { AsyncConnectionRuntime, }
+        } else {
+            quote! {}
+        };
         let listener_imports = if self.shape.is_multi_listener() {
             quote! {
                 AsyncListenerSocket, AsyncMultiConnectionRuntime,
                 AsyncMultiListenerDaemon, AsyncMultiListenerDaemonError, SocketMode,
-                AsyncConnectionRuntime,
+                #tcp_runtime_import
             }
         } else {
             quote! {
