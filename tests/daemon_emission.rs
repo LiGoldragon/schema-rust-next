@@ -1,6 +1,6 @@
 use schema_rust_next::{
-    DaemonModule, MetaListenerTier, NexusDaemonShape, SocketModeBits, UpgradeListenerTier,
-    WorkingListenerTier,
+    DaemonModule, MetaListenerTier, NexusDaemonShape, SocketModeBits, TcpListenerTier,
+    UpgradeListenerTier, WorkingListenerTier,
 };
 
 mod support;
@@ -58,6 +58,19 @@ fn upgrade_only_shape() -> NexusDaemonShape {
     NexusDaemonShape::new("test-daemon", WorkingListenerTier::new("signal")).with_upgrade_tier(
         UpgradeListenerTier::new(SocketModeBits::new(OWNER_ONLY_SOCKET_MODE)),
     )
+}
+
+fn tcp_shape() -> NexusDaemonShape {
+    NexusDaemonShape::new("test-daemon", WorkingListenerTier::new("signal"))
+        .with_tcp_tier(TcpListenerTier::new())
+}
+
+fn meta_plus_tcp_shape() -> NexusDaemonShape {
+    NexusDaemonShape::new("test-daemon", WorkingListenerTier::new("signal"))
+        .with_meta_tier(MetaListenerTier::new(SocketModeBits::new(
+            OWNER_ONLY_SOCKET_MODE,
+        )))
+        .with_tcp_tier(TcpListenerTier::new())
 }
 
 #[test]
@@ -209,6 +222,42 @@ fn meta_listener_tier_emits_the_async_multi_listener_spine() {
 }
 
 #[test]
+fn tcp_listener_tier_emits_a_sibling_tcp_working_ingress() {
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let generated = DaemonModule::new(tcp_shape(), &schema, "schema-rust-next").to_generated_file();
+    let code = generated.code.as_str();
+
+    assert_code_contains(code, "use triad_runtime::TcpListenerDaemon");
+    assert_code_contains(code, "use tokio::net::TcpStream");
+    assert_code_contains(code, "fn tcp_listen_address(");
+    assert_code_contains(code, "MissingTcpSocket");
+    assert_code_contains(code, "GeneratedSingleAndTcpDaemon<Self>");
+    assert_code_contains(code, "TcpListenerDaemon::new(");
+    assert_code_contains(
+        code,
+        "impl<Daemon: ComponentDaemon> AsyncConnectionRuntime<TcpStream> for GeneratedDaemonRuntime<Daemon>",
+    );
+    assert_code_contains(code, "self.handle_working_connection(connection).await");
+    assert_code_contains(code, "runtime.clone()");
+}
+
+#[test]
+fn tcp_listener_tier_composes_with_meta_and_keeps_meta_socket_mode() {
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let generated =
+        DaemonModule::new(meta_plus_tcp_shape(), &schema, "schema-rust-next").to_generated_file();
+    let code = generated.code.as_str();
+
+    assert_code_contains(code, "GeneratedMultiAndTcpDaemon<Self>");
+    assert_code_contains(code, "AsyncMultiListenerDaemon::new(");
+    assert_code_contains(code, "TcpListenerDaemon::new(");
+    assert_code_contains(code, "ListenerTier::Meta");
+    assert_code_contains(code, "SocketMode::new(0o600)");
+    assert_code_contains(code, "configuration.meta_socket_path()");
+    assert_code_contains(code, "configuration.socket_mode()");
+}
+
+#[test]
 fn component_decoded_working_tier_delegates_frame_decode_to_component() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated = DaemonModule::new(component_decoded_shape(), &schema, "schema-rust-next")
@@ -224,11 +273,11 @@ fn component_decoded_working_tier_delegates_frame_decode_to_component() {
     );
     assert_code_contains(
         code,
-        "Daemon::handle_working_connection(&self.engine, connection).await",
+        "Daemon::handle_working_connection(self.engine.as_ref(), connection).await",
     );
     assert_code_contains(
         code,
-        "ListenerTier::Meta => { Daemon::handle_meta_connection(&self.engine, connection).await }",
+        "ListenerTier::Meta => { Daemon::handle_meta_connection(self.engine.as_ref(), connection).await }",
     );
     assert_code_excludes(
         code,
@@ -264,13 +313,18 @@ fn declared_stream_emits_async_subscription_support() {
     assert_code_contains(code, "tokio::sync::Mutex");
     assert_code_contains(code, "SubscriptionEventPublisher::acceptor(");
     assert_code_contains(code, "let (stream, context) = connection.into_parts();");
-    assert_code_contains(code, "let (reader, writer) = stream.into_split();");
+    assert_code_contains(code, "let (reader, writer) = tokio::io::split(stream);");
+    assert_code_contains(
+        code,
+        "type SubscriptionWriter = Box<dyn tokio::io::AsyncWrite + Unpin + Send>;",
+    );
     assert_code_contains(code, "transport.into_writer()");
     assert_code_contains(code, "frame.encode()?");
     assert_code_contains(code, "write_body_async(writer, &FrameBody::new(bytes))");
     assert_code_excludes(code, "compile_error!");
     assert_code_excludes(code, "std::sync::Mutex");
     assert_code_excludes(code, "try_clone_stream");
+    assert_code_excludes(code, "OwnedWriteHalf");
     assert_code_excludes(code, "UnixStream");
 
     // The stream tier now also routes the engine through the kameo `EngineActor`.
@@ -284,7 +338,10 @@ fn declared_stream_emits_async_subscription_support() {
     assert_code_contains(code, "pub struct EngineActor<Daemon: ComponentDaemon>");
     assert_code_contains(code, "engine: ActorRef<EngineActor<Daemon>>");
     assert_code_contains(code, "EngineActor::<Daemon>::spawn(EngineActor { engine })");
-    assert_code_contains(code, "subscriptions: EmittedSubscriptions<Daemon>");
+    assert_code_contains(
+        code,
+        "subscriptions: std::sync::Arc<EmittedSubscriptions<Daemon>>",
+    );
     assert_code_contains(code, "pub struct WorkingOutcome<Daemon: ComponentDaemon>");
     assert_code_contains(code, "output: Output");
     assert_code_contains(code, "event: Option<Daemon::StreamEvent>");
@@ -324,6 +381,39 @@ fn declared_stream_emits_async_subscription_support() {
     // mailbox, not a direct `Daemon::stop` on a shared engine.
     assert_code_contains(code, "self.engine.stop_gracefully().await");
     assert_code_contains(code, "self.engine.wait_for_shutdown().await");
+}
+
+#[test]
+fn tcp_listener_tier_composes_with_stream_subscriptions() {
+    let schema = FixtureSchema::new("daemon-stream.schema").lower("test:signal");
+    let generated = DaemonModule::new(tcp_shape(), &schema, "schema-rust-next").to_generated_file();
+    let code = generated.code.as_str();
+
+    assert_code_contains(code, "GeneratedSingleAndTcpDaemon<Self>");
+    assert_code_contains(
+        code,
+        "impl<Daemon: ComponentDaemon> AsyncConnectionRuntime<TcpStream> for GeneratedDaemonRuntime<Daemon>",
+    );
+    assert_code_contains(
+        code,
+        "async fn handle_working_connection<Stream>(&self, connection: AcceptedConnection<Stream>)",
+    );
+    assert_code_contains(
+        code,
+        "Stream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static",
+    );
+    assert_code_contains(code, "WorkingTransport::from_connection(connection)");
+    assert_code_contains(
+        code,
+        "type SubscriptionWriter = Box<dyn tokio::io::AsyncWrite + Unpin + Send>;",
+    );
+    assert_code_contains(
+        code,
+        "writers: std::collections::HashMap<SubscriptionTokenInner, SubscriptionWriter>",
+    );
+    assert_code_contains(code, "self.handle_working_connection(connection).await");
+    assert_code_excludes(code, "OwnedWriteHalf");
+    assert_code_excludes(code, "UnixStream");
 }
 
 #[test]

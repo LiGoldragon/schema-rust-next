@@ -45,6 +45,7 @@ pub struct NexusDaemonShape {
     working_tier: WorkingListenerTier,
     meta_tier: Option<MetaListenerTier>,
     upgrade_tier: Option<UpgradeListenerTier>,
+    tcp_tier: Option<TcpListenerTier>,
 }
 
 impl NexusDaemonShape {
@@ -54,6 +55,7 @@ impl NexusDaemonShape {
             working_tier,
             meta_tier: None,
             upgrade_tier: None,
+            tcp_tier: None,
         }
     }
 
@@ -64,6 +66,11 @@ impl NexusDaemonShape {
 
     pub fn with_upgrade_tier(mut self, upgrade_tier: UpgradeListenerTier) -> Self {
         self.upgrade_tier = Some(upgrade_tier);
+        self
+    }
+
+    pub fn with_tcp_tier(mut self, tcp_tier: TcpListenerTier) -> Self {
+        self.tcp_tier = Some(tcp_tier);
         self
     }
 
@@ -83,6 +90,10 @@ impl NexusDaemonShape {
         self.upgrade_tier.as_ref()
     }
 
+    pub fn tcp_tier(&self) -> Option<&TcpListenerTier> {
+        self.tcp_tier.as_ref()
+    }
+
     fn has_meta_tier(&self) -> bool {
         self.meta_tier.is_some()
     }
@@ -91,8 +102,14 @@ impl NexusDaemonShape {
         self.upgrade_tier.is_some()
     }
 
+    fn has_tcp_tier(&self) -> bool {
+        self.tcp_tier.is_some()
+    }
+
     /// A daemon binds more than one listener whenever it declares any
-    /// owner-only tier beyond the working listener — meta, upgrade, or both.
+    /// Unix owner-only tier beyond the working listener — meta, upgrade, or
+    /// both. The optional TCP working ingress is emitted as a sibling
+    /// `TcpListenerDaemon`, not as an `AsyncMultiListenerDaemon` Unix socket.
     fn is_multi_listener(&self) -> bool {
         self.meta_tier.is_some() || self.upgrade_tier.is_some()
     }
@@ -227,6 +244,18 @@ impl UpgradeListenerTier {
 
     pub fn socket_mode(&self) -> SocketModeBits {
         self.socket_mode
+    }
+}
+
+/// An optional TCP working ingress for cross-host/tailnet traffic. TCP has no
+/// socket file mode; deployment trust is the configured bind address plus the
+/// runtime's typed `PeerIdentity::Tcp`.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct TcpListenerTier;
+
+impl TcpListenerTier {
+    pub const fn new() -> Self {
+        Self
     }
 }
 
@@ -374,6 +403,7 @@ impl ToTokens for DaemonImportsTokens<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let component_decoded = self.shape.working_tier().is_component_decoded();
         let actor_engine = !component_decoded;
+        let has_tcp_tier = self.shape.has_tcp_tier();
         let actor_imports = if actor_engine {
             quote! {
                 use triad_runtime::EngineRequestError;
@@ -393,6 +423,7 @@ impl ToTokens for DaemonImportsTokens<'_> {
             quote! {
                 AsyncListenerSocket, AsyncMultiConnectionRuntime,
                 AsyncMultiListenerDaemon, AsyncMultiListenerDaemonError, SocketMode,
+                AsyncConnectionRuntime,
             }
         } else {
             quote! {
@@ -400,10 +431,17 @@ impl ToTokens for DaemonImportsTokens<'_> {
                 AsyncSingleListenerDaemonError,
             }
         };
+        let tcp_imports = if has_tcp_tier {
+            quote! {
+                use tokio::net::TcpStream;
+                use triad_runtime::TcpListenerDaemon;
+            }
+        } else {
+            quote! {}
+        };
         let stream_imports = if self.emits_stream && !component_decoded {
             quote! {
                 use signal_frame::SubscriptionTokenInner;
-                use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
                 use triad_runtime::{
                     SubscriptionEventPublisher, SubscriptionRegistry,
                 };
@@ -431,6 +469,7 @@ impl ToTokens for DaemonImportsTokens<'_> {
             #typed_transport_imports
             #working_import
             #stream_imports
+            #tcp_imports
         }
         .to_tokens(tokens);
     }
@@ -442,6 +481,7 @@ struct ComponentDaemonTraitTokens {
     section: DaemonSection,
     has_meta_tier: bool,
     has_upgrade_tier: bool,
+    has_tcp_tier: bool,
     emits_stream: bool,
     component_decoded: bool,
 }
@@ -452,6 +492,7 @@ impl ComponentDaemonTraitTokens {
             section: DaemonSection::ComponentDaemonTrait,
             has_meta_tier: shape.has_meta_tier(),
             has_upgrade_tier: shape.has_upgrade_tier(),
+            has_tcp_tier: shape.has_tcp_tier(),
             emits_stream,
             component_decoded: shape.working_tier().is_component_decoded(),
         }
@@ -501,6 +542,21 @@ impl ToTokens for ComponentDaemonTraitTokens {
                         let _ = connection;
                         Ok(())
                     }
+                }
+            }
+        } else {
+            quote! {}
+        };
+        let tcp_address_hook = if self.has_tcp_tier {
+            quote! {
+                /// The optional TCP working ingress bind address. TCP has no socket
+                /// mode; deployment trust is the configured bind address plus the
+                /// runtime's typed `PeerIdentity::Tcp`.
+                fn tcp_listen_address(
+                    configuration: &Self::Configuration,
+                ) -> Option<std::net::SocketAddr> {
+                    let _ = configuration;
+                    None
                 }
             }
         } else {
@@ -621,6 +677,19 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 ) -> impl std::future::Future<Output = Result<Output, Self::Error>> + Send + 'connection;
             }
         };
+        let tcp_working_hook = if self.component_decoded && self.has_tcp_tier {
+            quote! {
+                /// Run one accepted TCP working connection. Component-decoded daemons
+                /// own their frame protocol, so they also own any transport-specific
+                /// TCP handling the schema asks the daemon to expose.
+                fn handle_tcp_working_connection(
+                    engine: &Self::Engine,
+                    connection: AcceptedConnection<TcpStream>,
+                ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send + '_;
+            }
+        } else {
+            quote! {}
+        };
         quote! {
             /// The component hook surface for the emitted daemon — the only daemon
             /// code the component hand-writes (record 1488 escape hatches).
@@ -644,6 +713,8 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 /// Open the component's durable Store and construct its Engine.
                 fn build_runtime(configuration: &Self::Configuration) -> Result<Self::Engine, Self::Error>;
 
+                #tcp_address_hook
+
                 /// Lifecycle: called once before the listener serves, once after it stops.
                 fn start(engine: &Self::Engine) -> Result<(), Self::Error> {
                     let _ = engine;
@@ -656,6 +727,8 @@ impl ToTokens for ComponentDaemonTraitTokens {
                 }
 
                 #working_hook
+
+                #tcp_working_hook
 
                 #stream_hooks
 
@@ -815,6 +888,7 @@ struct DaemonBinderTokens {
     is_multi_listener: bool,
     meta_tier: Option<MetaListenerTier>,
     upgrade_tier: Option<UpgradeListenerTier>,
+    has_tcp_tier: bool,
 }
 
 impl DaemonBinderTokens {
@@ -824,6 +898,7 @@ impl DaemonBinderTokens {
             is_multi_listener: shape.is_multi_listener(),
             meta_tier: shape.meta_tier().cloned(),
             upgrade_tier: shape.upgrade_tier().cloned(),
+            has_tcp_tier: shape.has_tcp_tier(),
         }
     }
 }
@@ -832,12 +907,24 @@ impl ToTokens for DaemonBinderTokens {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         debug_assert_eq!(self.section, DaemonSection::Binder);
         let bind_return = if self.is_multi_listener {
-            quote! {
-                AsyncMultiListenerDaemon<GeneratedDaemonRuntime<Self>>
+            if self.has_tcp_tier {
+                quote! {
+                    GeneratedMultiAndTcpDaemon<Self>
+                }
+            } else {
+                quote! {
+                    AsyncMultiListenerDaemon<GeneratedDaemonRuntime<Self>>
+                }
             }
         } else {
-            quote! {
-                AsyncSingleListenerDaemon<GeneratedDaemonRuntime<Self>>
+            if self.has_tcp_tier {
+                quote! {
+                    GeneratedSingleAndTcpDaemon<Self>
+                }
+            } else {
+                quote! {
+                    AsyncSingleListenerDaemon<GeneratedDaemonRuntime<Self>>
+                }
             }
         };
         let meta_socket_push = match self.meta_tier.as_ref() {
@@ -874,7 +961,7 @@ impl ToTokens for DaemonBinderTokens {
             }
             None => quote! {},
         };
-        let construction = if self.is_multi_listener {
+        let local_construction = if self.is_multi_listener {
             quote! {
                 let working_socket = AsyncListenerSocket::new(
                     ListenerTier::Working,
@@ -887,28 +974,151 @@ impl ToTokens for DaemonBinderTokens {
                 let mut listener_sockets = std::vec![working_socket];
                 #meta_socket_push
                 #upgrade_socket_push
-                Ok(AsyncMultiListenerDaemon::new(
+                AsyncMultiListenerDaemon::new(
                     listener_sockets,
-                    runtime,
+                    runtime.clone(),
                     RequestErrorLog::new(Self::PROCESS_NAME),
                 )
-                .with_concurrency_limit(configuration.request_concurrency_limit()))
+                .with_concurrency_limit(configuration.request_concurrency_limit())
             }
         } else {
             quote! {
                 let daemon = AsyncSingleListenerDaemon::new(
                     configuration.socket_path().to_path_buf(),
-                    runtime,
+                    runtime.clone(),
                     RequestErrorLog::new(Self::PROCESS_NAME),
                 )
                 .with_concurrency_limit(configuration.request_concurrency_limit());
-                Ok(match configuration.socket_mode() {
+                match configuration.socket_mode() {
                     Some(socket_mode) => daemon.with_socket_mode(socket_mode),
                     None => daemon,
-                })
+                }
             }
         };
+        let construction = if self.has_tcp_tier {
+            if self.is_multi_listener {
+                quote! {
+                    let local = { #local_construction };
+                    let tcp_address = Self::tcp_listen_address(&configuration)
+                        .ok_or(DaemonError::MissingTcpSocket)?;
+                    let tcp = TcpListenerDaemon::new(
+                        tcp_address,
+                        runtime,
+                        RequestErrorLog::new(Self::PROCESS_NAME),
+                    )
+                    .with_concurrency_limit(configuration.request_concurrency_limit());
+                    Ok(GeneratedMultiAndTcpDaemon::new(local, tcp))
+                }
+            } else {
+                quote! {
+                    let local = { #local_construction };
+                    let tcp_address = Self::tcp_listen_address(&configuration)
+                        .ok_or(DaemonError::MissingTcpSocket)?;
+                    let tcp = TcpListenerDaemon::new(
+                        tcp_address,
+                        runtime,
+                        RequestErrorLog::new(Self::PROCESS_NAME),
+                    )
+                    .with_concurrency_limit(configuration.request_concurrency_limit());
+                    Ok(GeneratedSingleAndTcpDaemon::new(local, tcp))
+                }
+            }
+        } else {
+            quote! {
+                Ok({ #local_construction })
+            }
+        };
+        let tcp_wrapper = if self.has_tcp_tier {
+            quote! {
+                pub struct GeneratedSingleAndTcpDaemon<Daemon: ComponentDaemon> {
+                    local: AsyncSingleListenerDaemon<GeneratedDaemonRuntime<Daemon>>,
+                    tcp: TcpListenerDaemon<GeneratedDaemonRuntime<Daemon>>,
+                }
+
+                impl<Daemon: ComponentDaemon> GeneratedSingleAndTcpDaemon<Daemon> {
+                    fn new(
+                        local: AsyncSingleListenerDaemon<GeneratedDaemonRuntime<Daemon>>,
+                        tcp: TcpListenerDaemon<GeneratedDaemonRuntime<Daemon>>,
+                    ) -> Self {
+                        Self { local, tcp }
+                    }
+
+                    async fn run(self) -> Result<(), DaemonError<Daemon>> {
+                        GeneratedTcpPair::new(self.local, self.tcp).run().await
+                    }
+                }
+
+                pub struct GeneratedMultiAndTcpDaemon<Daemon: ComponentDaemon> {
+                    local: AsyncMultiListenerDaemon<GeneratedDaemonRuntime<Daemon>>,
+                    tcp: TcpListenerDaemon<GeneratedDaemonRuntime<Daemon>>,
+                }
+
+                impl<Daemon: ComponentDaemon> GeneratedMultiAndTcpDaemon<Daemon> {
+                    fn new(
+                        local: AsyncMultiListenerDaemon<GeneratedDaemonRuntime<Daemon>>,
+                        tcp: TcpListenerDaemon<GeneratedDaemonRuntime<Daemon>>,
+                    ) -> Self {
+                        Self { local, tcp }
+                    }
+
+                    async fn run(self) -> Result<(), DaemonError<Daemon>> {
+                        GeneratedTcpPair::new(self.local, self.tcp).run().await
+                    }
+                }
+
+                struct GeneratedTcpPair<Local, Daemon: ComponentDaemon> {
+                    local: Local,
+                    tcp: TcpListenerDaemon<GeneratedDaemonRuntime<Daemon>>,
+                }
+
+                impl<Local, Daemon> GeneratedTcpPair<Local, Daemon>
+                where
+                    Daemon: ComponentDaemon,
+                    Local: GeneratedLocalDaemon<Daemon>,
+                {
+                    fn new(
+                        local: Local,
+                        tcp: TcpListenerDaemon<GeneratedDaemonRuntime<Daemon>>,
+                    ) -> Self {
+                        Self { local, tcp }
+                    }
+
+                    async fn run(self) -> Result<(), DaemonError<Daemon>> {
+                        tokio::select! {
+                            result = self.local.run_local() => result,
+                            result = self.tcp.run() => result.map_err(DaemonError::from),
+                        }
+                    }
+                }
+
+                trait GeneratedLocalDaemon<Daemon: ComponentDaemon> {
+                    fn run_local(
+                        self,
+                    ) -> impl std::future::Future<Output = Result<(), DaemonError<Daemon>>>;
+                }
+
+                impl<Daemon: ComponentDaemon> GeneratedLocalDaemon<Daemon>
+                    for AsyncSingleListenerDaemon<GeneratedDaemonRuntime<Daemon>>
+                {
+                    async fn run_local(self) -> Result<(), DaemonError<Daemon>> {
+                        self.run().await.map_err(DaemonError::from)
+                    }
+                }
+
+                impl<Daemon: ComponentDaemon> GeneratedLocalDaemon<Daemon>
+                    for AsyncMultiListenerDaemon<GeneratedDaemonRuntime<Daemon>>
+                {
+                    async fn run_local(self) -> Result<(), DaemonError<Daemon>> {
+                        self.run().await.map_err(DaemonError::from)
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
         quote! {
+            #tcp_wrapper
+
             /// The bound daemon constructor on the component trait: builds the engine,
             /// wraps it in the generated actor connection runtime, and returns the
             /// async task-backed listener shell the `DaemonCommand` drives. The component
@@ -958,26 +1168,42 @@ impl ToTokens for WorkingTransportTokens {
         }
         if self.emits_stream {
             quote! {
+                type SubscriptionWriter = Box<dyn tokio::io::AsyncWrite + Unpin + Send>;
+
                 /// The stream-aware working-tier transport over one accepted Tokio stream:
                 /// a length-prefixed envelope around the schema-emitted signal frame codec,
                 /// plus an owned writer half that can remain registered for pushed events.
-                struct WorkingTransport {
-                    reader: OwnedReadHalf,
-                    writer: OwnedWriteHalf,
+                struct WorkingTransport<Reader, Writer> {
+                    reader: Reader,
+                    writer: Writer,
                     context: triad_runtime::ConnectionContext,
                 }
 
-                impl WorkingTransport {
-                    fn new(connection: AcceptedConnection) -> Self {
+                impl<Stream> WorkingTransport<tokio::io::ReadHalf<Stream>, tokio::io::WriteHalf<Stream>>
+                where
+                    Stream: tokio::io::AsyncRead
+                        + tokio::io::AsyncWrite
+                        + Unpin
+                        + Send
+                        + 'static,
+                {
+                    fn from_connection(connection: AcceptedConnection<Stream>) -> Self
+                    {
                         let (stream, context) = connection.into_parts();
-                        let (reader, writer) = stream.into_split();
+                        let (reader, writer) = tokio::io::split(stream);
                         Self {
                             reader,
                             writer,
                             context,
                         }
                     }
+                }
 
+                impl<Reader, Writer> WorkingTransport<Reader, Writer>
+                where
+                    Reader: tokio::io::AsyncRead + Unpin,
+                    Writer: tokio::io::AsyncWrite + Unpin + Send + 'static,
+                {
                     fn context(&self) -> &triad_runtime::ConnectionContext {
                         &self.context
                     }
@@ -1000,8 +1226,8 @@ impl ToTokens for WorkingTransportTokens {
                         Ok(())
                     }
 
-                    fn into_writer(self) -> OwnedWriteHalf {
-                        self.writer
+                    fn into_writer(self) -> SubscriptionWriter {
+                        Box::new(self.writer)
                     }
                 }
             }
@@ -1011,12 +1237,15 @@ impl ToTokens for WorkingTransportTokens {
         quote! {
             /// The working-tier wire transport over one accepted stream: a
             /// length-prefixed envelope around the schema-emitted signal frame codec.
-            struct WorkingTransport<'connection> {
-                connection: &'connection mut AcceptedConnection,
+            struct WorkingTransport<'connection, Stream> {
+                connection: &'connection mut AcceptedConnection<Stream>,
             }
 
-            impl<'connection> WorkingTransport<'connection> {
-                fn new(connection: &'connection mut AcceptedConnection) -> Self {
+            impl<'connection, Stream> WorkingTransport<'connection, Stream>
+            where
+                Stream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+            {
+                fn new(connection: &'connection mut AcceptedConnection<Stream>) -> Self {
                     Self { connection }
                 }
 
@@ -1085,7 +1314,7 @@ impl ToTokens for SubscriptionSupportTokens {
                     Daemon::SubscriptionToken,
                     Daemon::SubscriptionFilter,
                 >,
-                writers: std::collections::HashMap<SubscriptionTokenInner, OwnedWriteHalf>,
+                writers: std::collections::HashMap<SubscriptionTokenInner, SubscriptionWriter>,
                 publisher: SubscriptionEventPublisher<Input, Output, Daemon::StreamEvent>,
             }
 
@@ -1111,7 +1340,7 @@ impl ToTokens for SubscriptionSupportTokens {
                     &self,
                     token: Daemon::SubscriptionToken,
                     filter: Daemon::SubscriptionFilter,
-                    writer: OwnedWriteHalf,
+                    writer: SubscriptionWriter,
                 ) {
                     let mut state = self.state.lock().await;
                     state.registry.register_token(token, filter);
@@ -1172,7 +1401,7 @@ impl ToTokens for SubscriptionSupportTokens {
             struct SubscriptionWriters<'writers, Daemon: ComponentDaemon> {
                 writers: &'writers mut std::collections::HashMap<
                     SubscriptionTokenInner,
-                    OwnedWriteHalf,
+                    SubscriptionWriter,
                 >,
                 daemon: std::marker::PhantomData<fn() -> Daemon>,
             }
@@ -1181,7 +1410,7 @@ impl ToTokens for SubscriptionSupportTokens {
                 fn new(
                     writers: &'writers mut std::collections::HashMap<
                         SubscriptionTokenInner,
-                        OwnedWriteHalf,
+                        SubscriptionWriter,
                     >,
                 ) -> Self {
                     Self {
@@ -1217,6 +1446,7 @@ struct GeneratedDaemonRuntimeTokens {
     section: DaemonSection,
     has_meta_tier: bool,
     has_upgrade_tier: bool,
+    has_tcp_tier: bool,
     emits_stream: bool,
     component_decoded: bool,
 }
@@ -1227,6 +1457,7 @@ impl GeneratedDaemonRuntimeTokens {
             section: DaemonSection::GeneratedRuntime,
             has_meta_tier: shape.has_meta_tier(),
             has_upgrade_tier: shape.has_upgrade_tier(),
+            has_tcp_tier: shape.has_tcp_tier(),
             emits_stream,
             component_decoded: shape.working_tier().is_component_decoded(),
         }
@@ -1251,13 +1482,25 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
         // The remaining path is the component-decoded working tier: the engine
         // stays shared and the component owns the connection hook.
         let working_connection_body = quote! {
-            Daemon::handle_working_connection(&self.engine, connection).await
+            Daemon::handle_working_connection(self.engine.as_ref(), connection).await
         };
         let working_connection_parameter = quote! { connection };
+        let tcp_connection_method = if self.has_tcp_tier {
+            quote! {
+                async fn handle_tcp_working_connection(
+                    &self,
+                    connection: AcceptedConnection<TcpStream>,
+                ) -> Result<(), Daemon::Error> {
+                    Daemon::handle_tcp_working_connection(self.engine.as_ref(), connection).await
+                }
+            }
+        } else {
+            quote! {}
+        };
         let meta_connection_arm = if self.has_meta_tier {
             quote! {
                 ListenerTier::Meta => {
-                    Daemon::handle_meta_connection(&self.engine, connection).await
+                    Daemon::handle_meta_connection(self.engine.as_ref(), connection).await
                 }
             }
         } else {
@@ -1266,11 +1509,20 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
         let upgrade_connection_arm = if self.has_upgrade_tier {
             quote! {
                 ListenerTier::Upgrade => {
-                    Daemon::handle_upgrade_connection(&self.engine, connection).await
+                    Daemon::handle_upgrade_connection(self.engine.as_ref(), connection).await
                 }
             }
         } else {
             quote! {}
+        };
+        let lifecycle_methods = quote! {
+            async fn start(&self) -> Result<(), Self::Error> {
+                Daemon::start(self.engine.as_ref())
+            }
+
+            async fn stop(&self) -> Result<(), Self::Error> {
+                Daemon::stop(self.engine.as_ref())
+            }
         };
         let runtime_impl = if self.is_multi_listener() {
             quote! {
@@ -1278,13 +1530,7 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
                     type Listener = ListenerTier;
                     type Error = Daemon::Error;
 
-                    async fn start(&self) -> Result<(), Self::Error> {
-                        Daemon::start(&self.engine)
-                    }
-
-                    async fn stop(&self) -> Result<(), Self::Error> {
-                        Daemon::stop(&self.engine)
-                    }
+                    #lifecycle_methods
 
                     async fn handle_connection(
                         &self,
@@ -1304,13 +1550,7 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
                 impl<Daemon: ComponentDaemon> AsyncConnectionRuntime for GeneratedDaemonRuntime<Daemon> {
                     type Error = Daemon::Error;
 
-                    async fn start(&self) -> Result<(), Self::Error> {
-                        Daemon::start(&self.engine)
-                    }
-
-                    async fn stop(&self) -> Result<(), Self::Error> {
-                        Daemon::stop(&self.engine)
-                    }
+                    #lifecycle_methods
 
                     async fn handle_connection(
                         &self,
@@ -1321,16 +1561,36 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
                 }
             }
         };
+        let tcp_runtime_impl = if self.has_tcp_tier {
+            quote! {
+                impl<Daemon: ComponentDaemon> AsyncConnectionRuntime<TcpStream> for GeneratedDaemonRuntime<Daemon> {
+                    type Error = Daemon::Error;
+
+                    #lifecycle_methods
+
+                    async fn handle_connection(
+                        &self,
+                        connection: AcceptedConnection<TcpStream>,
+                    ) -> Result<(), Self::Error> {
+                        self.handle_tcp_working_connection(connection).await
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
         quote! {
             /// The generated runtime struct that owns the engine. Its
             /// `handle_connection` IS the async decode -> execute -> encode spine.
             pub struct GeneratedDaemonRuntime<Daemon: ComponentDaemon> {
-                engine: Daemon::Engine,
+                engine: std::sync::Arc<Daemon::Engine>,
             }
 
             impl<Daemon: ComponentDaemon> GeneratedDaemonRuntime<Daemon> {
                 fn new(engine: Daemon::Engine) -> Self {
-                    Self { engine }
+                    Self {
+                        engine: std::sync::Arc::new(engine),
+                    }
                 }
 
                 async fn handle_working_connection(
@@ -1339,9 +1599,21 @@ impl ToTokens for GeneratedDaemonRuntimeTokens {
                 ) -> Result<(), Daemon::Error> {
                     #working_connection_body
                 }
+
+                #tcp_connection_method
+            }
+
+            impl<Daemon: ComponentDaemon> Clone for GeneratedDaemonRuntime<Daemon> {
+                fn clone(&self) -> Self {
+                    Self {
+                        engine: self.engine.clone(),
+                    }
+                }
             }
 
             #runtime_impl
+
+            #tcp_runtime_impl
         }
         .to_tokens(tokens);
     }
@@ -1426,11 +1698,18 @@ impl GeneratedDaemonRuntimeTokens {
         // output opens a subscription, and publishes the returned event.
         let working_connection_body = if emits_stream {
             quote! {
-                async fn handle_working_connection(
+                async fn handle_working_connection<Stream>(
                     &self,
-                    connection: AcceptedConnection,
-                ) -> Result<(), Daemon::Error> {
-                    let mut transport = WorkingTransport::new(connection);
+                    connection: AcceptedConnection<Stream>,
+                ) -> Result<(), Daemon::Error>
+                where
+                    Stream: tokio::io::AsyncRead
+                        + tokio::io::AsyncWrite
+                        + Unpin
+                        + Send
+                        + 'static,
+                {
+                    let mut transport = WorkingTransport::from_connection(connection);
                     let frame = transport.read_frame().await?;
                     let (_route, input) = Input::decode_signal_frame(&frame)?;
                     let filter = Daemon::subscription_filter(&input);
@@ -1456,10 +1735,13 @@ impl GeneratedDaemonRuntimeTokens {
             }
         } else {
             quote! {
-                async fn handle_working_connection(
+                async fn handle_working_connection<Stream>(
                     &self,
-                    mut connection: AcceptedConnection,
-                ) -> Result<(), Daemon::Error> {
+                    mut connection: AcceptedConnection<Stream>,
+                ) -> Result<(), Daemon::Error>
+                where
+                    Stream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+                {
                     let mut transport = WorkingTransport::new(&mut connection);
                     let frame = transport.read_frame().await?;
                     let (_route, input) = Input::decode_signal_frame(&frame)?;
@@ -1475,12 +1757,12 @@ impl GeneratedDaemonRuntimeTokens {
             }
         };
         let subscriptions_field = if emits_stream {
-            quote! { subscriptions: EmittedSubscriptions<Daemon>, }
+            quote! { subscriptions: std::sync::Arc<EmittedSubscriptions<Daemon>>, }
         } else {
             quote! {}
         };
         let subscriptions_init = if emits_stream {
-            quote! { subscriptions: EmittedSubscriptions::default(), }
+            quote! { subscriptions: std::sync::Arc::new(EmittedSubscriptions::default()), }
         } else {
             quote! {}
         };
@@ -1553,6 +1835,46 @@ impl GeneratedDaemonRuntimeTokens {
                         connection: AcceptedConnection,
                     ) -> Result<(), Self::Error> {
                         self.handle_working_connection(connection).await
+                    }
+                }
+            }
+        };
+        let tcp_runtime_impl = if self.has_tcp_tier {
+            quote! {
+                impl<Daemon: ComponentDaemon> AsyncConnectionRuntime<TcpStream> for GeneratedDaemonRuntime<Daemon> {
+                    type Error = Daemon::Error;
+
+                    #lifecycle_methods
+
+                    async fn handle_connection(
+                        &self,
+                        connection: AcceptedConnection<TcpStream>,
+                    ) -> Result<(), Self::Error> {
+                        self.handle_working_connection(connection).await
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+        let clone_impl = if emits_stream {
+            quote! {
+                impl<Daemon: ComponentDaemon> Clone for GeneratedDaemonRuntime<Daemon> {
+                    fn clone(&self) -> Self {
+                        Self {
+                            engine: self.engine.clone(),
+                            subscriptions: self.subscriptions.clone(),
+                        }
+                    }
+                }
+            }
+        } else {
+            quote! {
+                impl<Daemon: ComponentDaemon> Clone for GeneratedDaemonRuntime<Daemon> {
+                    fn clone(&self) -> Self {
+                        Self {
+                            engine: self.engine.clone(),
+                        }
                     }
                 }
             }
@@ -1655,7 +1977,11 @@ impl GeneratedDaemonRuntimeTokens {
                 #upgrade_connection_method
             }
 
+            #clone_impl
+
             #runtime_impl
+
+            #tcp_runtime_impl
         }
         .to_tokens(tokens);
     }
@@ -1720,6 +2046,7 @@ struct DaemonErrorTokens {
     is_multi_listener: bool,
     has_meta_tier: bool,
     has_upgrade_tier: bool,
+    has_tcp_tier: bool,
 }
 
 impl DaemonErrorTokens {
@@ -1729,6 +2056,7 @@ impl DaemonErrorTokens {
             is_multi_listener: shape.is_multi_listener(),
             has_meta_tier: shape.has_meta_tier(),
             has_upgrade_tier: shape.has_upgrade_tier(),
+            has_tcp_tier: shape.has_tcp_tier(),
         }
     }
 }
@@ -1752,7 +2080,15 @@ impl ToTokens for DaemonErrorTokens {
         } else {
             quote! {}
         };
-        let listener_error_conversion = if self.is_multi_listener {
+        let missing_tcp_variant = if self.has_tcp_tier {
+            quote! {
+                #[error("daemon TCP listen address missing from configuration")]
+                MissingTcpSocket,
+            }
+        } else {
+            quote! {}
+        };
+        let multi_listener_error_conversion = if self.is_multi_listener {
             quote! {
                 impl<Daemon: ComponentDaemon> From<AsyncMultiListenerDaemonError<Daemon::Error>>
                     for DaemonError<Daemon>
@@ -1767,6 +2103,9 @@ impl ToTokens for DaemonErrorTokens {
                 }
             }
         } else {
+            quote! {}
+        };
+        let single_listener_error_conversion = if !self.is_multi_listener || self.has_tcp_tier {
             quote! {
                 impl<Daemon: ComponentDaemon> From<AsyncSingleListenerDaemonError<Daemon::Error>>
                     for DaemonError<Daemon>
@@ -1780,6 +2119,8 @@ impl ToTokens for DaemonErrorTokens {
                     }
                 }
             }
+        } else {
+            quote! {}
         };
         quote! {
             /// The emitted daemon error: argv, configuration, listener, and the
@@ -1802,6 +2143,8 @@ impl ToTokens for DaemonErrorTokens {
 
                 #missing_upgrade_variant
 
+                #missing_tcp_variant
+
                 #[error("component error: {0}")]
                 Component(Daemon::Error),
             }
@@ -1812,7 +2155,9 @@ impl ToTokens for DaemonErrorTokens {
                 }
             }
 
-            #listener_error_conversion
+            #multi_listener_error_conversion
+
+            #single_listener_error_conversion
         }
         .to_tokens(tokens);
     }
