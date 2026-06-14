@@ -113,7 +113,7 @@
           generated-nota-boundary = pkgs.runCommand "schema-rust-next-generated-nota-boundary" { } ''
             grep -R "parse::<generated::Input>" ${src}/tests/emission.rs >/dev/null
             grep -R "impl std::str::FromStr for Input" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
-            grep -R "pub fn to_nota" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
+            grep -R "impl std::fmt::Display for Input" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             touch $out
           '';
           generated-schema-module-path = pkgs.runCommand "schema-rust-next-generated-schema-module-path" { } ''
