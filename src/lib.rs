@@ -1192,7 +1192,7 @@ impl LowerToRust<RustEnumVariant> for EnumVariant {
 /// fully-applied frame type by the position name while the imported head
 /// owns the generic definition. The applied reference is the field-position
 /// projection of the root, so it renders through the same
-/// [`RustTypeReferenceTokens`] path as any other applied type.
+/// `RustTypeReferenceTokens` path as any other applied type.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustAppliedRoot {
     name: Name,
