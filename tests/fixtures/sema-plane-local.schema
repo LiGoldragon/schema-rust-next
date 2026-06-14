@@ -22,7 +22,7 @@
   RecordIdentifier Integer
   Entry { Topic * }
   Query { Topic * }
-  RecordSet (Vec Entry)
+  RecordSet (Vector Entry)
   Receipt { RecordIdentifier * }
   ErrorReport { message String }
 }

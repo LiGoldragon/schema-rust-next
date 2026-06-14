@@ -25,5 +25,5 @@
   ErrorReport { ErrorMessage * databaseMarker DatabaseMarker }
   Entry { Topic * description Description }
   Query { Topic * }
-  RecordSet (Vec Entry)
+  RecordSet (Vector Entry)
 }

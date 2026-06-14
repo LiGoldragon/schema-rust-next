@@ -11,7 +11,7 @@
  (Rejected Rejection)]
 {
   Topic String
-  Topics (Vec Topic)
+  Topics (Vector Topic)
   Description String
   AgentName String
   RecordIdentifier Integer
@@ -19,5 +19,5 @@
   Entry { Topics * description Description agentName AgentName databaseMarker DatabaseMarker }
   Query { Topics * limit (Optional Integer) }
   RecordReceipt { RecordIdentifier * databaseMarker DatabaseMarker commitSequence CommitSequence }
-  RecordSet { records (Vec Entry) byTopic (Map (Topic RecordIdentifier)) }
+  RecordSet { records (Vector Entry) byTopic (Map Topic RecordIdentifier) }
 }

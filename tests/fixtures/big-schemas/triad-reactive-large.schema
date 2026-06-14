@@ -52,12 +52,12 @@
   MessageFailed RejectionReason
   Entry { Topics * kind Kind description Description magnitude Magnitude actorIdentifier ActorIdentifier }
   Topic String
-  Topics (Vec Topic)
+  Topics (Vector Topic)
   Description String
   Kind [Decision Principle Correction Clarification Constraint Observation Question]
   Magnitude [Minimum VeryLow Low Medium High VeryHigh Maximum]
-  Query { Topics * kinds (Vec Kind) limit (Optional Integer) }
+  Query { Topics * kinds (Vector Kind) limit (Optional Integer) }
   RecordIdentifier Integer
   SubscriptionToken Integer
-  RecordSet { records (Vec Entry) byTopic (Map (Topic RecordIdentifier)) }
+  RecordSet { records (Vector Entry) byTopic (Map Topic RecordIdentifier) }
 }

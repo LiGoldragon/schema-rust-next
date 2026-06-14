@@ -33,7 +33,7 @@ nouns so inline PascalCase schema sugar does not become an exported API by
 accident.
 
 Composite type references come from typed NOTA datatype objects in the
-authored schema: `(Vec Topic)`, `(Map (Topic RecordIdentifier))`, and
+authored schema: `(Vector Topic)`, `(Map Topic RecordIdentifier)`, and
 `(Optional Topic)`. Authored datatype declarations are strict key/value
 namespace entries such as `Topic String`, `Entry { topic Topic }`, and
 `Kind [Decision Correction]`. Square brackets declare enum bodies at enum

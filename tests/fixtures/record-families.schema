@@ -7,7 +7,7 @@
   Entry { topic Topic description Description }
   Observation { note Description }
   Query { Topic * }
-  RecordSet (Vec Entry)
+  RecordSet (Vector Entry)
   EntryFamily (Family { record Entry table entries key Domain })
   ObservationFamily (Family { record Observation table observations key Identified })
 }

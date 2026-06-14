@@ -3,7 +3,7 @@
 [RecordAccepted SubscriptionStarted (Event IntentEvent)]
 {
   Topic String
-  Topics (Vec Topic)
+  Topics (Vector Topic)
   Description String
   RecordIdentifier Integer
   SubscriptionToken Integer

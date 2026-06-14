@@ -497,6 +497,11 @@ impl ToTokens for TypeRenderer<'_> {
                 let value = TypeRenderer::new(value);
                 quote! { std::collections::HashMap<#key, #value> }.to_tokens(tokens);
             }
+            TypeReference::Application { head, arguments } => {
+                let head = Ident::new(head.name().as_str(), Span::call_site());
+                let arguments = arguments.iter().map(TypeRenderer::new);
+                quote! { #head<#(#arguments),*> }.to_tokens(tokens);
+            }
         }
     }
 }

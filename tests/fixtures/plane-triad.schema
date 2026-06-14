@@ -22,7 +22,7 @@
   ErrorReport { ErrorMessage * databaseMarker DatabaseMarker }
   Entry { Topic * kind Kind description Description magnitude Magnitude }
   Query { Topic * kind Kind }
-  RecordSet (Vec Entry)
+  RecordSet (Vector Entry)
   Kind [Decision Principle Correction Clarification Constraint]
   Magnitude [Minimum VeryLow Low Medium High VeryHigh Maximum]
 }

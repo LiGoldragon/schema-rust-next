@@ -1,5 +1,5 @@
 [(Register Cluster) (Observe Query)]
-[(Projected (Map (NodeName NodeConfig))) (Listed (Vec NodeName))]
+[(Projected (Map NodeName NodeConfig)) (Listed (Vector NodeName))]
 {
   NodeName String
   NodeConfig String
@@ -8,5 +8,5 @@
   Topic String
   Digest Bytes
   Fingerprint (Bytes 4)
-  Cluster { services (Vec Service) nodes (Map (NodeName NodeConfig)) cache (Optional NodeConfig) healthy Boolean configPath Path digest Digest fingerprint Fingerprint }
+  Cluster { services (Vector Service) nodes (Map NodeName NodeConfig) cache (Optional NodeConfig) healthy Boolean configPath Path digest Digest fingerprint Fingerprint }
 }

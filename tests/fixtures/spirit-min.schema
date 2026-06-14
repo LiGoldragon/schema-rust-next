@@ -2,13 +2,13 @@
 [(RecordAccepted RecordIdentifier) (RecordsObserved RecordSet)]
 {
   Topic String
-  Topics (Vec Topic)
+  Topics (Vector Topic)
   Description String
   Summary { Description * }
   RecordIdentifier Integer
   Entry { Topics * kind Kind description Description magnitude Magnitude }
   Query { Topic * kind Kind }
-  RecordSet (Vec Entry)
+  RecordSet (Vector Entry)
   Kind [Decision Principle Correction Clarification Constraint]
   Magnitude [Minimum VeryLow Low Medium High VeryHigh Maximum]
 }
