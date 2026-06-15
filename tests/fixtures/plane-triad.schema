@@ -13,15 +13,15 @@
   RecordIdentifier Integer
   CommitSequence Integer
   StateDigest Integer
-  DatabaseMarker { CommitSequence * stateDigest StateDigest }
-  SemaReceipt { RecordIdentifier * databaseMarker DatabaseMarker }
-  ObservedRecords { RecordSet * databaseMarker DatabaseMarker }
-  FoundRecord { RecordIdentifier * Entry * databaseMarker DatabaseMarker }
+  DatabaseMarker { CommitSequence stateDigest.StateDigest }
+  SemaReceipt { RecordIdentifier databaseMarker.DatabaseMarker }
+  ObservedRecords { RecordSet databaseMarker.DatabaseMarker }
+  FoundRecord { RecordIdentifier Entry databaseMarker.DatabaseMarker }
   RecordCount Integer
-  CountedRecords { RecordCount * databaseMarker DatabaseMarker }
-  ErrorReport { ErrorMessage * databaseMarker DatabaseMarker }
-  Entry { Topic * kind Kind description Description magnitude Magnitude }
-  Query { Topic * kind Kind }
+  CountedRecords { RecordCount databaseMarker.DatabaseMarker }
+  ErrorReport { ErrorMessage databaseMarker.DatabaseMarker }
+  Entry { Topic kind.Kind description.Description magnitude.Magnitude }
+  Query { Topic kind.Kind }
   RecordSet (Vector Entry)
   Kind [Decision Principle Correction Clarification Constraint]
   Magnitude [Minimum VeryLow Low Medium High VeryHigh Maximum]

@@ -1,5 +1,5 @@
 []
 []
 {
-  Entry { Receipt { recordIdentifier Integer message String } later Receipt }
+  Entry { Receipt { recordIdentifier.Integer message.String } later.Receipt }
 }

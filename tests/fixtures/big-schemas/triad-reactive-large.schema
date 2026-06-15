@@ -26,10 +26,10 @@
   RuntimeEventStream (Stream { token SubscriptionToken opened SubscriptionStarted event RuntimeEvent close SubscriptionToken })
   Rejected RejectionReason
   RejectionReason [Malformed Unauthorized Conflict Unsupported StaleVersion InternalError]
-  RecordIntent { ActorIdentifier * entry Entry }
+  RecordIntent { ActorIdentifier entry.Entry }
   ObserveIntent Query
   SubscribeIntent Query
-  RecordAccepted { RecordIdentifier * commitSequence CommitSequence }
+  RecordAccepted { RecordIdentifier commitSequence.CommitSequence }
   ObservationReturned RecordSet
   SubscriptionStarted SubscriptionToken
   PushSignal SignalRequest
@@ -40,23 +40,23 @@
   ReadEntries Query
   OpenSubscription Query
   CloseSubscription SubscriptionToken
-  EntryWritten { RecordIdentifier * commitSequence CommitSequence databaseDigest DatabaseDigest }
-  EntriesRead { RecordSet * databaseDigest DatabaseDigest }
-  SubscriptionOpened { SubscriptionToken * commitSequence CommitSequence }
-  SubscriptionClosed { SubscriptionToken * commitSequence CommitSequence }
+  EntryWritten { RecordIdentifier commitSequence.CommitSequence databaseDigest.DatabaseDigest }
+  EntriesRead { RecordSet databaseDigest.DatabaseDigest }
+  SubscriptionOpened { SubscriptionToken commitSequence.CommitSequence }
+  SubscriptionClosed { SubscriptionToken commitSequence.CommitSequence }
   Snapshot SocketPath
-  SnapshotReady { SocketPath * databaseDigest DatabaseDigest }
+  SnapshotReady { SocketPath databaseDigest.DatabaseDigest }
   MailSent SignalRequest
   MessageAccepted SignalRequest
   MessageCommitted CommitSequence
   MessageFailed RejectionReason
-  Entry { Topics * kind Kind description Description magnitude Magnitude actorIdentifier ActorIdentifier }
+  Entry { Topics kind.Kind description.Description magnitude.Magnitude actorIdentifier.ActorIdentifier }
   Topic String
   Topics (Vector Topic)
   Description String
   Kind [Decision Principle Correction Clarification Constraint Observation Question]
   Magnitude [Minimum VeryLow Low Medium High VeryHigh Maximum]
-  Query { Topics * kinds (Vector Kind) limit (Optional Integer) }
+  Query { Topics kinds (Vector Kind) limit (Optional Integer) }
   RecordIdentifier Integer
   SubscriptionToken Integer
   RecordSet { records (Vector Entry) byTopic (Map Topic RecordIdentifier) }

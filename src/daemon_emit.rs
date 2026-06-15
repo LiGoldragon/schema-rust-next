@@ -43,6 +43,7 @@ use crate::{GeneratedFile, RustCode, RustfmtSkippedItems};
 pub struct NexusDaemonShape {
     process_name: String,
     working_tier: WorkingListenerTier,
+    working_streams: bool,
     meta_tier: Option<MetaListenerTier>,
     upgrade_tier: Option<UpgradeListenerTier>,
     tcp_tier: Option<TcpListenerTier>,
@@ -53,10 +54,19 @@ impl NexusDaemonShape {
         Self {
             process_name: process_name.into(),
             working_tier,
+            working_streams: false,
             meta_tier: None,
             upgrade_tier: None,
             tcp_tier: None,
         }
+    }
+
+    /// Mark that the working contract declares stream traffic when that
+    /// contract is dependency-hosted and therefore its stream declarations are
+    /// not present in the local Nexus schema passed to the daemon emitter.
+    pub fn with_working_streams(mut self) -> Self {
+        self.working_streams = true;
+        self
     }
 
     pub fn with_meta_tier(mut self, meta_tier: MetaListenerTier) -> Self {
@@ -80,6 +90,10 @@ impl NexusDaemonShape {
 
     pub fn working_tier(&self) -> &WorkingListenerTier {
         &self.working_tier
+    }
+
+    pub fn working_streams(&self) -> bool {
+        self.working_streams
     }
 
     pub fn meta_tier(&self) -> Option<&MetaListenerTier> {
@@ -289,7 +303,7 @@ impl DaemonModule {
         schema: &Schema,
         generator_name: impl Into<String>,
     ) -> Self {
-        let emits_stream = !schema.streams().is_empty();
+        let emits_stream = shape.working_streams() || !schema.streams().is_empty();
         Self {
             shape,
             emits_stream,

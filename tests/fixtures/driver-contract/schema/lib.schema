@@ -2,6 +2,6 @@
 [(Observed Report)]
 {
   Topic String
-  Query { topic Topic }
-  Report { topic Topic }
+  Query { topic.Topic }
+  Report { topic.Topic }
 }

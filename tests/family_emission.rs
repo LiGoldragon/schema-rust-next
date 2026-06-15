@@ -92,8 +92,8 @@ fn schema_without_families_emits_no_family_surface() {
 fn schema_field_change_moves_the_emitted_family_constant() {
     let original = family_schema();
     let edited_source = FixtureSchema::new("record-families.schema").read().replace(
-        "Entry { topic Topic description Description }",
-        "Entry { topic Topic description Description revision Integer }",
+        "Entry { topic.Topic description.Description }",
+        "Entry { topic.Topic description.Description revision.Integer }",
     );
     let edited = SchemaEngine::default()
         .lower_source(&edited_source, SchemaIdentity::new("example:lib", "0.1.0"))

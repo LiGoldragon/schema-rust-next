@@ -496,11 +496,12 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "schema-next"
 version = "0.2.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=structural-forms-integration#2bb0228e503972ba4112bf420b8a55835d366285"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=structural-forms-integration#1abdcd22c0d1ceb1df03fb7e28a731e3d98fd825"
 dependencies = [
  "blake3",
  "nota-next",
  "rkyv",
+ "thiserror",
 ]
 
 [[package]]

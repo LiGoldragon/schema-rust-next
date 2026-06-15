@@ -5,6 +5,6 @@
   SemaWriteOutput [(Recorded Receipt)]
   Topic String
   Identifier Integer
-  Entry { Topic * }
-  Receipt { Identifier * }
+  Entry { Topic }
+  Receipt { Identifier }
 }

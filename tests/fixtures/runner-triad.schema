@@ -16,14 +16,14 @@
   RecordIdentifier Integer
   CommitSequence Integer
   StateDigest Integer
-  DatabaseMarker { CommitSequence * stateDigest StateDigest }
-  SemaReceipt { RecordIdentifier * databaseMarker DatabaseMarker }
-  ObservedRecords { RecordSet * databaseMarker DatabaseMarker }
+  DatabaseMarker { CommitSequence stateDigest.StateDigest }
+  SemaReceipt { RecordIdentifier databaseMarker.DatabaseMarker }
+  ObservedRecords { RecordSet databaseMarker.DatabaseMarker }
   StashHandle Integer
-  StashResult { StashHandle * recordCount Integer databaseMarker DatabaseMarker }
-  StashRequest { RecordSet * databaseMarker DatabaseMarker }
-  ErrorReport { ErrorMessage * databaseMarker DatabaseMarker }
-  Entry { Topic * description Description }
-  Query { Topic * }
+  StashResult { StashHandle recordCount.Integer databaseMarker.DatabaseMarker }
+  StashRequest { RecordSet databaseMarker.DatabaseMarker }
+  ErrorReport { ErrorMessage databaseMarker.DatabaseMarker }
+  Entry { Topic description.Description }
+  Query { Topic }
   RecordSet (Vector Entry)
 }

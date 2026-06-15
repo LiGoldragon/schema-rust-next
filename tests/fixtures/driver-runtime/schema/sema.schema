@@ -2,9 +2,9 @@
 [(ReadDone Report)]
 {
   Topic String
-  Query { topic Topic }
-  Report { topic Topic }
-  SemaReceipt { integer Integer }
+  Query { topic.Topic }
+  Report { topic.Topic }
+  SemaReceipt { integer.Integer }
   SemaReadInput [Read]
   SemaReadOutput [ReadDone]
   SemaWriteInput [(Record Query)]
