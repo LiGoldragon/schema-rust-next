@@ -4251,7 +4251,10 @@ impl ToTokens for FamilyIdentityModuleTokens<'_> {
                 .schema_hash()
                 .iter()
                 .map(|byte| Literal::u8_unsuffixed(*byte));
-            quote! { pub const #constant: [u8; 32] = [#(#bytes),*]; }
+            quote! {
+                pub const #constant: ::sema_engine::SchemaHash =
+                    ::sema_engine::SchemaHash::new([#(#bytes),*]);
+            }
         });
         quote! {
             pub mod family_identity {
@@ -4301,7 +4304,7 @@ impl ToTokens for RecordFamilyEnumTokens<'_> {
                     #descriptor_head(
                         sema_engine::TableName::new(#table),
                         sema_engine::FamilyName::new(#family_name),
-                        sema_engine::SchemaHash::new(family_identity::#constant),
+                        family_identity::#constant,
                     )
                 }
             }
@@ -4313,7 +4316,7 @@ impl ToTokens for RecordFamilyEnumTokens<'_> {
             let constant = family.constant_identifier();
             quote! {
                 #family_name => {
-                    let generated = sema_engine::SchemaHash::new(family_identity::#constant);
+                    let generated = family_identity::#constant;
                     if identity.schema_hash() != generated {
                         return Err(RecordFamilyError::SchemaHashMismatch {
                             family: sema_engine::FamilyName::new(#family_name),

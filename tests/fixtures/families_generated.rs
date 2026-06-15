@@ -263,14 +263,14 @@ impl std::fmt::Display for Output {
 
 #[rustfmt::skip]
 pub mod family_identity {
-    pub const ENTRY_FAMILY: [u8; 32] = [
+    pub const ENTRY_FAMILY: ::sema_engine::SchemaHash = ::sema_engine::SchemaHash::new([
         62, 99, 186, 41, 123, 139, 100, 187, 190, 247, 226, 56, 225, 35, 10, 222, 9, 187,
         65, 13, 229, 92, 116, 61, 243, 98, 63, 247, 37, 3, 214, 82,
-    ];
-    pub const OBSERVATION_FAMILY: [u8; 32] = [
+    ]);
+    pub const OBSERVATION_FAMILY: ::sema_engine::SchemaHash = ::sema_engine::SchemaHash::new([
         209, 136, 67, 79, 89, 116, 234, 225, 226, 48, 175, 37, 194, 25, 230, 196, 90, 47,
         74, 103, 4, 245, 227, 184, 126, 172, 68, 7, 50, 126, 65, 45,
-    ];
+    ]);
 }
 
 #[rustfmt::skip]
@@ -324,14 +324,14 @@ impl RecordFamily {
         sema_engine::TableDescriptor::new(
             sema_engine::TableName::new("entries"),
             sema_engine::FamilyName::new("EntryFamily"),
-            sema_engine::SchemaHash::new(family_identity::ENTRY_FAMILY),
+            family_identity::ENTRY_FAMILY,
         )
     }
     pub fn observation_family() -> sema_engine::IdentifiedTableDescriptor<Observation> {
         sema_engine::IdentifiedTableDescriptor::new(
             sema_engine::TableName::new("observations"),
             sema_engine::FamilyName::new("ObservationFamily"),
-            sema_engine::SchemaHash::new(family_identity::OBSERVATION_FAMILY),
+            family_identity::OBSERVATION_FAMILY,
         )
     }
     pub fn decode(
@@ -340,9 +340,7 @@ impl RecordFamily {
     ) -> Result<Self, RecordFamilyError> {
         match identity.family().as_str() {
             "EntryFamily" => {
-                let generated = sema_engine::SchemaHash::new(
-                    family_identity::ENTRY_FAMILY,
-                );
+                let generated = family_identity::ENTRY_FAMILY;
                 if identity.schema_hash() != generated {
                     return Err(RecordFamilyError::SchemaHashMismatch {
                         family: sema_engine::FamilyName::new("EntryFamily"),
@@ -357,9 +355,7 @@ impl RecordFamily {
                 Ok(Self::EntryFamily(record))
             }
             "ObservationFamily" => {
-                let generated = sema_engine::SchemaHash::new(
-                    family_identity::OBSERVATION_FAMILY,
-                );
+                let generated = family_identity::OBSERVATION_FAMILY;
                 if identity.schema_hash() != generated {
                     return Err(RecordFamilyError::SchemaHashMismatch {
                         family: sema_engine::FamilyName::new("ObservationFamily"),

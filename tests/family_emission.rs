@@ -51,8 +51,14 @@ fn family_declarations_emit_the_version_control_surface() {
     let generated = RustEmitter::default().emit_code_from_schema(&schema);
 
     assert_code_contains(generated.as_str(), "pub mod family_identity");
-    assert_code_contains(generated.as_str(), "pub const ENTRY_FAMILY: [u8; 32]");
-    assert_code_contains(generated.as_str(), "pub const OBSERVATION_FAMILY: [u8; 32]");
+    assert_code_contains(
+        generated.as_str(),
+        "pub const ENTRY_FAMILY: ::sema_engine::SchemaHash",
+    );
+    assert_code_contains(
+        generated.as_str(),
+        "pub const OBSERVATION_FAMILY: ::sema_engine::SchemaHash",
+    );
     assert_code_contains(generated.as_str(), "pub enum RecordFamilyError");
     assert_code_contains(
         generated.as_str(),
@@ -135,7 +141,9 @@ fn schema_field_change_moves_the_emitted_family_constant() {
             .map(|byte| byte.to_string())
             .collect::<Vec<_>>()
             .join(" ");
-        format!("pub const ENTRY_FAMILY: [u8; 32] = [{bytes}];")
+        format!(
+            "pub const ENTRY_FAMILY: ::sema_engine::SchemaHash = ::sema_engine::SchemaHash::new([{bytes}]);"
+        )
     };
     assert_code_contains(
         RustEmitter::default()
@@ -158,7 +166,7 @@ fn generated_descriptors_carry_the_pinned_family_identity() {
     assert_eq!(entry_descriptor.family().as_str(), "EntryFamily");
     assert_eq!(
         entry_descriptor.schema_hash(),
-        sema_engine::SchemaHash::new(families_generated::family_identity::ENTRY_FAMILY)
+        families_generated::family_identity::ENTRY_FAMILY
     );
 
     let observation_descriptor = families_generated::RecordFamily::observation_family();
@@ -169,7 +177,7 @@ fn generated_descriptors_carry_the_pinned_family_identity() {
     );
     assert_eq!(
         observation_descriptor.schema_hash(),
-        sema_engine::SchemaHash::new(families_generated::family_identity::OBSERVATION_FAMILY)
+        families_generated::family_identity::OBSERVATION_FAMILY
     );
 }
 
@@ -239,9 +247,7 @@ fn generated_decode_rejects_schema_hash_drift() {
         families_generated::RecordFamilyError::SchemaHashMismatch {
             family: sema_engine::FamilyName::new("EntryFamily"),
             stored: stale,
-            generated: sema_engine::SchemaHash::new(
-                families_generated::family_identity::ENTRY_FAMILY
-            ),
+            generated: families_generated::family_identity::ENTRY_FAMILY,
         }
     );
 }
