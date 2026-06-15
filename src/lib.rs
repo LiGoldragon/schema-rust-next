@@ -1140,6 +1140,12 @@ impl RustEnum {
     pub fn has_only_unit_variants(&self) -> bool {
         self.variants.iter().all(RustEnumVariant::has_no_payload)
     }
+
+    fn has_optional_payload_variant(&self) -> bool {
+        self.variants
+            .iter()
+            .any(|variant| matches!(variant.payload(), Some(TypeReference::Optional(_))))
+    }
 }
 
 impl LowerToRust<RustEnum> for EnumDeclaration {
@@ -1292,16 +1298,21 @@ impl RustRenderContext {
     }
 
     fn enum_type_attributes(&self, enumeration: &RustEnum) -> Vec<TokenStream> {
-        self.derive_attributes(
+        self.derive_attributes_with_nota(
             enumeration.has_only_unit_variants(),
             self.map_key_type_names
                 .iter()
                 .any(|name| name == enumeration.name().as_str()),
+            !enumeration.has_optional_payload_variant(),
         )
     }
 
     fn root_enum_type_attributes(&self, enumeration: &RustEnum) -> Vec<TokenStream> {
-        self.derive_attributes(enumeration.has_only_unit_variants(), false)
+        self.derive_attributes_with_nota(
+            enumeration.has_only_unit_variants(),
+            false,
+            !enumeration.has_optional_payload_variant(),
+        )
     }
 
     fn scope_enum_type_attributes(&self) -> Vec<TokenStream> {
@@ -1309,13 +1320,22 @@ impl RustRenderContext {
     }
 
     fn derive_attributes(&self, includes_copy: bool, includes_ordering: bool) -> Vec<TokenStream> {
+        self.derive_attributes_with_nota(includes_copy, includes_ordering, true)
+    }
+
+    fn derive_attributes_with_nota(
+        &self,
+        includes_copy: bool,
+        includes_ordering: bool,
+        includes_nota: bool,
+    ) -> Vec<TokenStream> {
         let mut attributes = Vec::new();
-        if let NotaSurface::FeatureGated { feature } = &self.nota_surface {
+        if includes_nota && let NotaSurface::FeatureGated { feature } = &self.nota_surface {
             attributes.push(quote! {
                 #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaEncode))]
             });
         }
-        let nota_derives = if self.nota_surface.includes_nota_in_derive() {
+        let nota_derives = if includes_nota && self.nota_surface.includes_nota_in_derive() {
             quote! { nota_next::NotaDecode, nota_next::NotaEncode, }
         } else {
             TokenStream::new()
@@ -3841,6 +3861,175 @@ impl ToTokens for RustEnumTokens<'_, '_> {
             #(#attributes)*
             #visibility enum #name #generics {
                 #(#variants)*
+            }
+        }
+        .to_tokens(tokens);
+
+        if self.enumeration.has_optional_payload_variant() && self.context.nota_surface.emits_nota()
+        {
+            RustOptionalEnumNotaTokens::new(self.enumeration, self.context).to_tokens(tokens);
+        }
+    }
+}
+
+struct RustOptionalEnumNotaTokens<'enumeration, 'context> {
+    enumeration: &'enumeration RustEnum,
+    context: &'context RustRenderContext,
+}
+
+impl<'enumeration, 'context> RustOptionalEnumNotaTokens<'enumeration, 'context> {
+    fn new(enumeration: &'enumeration RustEnum, context: &'context RustRenderContext) -> Self {
+        Self {
+            enumeration,
+            context,
+        }
+    }
+}
+
+impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let gate = self.context.nota_feature_gate();
+        let name = RustIdentifier::new(self.enumeration.name().as_str());
+        let enum_name = Literal::string(self.enumeration.name().as_str());
+        let unit_arms = self
+            .enumeration
+            .variants()
+            .iter()
+            .filter(|variant| variant.payload().is_none())
+            .map(|variant| {
+                let variant_name = RustIdentifier::new(variant.name().as_str());
+                let tag = Literal::string(variant.name().as_str());
+                quote! { #tag => Ok(Self::#variant_name), }
+            });
+        let optional_unit_arms = self
+            .enumeration
+            .variants()
+            .iter()
+            .filter(|variant| matches!(variant.payload(), Some(TypeReference::Optional(_))))
+            .map(|variant| {
+                let variant_name = RustIdentifier::new(variant.name().as_str());
+                let tag = Literal::string(variant.name().as_str());
+                quote! { #tag => Ok(Self::#variant_name(None)), }
+            });
+        let payload_arms = self.enumeration.variants().iter().filter_map(|variant| {
+            let payload = variant.payload()?;
+            let variant_name = RustIdentifier::new(variant.name().as_str());
+            let tag = Literal::string(variant.name().as_str());
+            match payload {
+                TypeReference::Optional(inner) => {
+                    let inner = RustTypeReferenceTokens::new(inner);
+                    Some(quote! {
+                        #tag => Ok(Self::#variant_name(Some(
+                            <#inner as nota_next::NotaDecode>::from_nota_block(&children[1])?
+                        ))),
+                    })
+                }
+                _ => {
+                    let payload = RustTypeReferenceTokens::new(payload);
+                    Some(quote! {
+                        #tag => Ok(Self::#variant_name(
+                            <#payload as nota_next::NotaDecode>::from_nota_block(&children[1])?
+                        )),
+                    })
+                }
+            }
+        });
+        let encode_arms = self.enumeration.variants().iter().map(|variant| {
+            let variant_name = RustIdentifier::new(variant.name().as_str());
+            let tag = Literal::string(variant.name().as_str());
+            match variant.payload() {
+                None => quote! {
+                    Self::#variant_name => nota_next::NotaBodyEncoding::new(vec![#tag.to_owned()]),
+                },
+                Some(TypeReference::Optional(_)) => quote! {
+                    Self::#variant_name(payload) => {
+                        let mut fields = vec![#tag.to_owned()];
+                        if let Some(payload) = payload {
+                            fields.push(nota_next::NotaEncode::to_nota(payload));
+                        }
+                        nota_next::NotaBodyEncoding::new(fields)
+                    },
+                },
+                Some(_) => quote! {
+                    Self::#variant_name(payload) => nota_next::NotaBodyEncoding::new(vec![
+                        #tag.to_owned(),
+                        nota_next::NotaEncode::to_nota(payload),
+                    ]),
+                },
+            }
+        });
+        quote! {
+            #gate
+            impl nota_next::NotaBodyDecode for #name {
+                fn from_nota_body(
+                    body: &nota_next::NotaBody<'_>,
+                ) -> Result<Self, nota_next::NotaDecodeError> {
+                    let root_objects = body.root_objects();
+                    if root_objects.len() == 1 {
+                        if let Some(variant) = root_objects[0].demote_to_string() {
+                            return match variant {
+                                #(#unit_arms)*
+                                #(#optional_unit_arms)*
+                                other => Err(nota_next::NotaDecodeError::UnknownVariant {
+                                    enum_name: #enum_name,
+                                    variant: other.to_owned(),
+                                }),
+                            };
+                        }
+                    }
+                    let children = body.expect_fields(#enum_name, 2)?;
+                    let variant = children[0].demote_to_string().ok_or(
+                        nota_next::NotaDecodeError::ExpectedAtom {
+                            type_name: "enum variant",
+                        },
+                    )?;
+                    match variant {
+                        #(#payload_arms)*
+                        other => Err(nota_next::NotaDecodeError::UnknownVariant {
+                            enum_name: #enum_name,
+                            variant: other.to_owned(),
+                        }),
+                    }
+                }
+            }
+
+            #gate
+            impl nota_next::NotaDecode for #name {
+                fn from_nota_block(
+                    block: &nota_next::Block,
+                ) -> Result<Self, nota_next::NotaDecodeError> {
+                    if block.demote_to_string().is_some() {
+                        let root_objects = std::slice::from_ref(block);
+                        let body = nota_next::NotaBody::new(root_objects);
+                        return <Self as nota_next::NotaBodyDecode>::from_nota_body(&body);
+                    }
+                    let body = nota_next::NotaBlock::new(block).expect_body(
+                        nota_next::Delimiter::Parenthesis,
+                        #enum_name,
+                    )?;
+                    <Self as nota_next::NotaBodyDecode>::from_nota_body(&body)
+                }
+            }
+
+            #gate
+            impl nota_next::NotaBodyEncode for #name {
+                fn to_nota_body(&self) -> nota_next::NotaBodyEncoding {
+                    match self {
+                        #(#encode_arms)*
+                    }
+                }
+            }
+
+            #gate
+            impl nota_next::NotaEncode for #name {
+                fn to_nota(&self) -> String {
+                    let body = <Self as nota_next::NotaBodyEncode>::to_nota_body(self);
+                    if body.fields().len() == 1 {
+                        body.to_nota()
+                    } else {
+                        body.to_delimited_nota(nota_next::Delimiter::Parenthesis)
+                    }
+                }
             }
         }
         .to_tokens(tokens);
