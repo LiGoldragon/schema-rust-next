@@ -3965,17 +3965,17 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
                     body: &nota_next::NotaBody<'_>,
                 ) -> Result<Self, nota_next::NotaDecodeError> {
                     let root_objects = body.root_objects();
-                    if root_objects.len() == 1 {
-                        if let Some(variant) = root_objects[0].demote_to_string() {
-                            return match variant {
-                                #(#unit_arms)*
-                                #(#optional_unit_arms)*
-                                other => Err(nota_next::NotaDecodeError::UnknownVariant {
-                                    enum_name: #enum_name,
-                                    variant: other.to_owned(),
-                                }),
-                            };
-                        }
+                    if root_objects.len() == 1
+                        && let Some(variant) = root_objects[0].demote_to_string()
+                    {
+                        return match variant {
+                            #(#unit_arms)*
+                            #(#optional_unit_arms)*
+                            other => Err(nota_next::NotaDecodeError::UnknownVariant {
+                                enum_name: #enum_name,
+                                variant: other.to_owned(),
+                            }),
+                        };
                     }
                     let children = body.expect_fields(#enum_name, 2)?;
                     let variant = children[0].demote_to_string().ok_or(
