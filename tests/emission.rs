@@ -225,6 +225,40 @@ fn emits_domain_scope_equivalence_expansion_from_relations() {
 }
 
 #[test]
+fn emits_terminal_value_domains_as_scope_all() {
+    let source = FixtureSchema::new("domain-terminal-scope.schema").read();
+    let artifact = SchemaSourceArtifact::from_schema_text(&source).expect("schema source decodes");
+    let schema = artifact
+        .source()
+        .lower(
+            &SchemaEngine::default(),
+            SchemaIdentity::new("example:domain", "0.1.0"),
+        )
+        .expect("schema source lowers");
+    let generated = RustEmitter::default().emit_code_from_schema(&schema);
+
+    assert_code_contains(generated.as_str(), "Programming(Option<ProgrammingLeaf>),");
+    assert_code_contains(generated.as_str(), "pub enum ProgrammingLeafScope");
+    assert_code_contains(generated.as_str(), "All,");
+    assert_code_contains(
+        generated.as_str(),
+        "Domain::Technology(payload) => Self::Technology(payload.into())",
+    );
+    assert_code_contains(
+        generated.as_str(),
+        "Software::Programming(payload) => {\n                match payload",
+    );
+    assert_code_contains(
+        generated.as_str(),
+        "None => Self::Programming(ProgrammingLeafScope::All)",
+    );
+    assert_code_contains(
+        generated.as_str(),
+        "Some(payload) => Self::Programming(payload.into())",
+    );
+}
+
+#[test]
 fn schema_object_lowers_itself_into_rust_through_emitter_policy() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let emitter = RustEmitter::default();

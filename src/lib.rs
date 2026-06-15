@@ -3360,23 +3360,22 @@ impl ScopeEnumModel {
             .variants()
             .iter()
             .map(|variant| {
-                let payload_source = variant
-                    .payload()
-                    .and_then(TypeReference::plain_name)
-                    .map(|name| name.as_str().to_owned());
+                let payload_source = variant.payload().and_then(Self::scope_payload_source_name);
                 let payload_scope = variant
                     .payload()
-                    .and_then(TypeReference::plain_name)
+                    .and_then(Self::scope_payload_source_name)
                     .and_then(|name| Self::enum_named(declarations, name.as_str()))
                     .map(|payload| {
                         let emitted = Self::child_scope_name(payload.name());
                         Self::push_model(payload, emitted.clone(), false, declarations, models);
                         emitted
                     });
+                let terminal_payload = variant.payload().is_some_and(Self::is_optional_payload);
                 ScopeEnumVariantModel::new(
                     variant.name().as_str().to_owned(),
                     payload_source,
                     payload_scope,
+                    terminal_payload,
                 )
             })
             .collect();
@@ -3403,6 +3402,20 @@ impl ScopeEnumModel {
 
     fn child_scope_name(name: &Name) -> String {
         format!("{}Scope", name.as_str())
+    }
+
+    fn scope_payload_source_name(reference: &TypeReference) -> Option<String> {
+        match reference {
+            TypeReference::Plain(name) => Some(name.as_str().to_owned()),
+            TypeReference::Optional(inner) => {
+                inner.plain_name().map(|name| name.as_str().to_owned())
+            }
+            _ => None,
+        }
+    }
+
+    fn is_optional_payload(reference: &TypeReference) -> bool {
+        matches!(reference, TypeReference::Optional(_))
     }
 
     fn model_named<'model>(
@@ -3459,14 +3472,21 @@ struct ScopeEnumVariantModel {
     name: String,
     payload_source: Option<String>,
     payload_scope: Option<String>,
+    terminal_payload: bool,
 }
 
 impl ScopeEnumVariantModel {
-    fn new(name: String, payload_source: Option<String>, payload_scope: Option<String>) -> Self {
+    fn new(
+        name: String,
+        payload_source: Option<String>,
+        payload_scope: Option<String>,
+        terminal_payload: bool,
+    ) -> Self {
         Self {
             name,
             payload_source,
             payload_scope,
+            terminal_payload,
         }
     }
 }
@@ -3592,6 +3612,21 @@ impl ToTokens for ScopeOperationImplTokens<'_> {
         let from_arms = self.model.variants.iter().map(|variant| {
             let variant_name = RustIdentifier::new(&variant.name);
             match &variant.payload_source {
+                Some(_) if variant.terminal_payload => {
+                    let payload_scope = variant.payload_scope.as_ref().unwrap_or_else(|| {
+                        panic!(
+                            "terminal scope variant {} has no scope payload",
+                            variant.name
+                        )
+                    });
+                    let payload_scope = RustIdentifier::new(payload_scope);
+                    quote! {
+                        #source::#variant_name(payload) => match payload {
+                            Some(payload) => Self::#variant_name(payload.into()),
+                            None => Self::#variant_name(#payload_scope::All),
+                        },
+                    }
+                }
                 Some(_) => quote! {
                     #source::#variant_name(payload) => Self::#variant_name(payload.into()),
                 },
