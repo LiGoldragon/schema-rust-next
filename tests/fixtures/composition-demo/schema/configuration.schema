@@ -1,0 +1,10 @@
+[(Configure)]
+[(Configured)]
+{
+  Configure ConfigurationPath
+  Configured ConfigurationPath
+
+  ConfigurationPath String
+
+  ConfigurationPathAsStr {| Composed ConfigurationPath [ (as_str (call (call self payload) as_str)) ] |}
+}

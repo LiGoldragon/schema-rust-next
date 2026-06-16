@@ -1,0 +1,36 @@
+{
+  Work reaction:reaction:Work
+  Action reaction:reaction:Action
+}
+(Work SignalInput SemaWriteOutput SemaReadOutput EffectOutcome)
+(Action SignalOutput SemaWriteSet SemaReadInput EffectCommand (Work SignalInput SemaWriteOutput SemaReadOutput EffectOutcome))
+{
+  SignalInput { payload String }
+  SignalOutput { reply String }
+  SemaReadInput { selector String }
+  SemaReadOutput { records Integer }
+  SemaWriteOutput { written Boolean }
+
+  Statement { text String }
+  Removal { selector String }
+
+  LedgerEntry { statement Statement sequence Integer }
+
+  EntryHandle Statement
+
+  SemaWriteSet [(Record) (Remove)]
+  Record LedgerEntry
+  Remove Removal
+
+  EffectCommand [(Append) (Prune)]
+  Append LedgerEntry
+  Prune Removal
+
+  EffectOutcome [(Appended) (Pruned)]
+  Appended EntryHandle
+  Pruned Removal
+
+  EntryHandleIsAuditable {| Auditable EntryHandle |}
+
+  EntryHandleDeref {| Deref EntryHandle [ (deref (reference (field self payload))) ] |}
+}

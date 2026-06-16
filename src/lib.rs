@@ -2,9 +2,10 @@ use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{ToTokens, quote};
 use schema_next::{
     Declaration, EnumDeclaration, EnumVariant, FamilyDeclaration, FamilyKey, FieldDeclaration,
-    ImportResolver, Name, NewtypeDeclaration, RelationDeclaration, RelationValue, ResolvedImport,
-    Root, RootApplication, Schema, SchemaEngine, SchemaError, SchemaIdentity, SchemaSource,
-    StreamDeclaration, StructDeclaration, TypeDeclaration, TypeReference, Visibility,
+    ImplBody, ImplDeclaration, ImportResolver, MethodDeclaration, Name, NewtypeDeclaration,
+    RelationDeclaration, RelationValue, ResolvedImport, Root, RootApplication, Schema, SchemaEngine,
+    SchemaError, SchemaIdentity, SchemaSource, StreamDeclaration, StructDeclaration,
+    TypeDeclaration, TypeReference, Visibility,
 };
 
 pub mod build;
@@ -222,6 +223,7 @@ pub struct RustModule {
     declarations: Vec<RustDeclaration>,
     root_enums: Vec<RustEnum>,
     applied_roots: Vec<RustAppliedRoot>,
+    impls: Vec<RustImpl>,
     streams: Vec<StreamDeclaration>,
     relations: Vec<RustRelation>,
     versioned_store: RustVersionedStore,
@@ -265,6 +267,10 @@ impl RustModule {
 
     pub fn relations(&self) -> &[RustRelation] {
         &self.relations
+    }
+
+    pub fn impls(&self) -> &[RustImpl] {
+        &self.impls
     }
 
     pub fn versioned_store(&self) -> &RustVersionedStore {
@@ -332,6 +338,15 @@ impl RustModule {
             }
         }
         writer.emit_domain_scope_relation_support(&self.relations, &self.declarations);
+        // The `{| |}` trait/impl constructs lower to real `impl` blocks over
+        // the concrete types emitted above; emit them after the types and
+        // their inherent impls so each target already exists. The declarations
+        // travel along so a `Deref` impl can resolve its target newtype's
+        // inner type for the `type Target` associated item.
+        for declaration in &self.impls {
+            writer.emit_impl(declaration, &self.declarations);
+            writer.blank();
+        }
         if !self.versioned_store.is_empty() {
             writer.emit_record_family_support(&self.versioned_store);
         }
@@ -372,18 +387,30 @@ impl LowerToRust<RustModule> for Schema {
             .iter()
             .map(|declaration| declaration.lower_to_rust(context))
             .collect::<Vec<_>>();
-        let root_enums = self
+        // Concrete enum-body roots lower directly. Application-form roots are
+        // monomorphized first: expanding the applied frame head produces a
+        // CONCRETE `EnumDeclaration` (empty parameters) that lowers through the
+        // same concrete-enum path, so constructors / From / accessors / nota /
+        // wire emission cover it unchanged. An application whose head names no
+        // resolvable frame falls back to the legacy type-alias path (rollback
+        // safety) — that path stays until the expansion is proven.
+        let mut root_enums = self
             .input_and_output()
             .into_iter()
             .filter_map(Root::as_enum)
             .map(|root| root.lower_to_rust(context))
             .collect::<Vec<_>>();
-        let applied_roots = self
+        let mut applied_roots = Vec::new();
+        for application in self
             .input_and_output()
             .into_iter()
             .filter_map(Root::as_application)
-            .map(|application| application.lower_to_rust(context))
-            .collect::<Vec<_>>();
+        {
+            match self.expand_application_root(application) {
+                Some(expanded) => root_enums.push(expanded.lower_to_rust(context)),
+                None => applied_roots.push(application.lower_to_rust(context)),
+            }
+        }
         RustModule {
             file_path: RustModulePath::new(self.identity().component().clone()).to_file_path(),
             generator_name: context.generator_name().to_owned(),
@@ -396,6 +423,11 @@ impl LowerToRust<RustModule> for Schema {
             declarations,
             root_enums,
             applied_roots,
+            impls: self
+                .impls()
+                .iter()
+                .map(|declaration| declaration.lower_to_rust(context))
+                .collect(),
             streams: self.streams().to_vec(),
             relations: self
                 .relations()
@@ -1049,6 +1081,108 @@ impl LowerToRust<RustNewtype> for NewtypeDeclaration {
         RustNewtype {
             name: self.name.clone(),
             reference: self.reference.clone(),
+        }
+    }
+}
+
+/// A trait / impl construct lowered to its Rust-emission model. It carries the
+/// trait name, the target type, and the body — a marker (empty impl) or a set
+/// of methods whose bodies are expression trees. The emitter projects it to a
+/// real `impl <Trait> for <Target>` block; the Deref method's signature is
+/// fixed by the trait, so only the body expression travels as data.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustImpl {
+    parameters: Vec<Name>,
+    trait_reference: Name,
+    target: Name,
+    body: RustImplBody,
+}
+
+impl RustImpl {
+    pub fn trait_reference(&self) -> &Name {
+        &self.trait_reference
+    }
+
+    pub fn target(&self) -> &Name {
+        &self.target
+    }
+
+    pub fn body(&self) -> &RustImplBody {
+        &self.body
+    }
+
+    /// Whether this impl carries generic parameters. This slice emits only
+    /// concrete impl headers (`impl Trait for Target`), so a parameterized
+    /// impl is carried through lowering but not yet threaded into the header;
+    /// the renderer asserts on this rather than emitting a malformed header.
+    fn is_generic(&self) -> bool {
+        !self.parameters.is_empty()
+    }
+}
+
+impl LowerToRust<RustImpl> for ImplDeclaration {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustImpl {
+        RustImpl {
+            parameters: self.parameters().to_vec(),
+            trait_reference: self.trait_reference().clone(),
+            target: self.target().clone(),
+            body: self.body().lower_to_rust(context),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RustImplBody {
+    Marker,
+    Methods(Vec<RustMethod>),
+}
+
+impl LowerToRust<RustImplBody> for ImplBody {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustImplBody {
+        match self {
+            ImplBody::Marker => RustImplBody::Marker,
+            ImplBody::Methods(methods) => RustImplBody::Methods(
+                methods
+                    .iter()
+                    .map(|method| method.lower_to_rust(context))
+                    .collect(),
+            ),
+        }
+    }
+}
+
+/// A method lowered for emission: its name plus the projection of its body
+/// expression. The body is produced by [`Expression::to_rust`] — the concrete
+/// `code is data` step — which under the composition closure (`d3r2`) either
+/// resolves every call to a shape-implied primitive and yields the Rust source
+/// text, or rejects the body with [`SchemaError::UnresolvedComposition`] when a
+/// call hits the business-logic boundary. The projection result travels as data
+/// so the emitter surfaces the rejection loudly rather than emitting a wrong
+/// body or panicking.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustMethod {
+    name: Name,
+    body: Result<String, SchemaError>,
+}
+
+impl RustMethod {
+    pub fn name(&self) -> &Name {
+        &self.name
+    }
+
+    /// The projected body source, or the typed rejection if the body resolves to
+    /// no shape-implied primitive.
+    pub fn body(&self) -> Result<&str, &SchemaError> {
+        self.body.as_deref()
+    }
+}
+
+impl LowerToRust<RustMethod> for MethodDeclaration {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustMethod {
+        let _ = context;
+        RustMethod {
+            name: self.name().clone(),
+            body: self.body().to_rust(),
         }
     }
 }
@@ -1979,6 +2113,161 @@ impl ToTokens for NewtypeInherentImplTokens<'_> {
             }
         }
         .to_tokens(tokens);
+    }
+}
+
+/// Renders a `{| |}` trait/impl construct as a real Rust `impl` block.
+///
+/// A marker impl (no body) renders `impl <Trait> for <Target> {}` — the empty
+/// impl that asserts trait membership. A method-bearing impl renders the
+/// methods; for `Deref` the signature is fixed (`type Target = <Inner>; fn
+/// deref(&self) -> &Self::Target { <body> }`) so only the body expression
+/// travels as data. The body text is the projection of the method's expression
+/// tree (`Expression::to_rust`), parsed back into an expression token — the
+/// concrete `code is data` proof that the body was emitted from data.
+struct RustImplTokens<'impl_declaration> {
+    declaration: &'impl_declaration RustImpl,
+    declarations: &'impl_declaration [RustDeclaration],
+}
+
+impl<'impl_declaration> RustImplTokens<'impl_declaration> {
+    fn new(
+        declaration: &'impl_declaration RustImpl,
+        declarations: &'impl_declaration [RustDeclaration],
+    ) -> Self {
+        Self {
+            declaration,
+            declarations,
+        }
+    }
+
+    /// The inner type of the target newtype, for `Deref`'s `type Target`. The
+    /// target must be a single-field newtype; any other shape is a schema
+    /// error surfaced as a panic at generation (the generator's contract is
+    /// that a `Deref` impl targets a newtype).
+    fn target_newtype_inner(&self) -> TokenStream {
+        let newtype = self
+            .declarations
+            .iter()
+            .find_map(|declaration| match declaration.value() {
+                RustTypeDeclaration::Newtype(newtype)
+                    if newtype.name() == self.declaration.target() =>
+                {
+                    Some(newtype)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "Deref impl target {} is not a declared newtype",
+                    self.declaration.target().as_str()
+                )
+            });
+        RustTypeReferenceTokens::new(newtype.reference()).into_token_stream()
+    }
+
+    fn deref_tokens(&self, method: &RustMethod) -> TokenStream {
+        let target = RustIdentifier::new(self.declaration.target().as_str());
+        let inner = self.target_newtype_inner();
+        let body = Self::method_body_expression(method);
+        quote! {
+            impl std::ops::Deref for #target {
+                type Target = #inner;
+                fn deref(&self) -> &Self::Target {
+                    #body
+                }
+            }
+        }
+    }
+
+    /// Project a lowered method's body to a Rust expression token. A body that
+    /// resolved to shape-implied primitives parses to its `syn::Expr`; a body
+    /// rejected at the composition boundary
+    /// ([`SchemaError::UnresolvedComposition`]) emits a `compile_error!` carrying
+    /// the typed message, so a business-logic body declared as schema data fails
+    /// LOUDLY at the generated-code boundary — never a wrong body, never a panic.
+    fn method_body_expression(method: &RustMethod) -> TokenStream {
+        match method.body() {
+            Ok(body) => syn::parse_str::<syn::Expr>(body)
+                .map(|expression| expression.into_token_stream())
+                .unwrap_or_else(|error| {
+                    let message = format!("method body {body:?} does not parse as an expression: {error}");
+                    quote! { compile_error!(#message) }
+                }),
+            Err(error) => {
+                let message = error.to_string();
+                quote! { compile_error!(#message) }
+            }
+        }
+    }
+
+    /// Emit an INHERENT `impl Target { … }` block for a `Composed` impl: each
+    /// method is a composition of shape-implied primitives whose body is the
+    /// projected expression data. This slice fixes the inherent signature to the
+    /// `as_str`-shaped `(&self) -> &str` accessor — the same way `Deref`'s
+    /// signature is fixed by the trait — so the body is the only data. The body
+    /// projection routes through [`Self::method_body_expression`], so a body that
+    /// hits the business-logic boundary surfaces a `compile_error!`, never a
+    /// silently-wrong accessor.
+    fn composed_inherent_tokens(&self, methods: &[RustMethod]) -> TokenStream {
+        let target = RustIdentifier::new(self.declaration.target().as_str());
+        let method_tokens = methods.iter().map(|method| {
+            let name = RustIdentifier::new(method.name().as_str()).ident();
+            let body = Self::method_body_expression(method);
+            quote! {
+                pub fn #name(&self) -> &str {
+                    #body
+                }
+            }
+        });
+        quote! {
+            impl #target {
+                #(#method_tokens)*
+            }
+        }
+    }
+}
+
+impl ToTokens for RustImplTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        assert!(
+            !self.declaration.is_generic(),
+            "generic impl-header emission is out of scope for this slice; impl over {} carries parameters",
+            self.declaration.target().as_str()
+        );
+        let trait_reference = RustIdentifier::new(self.declaration.trait_reference().as_str());
+        let target = RustIdentifier::new(self.declaration.target().as_str());
+        match self.declaration.body() {
+            RustImplBody::Marker => {
+                quote! { impl #trait_reference for #target {} }.to_tokens(tokens);
+            }
+            RustImplBody::Methods(methods) => {
+                // A method-bearing impl is dispatched by the construct it names.
+                // `Deref` is the fixed-signature trait whose body is the data
+                // (the prior slice). `Composed` is the inherent-impl construct
+                // (`d3r2`): each method's body is a composition of shape-implied
+                // primitives, projected by `Expression::to_rust`. Any other
+                // method-bearing construct is out of scope.
+                match self.declaration.trait_reference().as_str() {
+                    "Deref" => {
+                        let deref = methods
+                            .iter()
+                            .find(|method| method.name().as_str() == "deref")
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "Deref impl over {} has a deref method",
+                                    self.declaration.target().as_str()
+                                )
+                            });
+                        self.deref_tokens(deref).to_tokens(tokens);
+                    }
+                    "Composed" => self.composed_inherent_tokens(methods).to_tokens(tokens),
+                    other => panic!(
+                        "method-bearing impl emission supports Deref and Composed, not {other}"
+                    ),
+                }
+            }
+        }
     }
 }
 
@@ -5070,6 +5359,10 @@ impl RustModuleRenderer {
 
     fn emit_newtype_inherent_impl(&mut self, declaration: &RustNewtype) {
         self.emit_item_tokens(NewtypeInherentImplTokens::new(declaration).into_token_stream());
+    }
+
+    fn emit_impl(&mut self, declaration: &RustImpl, declarations: &[RustDeclaration]) {
+        self.emit_item_tokens(RustImplTokens::new(declaration, declarations).into_token_stream());
     }
 
     fn emit_root_enum(&mut self, root_enum: &RustEnum) {
