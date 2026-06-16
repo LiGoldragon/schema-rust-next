@@ -276,6 +276,50 @@ impl From<FixedBytes<4>> for Fingerprint {
 }
 
 #[rustfmt::skip]
+impl Cluster {
+    pub fn new(
+        services: Vec<Service>,
+        nodes: std::collections::BTreeMap<NodeName, NodeConfig>,
+        cache: Option<NodeConfig>,
+        healthy: Boolean,
+        config_path: Path,
+        digest: Digest,
+        fingerprint: Fingerprint,
+    ) -> Self {
+        Self {
+            services,
+            nodes,
+            cache,
+            healthy,
+            config_path,
+            digest,
+            fingerprint,
+        }
+    }
+    pub fn services(&self) -> &Vec<Service> {
+        &self.services
+    }
+    pub fn nodes(&self) -> &std::collections::BTreeMap<NodeName, NodeConfig> {
+        &self.nodes
+    }
+    pub fn cache(&self) -> &Option<NodeConfig> {
+        &self.cache
+    }
+    pub fn healthy(&self) -> &Boolean {
+        &self.healthy
+    }
+    pub fn config_path(&self) -> &Path {
+        &self.config_path
+    }
+    pub fn digest(&self) -> &Digest {
+        &self.digest
+    }
+    pub fn fingerprint(&self) -> &Fingerprint {
+        &self.fingerprint
+    }
+}
+
+#[rustfmt::skip]
 impl Input {
     pub fn register(payload: Cluster) -> Self {
         Self::Register(payload)

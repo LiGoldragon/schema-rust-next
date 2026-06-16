@@ -218,6 +218,48 @@ impl From<Vec<Entry>> for RecordSet {
 }
 
 #[rustfmt::skip]
+impl Entry {
+    pub fn new(
+        topics: Topics,
+        kind: Kind,
+        description: Description,
+        magnitude: Magnitude,
+    ) -> Self {
+        Self {
+            topics,
+            kind,
+            description,
+            magnitude,
+        }
+    }
+    pub fn topics(&self) -> &Topics {
+        &self.topics
+    }
+    pub fn kind(&self) -> &Kind {
+        &self.kind
+    }
+    pub fn description(&self) -> &Description {
+        &self.description
+    }
+    pub fn magnitude(&self) -> &Magnitude {
+        &self.magnitude
+    }
+}
+
+#[rustfmt::skip]
+impl Query {
+    pub fn new(topic: Topic, kind: Kind) -> Self {
+        Self { topic, kind }
+    }
+    pub fn topic(&self) -> &Topic {
+        &self.topic
+    }
+    pub fn kind(&self) -> &Kind {
+        &self.kind
+    }
+}
+
+#[rustfmt::skip]
 impl Input {
     pub fn record(payload: Entry) -> Self {
         Self::Record(payload)

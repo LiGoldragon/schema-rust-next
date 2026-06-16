@@ -1,8 +1,9 @@
 use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{ToTokens, quote};
 use schema_next::{
-    Declaration, EnumDeclaration, EnumVariant, FamilyDeclaration, FamilyKey, FieldDeclaration,
-    ImplBody, ImplDeclaration, ImportResolver, MethodDeclaration, Name, NewtypeDeclaration,
+    CapabilityResolver, Declaration, EnumDeclaration, EnumVariant, FamilyDeclaration, FamilyKey,
+    FieldDeclaration, ImplBody, ImplDeclaration, ImportResolver, MethodDeclaration, Name,
+    NewtypeDeclaration,
     RelationDeclaration, RelationValue, ResolvedImport, Root, RootApplication, Schema, SchemaEngine,
     SchemaError, SchemaIdentity, SchemaSource, StreamDeclaration, StructDeclaration,
     TypeDeclaration, TypeReference, Visibility,
@@ -187,6 +188,12 @@ impl RustSchemaSourceLowering for SchemaSource {
 pub struct RustLoweringContext {
     generator_name: String,
     options: RustEmissionOptions,
+    /// The schema type graph (a clone of [`Schema::namespace`]) carried into
+    /// lowering so a method body's call resolution can compute receiver shapes.
+    /// `Expression::to_rust` runs at lowering time with no access to the schema
+    /// itself, so the declarations travel here; for non-schema callers it is
+    /// empty (composition impls only appear via a [`Schema`]).
+    declarations: Vec<Declaration>,
 }
 
 impl RustLoweringContext {
@@ -194,11 +201,19 @@ impl RustLoweringContext {
         Self {
             generator_name: generator_name.into(),
             options,
+            declarations: Vec::new(),
         }
     }
 
     pub fn from_emitter(emitter: &RustEmitter) -> Self {
         Self::new(emitter.generator_name, emitter.options.clone())
+    }
+
+    /// Attach the schema type graph so method-body call resolution can look up
+    /// receiver shapes. Called once by [`Schema::lower_to_rust`] before lowering.
+    fn with_declarations(mut self, declarations: Vec<Declaration>) -> Self {
+        self.declarations = declarations;
+        self
     }
 
     fn generator_name(&self) -> &str {
@@ -207,6 +222,10 @@ impl RustLoweringContext {
 
     fn options(&self) -> RustEmissionOptions {
         self.options.clone()
+    }
+
+    fn declarations(&self) -> &[Declaration] {
+        &self.declarations
     }
 }
 
@@ -323,6 +342,7 @@ impl RustModule {
         }
 
         writer.emit_newtype_inherent_impls(&self.declarations);
+        writer.emit_struct_inherent_impls(&self.declarations);
         writer.emit_enum_variant_constructors(
             &self.declarations,
             writer.emitted_root_enums(&self.root_enums),
@@ -382,6 +402,12 @@ impl RustModule {
 
 impl LowerToRust<RustModule> for Schema {
     fn lower_to_rust(&self, context: &RustLoweringContext) -> RustModule {
+        // Carry the schema type graph into a derived context so method-body call
+        // resolution (`Expression::to_rust`) can compute receiver shapes. The
+        // base context reaching this impl has no declarations; every nested
+        // lowering below uses the schema-aware one.
+        let schema_context = context.clone().with_declarations(self.namespace().to_vec());
+        let context = &schema_context;
         let declarations = self
             .namespace()
             .iter()
@@ -1122,11 +1148,18 @@ impl RustImpl {
 
 impl LowerToRust<RustImpl> for ImplDeclaration {
     fn lower_to_rust(&self, context: &RustLoweringContext) -> RustImpl {
+        // The impl owns the `self` type (its target), so this is the one place
+        // that can build the shape-aware `CapabilityResolver` for the body
+        // projection: the resolver needs the schema type graph (carried in the
+        // context) AND the target as the type of `self`. The body projection
+        // therefore happens here rather than in the bare `ImplBody`/`Method`
+        // lowering, which never see the target.
+        let resolver = CapabilityResolver::new(context.declarations(), self.target());
         RustImpl {
             parameters: self.parameters().to_vec(),
             trait_reference: self.trait_reference().clone(),
             target: self.target().clone(),
-            body: self.body().lower_to_rust(context),
+            body: RustImplBody::from_impl_body(self.body(), &resolver),
         }
     }
 }
@@ -1137,14 +1170,16 @@ pub enum RustImplBody {
     Methods(Vec<RustMethod>),
 }
 
-impl LowerToRust<RustImplBody> for ImplBody {
-    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustImplBody {
-        match self {
+impl RustImplBody {
+    /// Lower an impl body, projecting each method's expression tree against the
+    /// shape-aware [`CapabilityResolver`] the owning impl built from its target.
+    fn from_impl_body(body: &ImplBody, resolver: &CapabilityResolver) -> Self {
+        match body {
             ImplBody::Marker => RustImplBody::Marker,
             ImplBody::Methods(methods) => RustImplBody::Methods(
                 methods
                     .iter()
-                    .map(|method| method.lower_to_rust(context))
+                    .map(|method| RustMethod::from_method(method, resolver))
                     .collect(),
             ),
         }
@@ -1154,11 +1189,12 @@ impl LowerToRust<RustImplBody> for ImplBody {
 /// A method lowered for emission: its name plus the projection of its body
 /// expression. The body is produced by [`Expression::to_rust`] — the concrete
 /// `code is data` step — which under the composition closure (`d3r2`) either
-/// resolves every call to a shape-implied primitive and yields the Rust source
-/// text, or rejects the body with [`SchemaError::UnresolvedComposition`] when a
-/// call hits the business-logic boundary. The projection result travels as data
-/// so the emitter surfaces the rejection loudly rather than emitting a wrong
-/// body or panicking.
+/// resolves every call against its RECEIVER'S SCHEMA SHAPE and yields the Rust
+/// source text, or rejects the body with a typed [`SchemaError`]
+/// ([`SchemaError::UnresolvedCapability`] and siblings) when a call hits the
+/// business-logic boundary. The projection result travels as data so the
+/// emitter surfaces the rejection loudly rather than emitting a wrong body or
+/// panicking.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustMethod {
     name: Name,
@@ -1177,12 +1213,15 @@ impl RustMethod {
     }
 }
 
-impl LowerToRust<RustMethod> for MethodDeclaration {
-    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustMethod {
-        let _ = context;
+impl RustMethod {
+    /// Project a method declaration's body against the shape-aware resolver. The
+    /// projection either resolves every call against its receiver's schema shape
+    /// and yields the Rust source text, or carries the typed rejection forward
+    /// so the emitter surfaces it loudly.
+    fn from_method(method: &MethodDeclaration, resolver: &CapabilityResolver) -> Self {
         RustMethod {
-            name: self.name().clone(),
-            body: self.body().to_rust(),
+            name: method.name().clone(),
+            body: method.body().to_rust(resolver),
         }
     }
 }
@@ -2116,6 +2155,73 @@ impl ToTokens for NewtypeInherentImplTokens<'_> {
     }
 }
 
+/// Renders the standard inherent `impl <Name> { … }` block for a struct shape
+/// by default — no per-method declaration needed. Each declared field implies
+/// exactly one total borrow accessor `field(&self) -> &FieldType`, and the full
+/// field list implies the all-fields constructor `new(f0, f1, …) -> Self`. A
+/// single-field struct additionally admits `From<FieldType>`. This is the
+/// struct face of the shape-derived standard-impl set: the same shape the
+/// resolver reads to accept `(field self magnitude)` is the shape the emitter
+/// reads to GENERATE the `magnitude` accessor.
+struct StructInherentImplTokens<'structure> {
+    structure: &'structure RustStruct,
+}
+
+impl<'structure> StructInherentImplTokens<'structure> {
+    fn new(structure: &'structure RustStruct) -> Self {
+        Self { structure }
+    }
+}
+
+impl ToTokens for StructInherentImplTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = RustIdentifier::new(self.structure.name().as_str());
+        let fields = self.structure.fields();
+        let constructor_parameters = fields.iter().map(|field| {
+            let field_name = RustIdentifier::new(field.name().as_str()).ident();
+            let field_type = RustTypeReferenceTokens::new(field.reference());
+            quote! { #field_name: #field_type }
+        });
+        let constructor_initializers = fields.iter().map(|field| {
+            let field_name = RustIdentifier::new(field.name().as_str()).ident();
+            quote! { #field_name }
+        });
+        let accessors = fields.iter().map(|field| {
+            let field_name = RustIdentifier::new(field.name().as_str()).ident();
+            let field_type = RustTypeReferenceTokens::new(field.reference());
+            quote! {
+                pub fn #field_name(&self) -> &#field_type {
+                    &self.#field_name
+                }
+            }
+        });
+        let mut block = quote! {
+            impl #name {
+                pub fn new(#(#constructor_parameters),*) -> Self {
+                    Self { #(#constructor_initializers),* }
+                }
+                #(#accessors)*
+            }
+        };
+        // A single-field struct additionally admits the unambiguous
+        // `From<FieldType>` conversion — sound only because there is exactly one
+        // field to construct from.
+        if let [field] = fields {
+            let field_name = RustIdentifier::new(field.name().as_str()).ident();
+            let field_type = RustTypeReferenceTokens::new(field.reference());
+            quote! {
+                impl From<#field_type> for #name {
+                    fn from(#field_name: #field_type) -> Self {
+                        Self::new(#field_name)
+                    }
+                }
+            }
+            .to_tokens(&mut block);
+        }
+        block.to_tokens(tokens);
+    }
+}
+
 /// Renders a `{| |}` trait/impl construct as a real Rust `impl` block.
 ///
 /// A marker impl (no body) renders `impl <Trait> for <Target> {}` — the empty
@@ -2142,11 +2248,12 @@ impl<'impl_declaration> RustImplTokens<'impl_declaration> {
     }
 
     /// The inner type of the target newtype, for `Deref`'s `type Target`. The
-    /// target must be a single-field newtype; any other shape is a schema
-    /// error surfaced as a panic at generation (the generator's contract is
-    /// that a `Deref` impl targets a newtype).
+    /// target must be a single-field newtype; any other shape is a schema error
+    /// surfaced as a `compile_error!` at the generated-code boundary — never a
+    /// generator panic — so a malformed `Deref` target fails loudly and locally
+    /// rather than crashing emission.
     fn target_newtype_inner(&self) -> TokenStream {
-        let newtype = self
+        match self
             .declarations
             .iter()
             .find_map(|declaration| match declaration.value() {
@@ -2156,14 +2263,16 @@ impl<'impl_declaration> RustImplTokens<'impl_declaration> {
                     Some(newtype)
                 }
                 _ => None,
-            })
-            .unwrap_or_else(|| {
-                panic!(
+            }) {
+            Some(newtype) => RustTypeReferenceTokens::new(newtype.reference()).into_token_stream(),
+            None => {
+                let message = format!(
                     "Deref impl target {} is not a declared newtype",
                     self.declaration.target().as_str()
-                )
-            });
-        RustTypeReferenceTokens::new(newtype.reference()).into_token_stream()
+                );
+                quote! { compile_error!(#message) }
+            }
+        }
     }
 
     fn deref_tokens(&self, method: &RustMethod) -> TokenStream {
@@ -2180,12 +2289,13 @@ impl<'impl_declaration> RustImplTokens<'impl_declaration> {
         }
     }
 
-    /// Project a lowered method's body to a Rust expression token. A body that
-    /// resolved to shape-implied primitives parses to its `syn::Expr`; a body
-    /// rejected at the composition boundary
-    /// ([`SchemaError::UnresolvedComposition`]) emits a `compile_error!` carrying
-    /// the typed message, so a business-logic body declared as schema data fails
-    /// LOUDLY at the generated-code boundary — never a wrong body, never a panic.
+    /// Project a lowered method's body to a Rust expression token. A body whose
+    /// every call resolved against its receiver's schema shape parses to its
+    /// `syn::Expr`; a body rejected at the composition boundary (a typed
+    /// [`SchemaError`] such as [`SchemaError::UnresolvedCapability`]) emits a
+    /// `compile_error!` carrying the typed message, so a business-logic body
+    /// declared as schema data fails LOUDLY at the generated-code boundary —
+    /// never a wrong body, never a panic.
     fn method_body_expression(method: &RustMethod) -> TokenStream {
         match method.body() {
             Ok(body) => syn::parse_str::<syn::Expr>(body)
@@ -5359,6 +5469,27 @@ impl RustModuleRenderer {
 
     fn emit_newtype_inherent_impl(&mut self, declaration: &RustNewtype) {
         self.emit_item_tokens(NewtypeInherentImplTokens::new(declaration).into_token_stream());
+    }
+
+    /// Emit the standard inherent `impl <Struct> { new + per-field accessors }`
+    /// block for each declared concrete struct, by default — the struct face of
+    /// the shape-derived standard-impl set. A parameterized struct (a generic
+    /// frame body) is skipped: its inherent surface is carried by hand in the
+    /// runtime crate, and a bare `impl Struct { … }` would not name its generic
+    /// binders.
+    fn emit_struct_inherent_impls(&mut self, declarations: &[RustDeclaration]) {
+        let structures: Vec<_> = declarations
+            .iter()
+            .filter(|declaration| declaration.parameters().is_empty())
+            .filter_map(|declaration| match declaration.value() {
+                RustTypeDeclaration::Struct(value) => Some(value),
+                _ => None,
+            })
+            .collect();
+        for structure in structures {
+            self.emit_item_tokens(StructInherentImplTokens::new(structure).into_token_stream());
+            self.blank();
+        }
     }
 
     fn emit_impl(&mut self, declaration: &RustImpl, declarations: &[RustDeclaration]) {

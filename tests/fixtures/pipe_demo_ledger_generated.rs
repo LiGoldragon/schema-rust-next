@@ -408,6 +408,19 @@ impl From<Removal> for Pruned {
 }
 
 #[rustfmt::skip]
+impl LedgerEntry {
+    pub fn new(statement: Statement, sequence: Integer) -> Self {
+        Self { statement, sequence }
+    }
+    pub fn statement(&self) -> &Statement {
+        &self.statement
+    }
+    pub fn sequence(&self) -> &Integer {
+        &self.sequence
+    }
+}
+
+#[rustfmt::skip]
 impl SemaWriteSet {
     pub fn record(payload: LedgerEntry) -> Self {
         Self::Record(Record::new(payload))

@@ -31,6 +31,22 @@ pub struct ConfigurationPath(String);
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Magnitude {
+    pub value: Integer,
+    pub scale: Integer,
+}
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum Reply {
+    Accepted(Magnitude),
+    Rejected(ConfigurationPath),
+}
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Input {
     Configure(Configure),
 }
@@ -100,6 +116,29 @@ impl From<String> for ConfigurationPath {
 }
 
 #[rustfmt::skip]
+impl Magnitude {
+    pub fn new(value: Integer, scale: Integer) -> Self {
+        Self { value, scale }
+    }
+    pub fn value(&self) -> &Integer {
+        &self.value
+    }
+    pub fn scale(&self) -> &Integer {
+        &self.scale
+    }
+}
+
+#[rustfmt::skip]
+impl Reply {
+    pub fn accepted(payload: Magnitude) -> Self {
+        Self::Accepted(payload)
+    }
+    pub fn rejected(payload: String) -> Self {
+        Self::Rejected(ConfigurationPath::new(payload))
+    }
+}
+
+#[rustfmt::skip]
 impl Input {
     pub fn configure(payload: ConfigurationPath) -> Self {
         Self::Configure(Configure::new(payload))
@@ -110,6 +149,20 @@ impl Input {
 impl Output {
     pub fn configured(payload: ConfigurationPath) -> Self {
         Self::Configured(Configured::new(payload))
+    }
+}
+
+#[rustfmt::skip]
+impl From<Magnitude> for Reply {
+    fn from(payload: Magnitude) -> Self {
+        Self::Accepted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<ConfigurationPath> for Reply {
+    fn from(payload: ConfigurationPath) -> Self {
+        Self::Rejected(payload)
     }
 }
 

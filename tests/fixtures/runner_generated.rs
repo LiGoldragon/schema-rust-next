@@ -339,6 +339,126 @@ impl From<Vec<Entry>> for RecordSet {
 }
 
 #[rustfmt::skip]
+impl DatabaseMarker {
+    pub fn new(commit_sequence: CommitSequence, state_digest: StateDigest) -> Self {
+        Self {
+            commit_sequence,
+            state_digest,
+        }
+    }
+    pub fn commit_sequence(&self) -> &CommitSequence {
+        &self.commit_sequence
+    }
+    pub fn state_digest(&self) -> &StateDigest {
+        &self.state_digest
+    }
+}
+
+#[rustfmt::skip]
+impl SemaReceipt {
+    pub fn new(
+        record_identifier: RecordIdentifier,
+        database_marker: DatabaseMarker,
+    ) -> Self {
+        Self {
+            record_identifier,
+            database_marker,
+        }
+    }
+    pub fn record_identifier(&self) -> &RecordIdentifier {
+        &self.record_identifier
+    }
+    pub fn database_marker(&self) -> &DatabaseMarker {
+        &self.database_marker
+    }
+}
+
+#[rustfmt::skip]
+impl ObservedRecords {
+    pub fn new(record_set: RecordSet, database_marker: DatabaseMarker) -> Self {
+        Self {
+            record_set,
+            database_marker,
+        }
+    }
+    pub fn record_set(&self) -> &RecordSet {
+        &self.record_set
+    }
+    pub fn database_marker(&self) -> &DatabaseMarker {
+        &self.database_marker
+    }
+}
+
+#[rustfmt::skip]
+impl StashResult {
+    pub fn new(
+        stash_handle: StashHandle,
+        record_count: Integer,
+        database_marker: DatabaseMarker,
+    ) -> Self {
+        Self {
+            stash_handle,
+            record_count,
+            database_marker,
+        }
+    }
+    pub fn stash_handle(&self) -> &StashHandle {
+        &self.stash_handle
+    }
+    pub fn record_count(&self) -> &Integer {
+        &self.record_count
+    }
+    pub fn database_marker(&self) -> &DatabaseMarker {
+        &self.database_marker
+    }
+}
+
+#[rustfmt::skip]
+impl StashRequest {
+    pub fn new(record_set: RecordSet, database_marker: DatabaseMarker) -> Self {
+        Self {
+            record_set,
+            database_marker,
+        }
+    }
+    pub fn record_set(&self) -> &RecordSet {
+        &self.record_set
+    }
+    pub fn database_marker(&self) -> &DatabaseMarker {
+        &self.database_marker
+    }
+}
+
+#[rustfmt::skip]
+impl ErrorReport {
+    pub fn new(error_message: ErrorMessage, database_marker: DatabaseMarker) -> Self {
+        Self {
+            error_message,
+            database_marker,
+        }
+    }
+    pub fn error_message(&self) -> &ErrorMessage {
+        &self.error_message
+    }
+    pub fn database_marker(&self) -> &DatabaseMarker {
+        &self.database_marker
+    }
+}
+
+#[rustfmt::skip]
+impl Entry {
+    pub fn new(topic: Topic, description: Description) -> Self {
+        Self { topic, description }
+    }
+    pub fn topic(&self) -> &Topic {
+        &self.topic
+    }
+    pub fn description(&self) -> &Description {
+        &self.description
+    }
+}
+
+#[rustfmt::skip]
 impl NexusWork {
     pub fn signal_arrived(payload: Input) -> Self {
         Self::SignalArrived(payload)

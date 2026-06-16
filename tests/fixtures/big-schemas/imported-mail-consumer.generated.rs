@@ -230,6 +230,88 @@ impl From<Description> for Rejection {
 }
 
 #[rustfmt::skip]
+impl Entry {
+    pub fn new(
+        topics: Topics,
+        description: Description,
+        agent_name: AgentName,
+        database_marker: DatabaseMarker,
+    ) -> Self {
+        Self {
+            topics,
+            description,
+            agent_name,
+            database_marker,
+        }
+    }
+    pub fn topics(&self) -> &Topics {
+        &self.topics
+    }
+    pub fn description(&self) -> &Description {
+        &self.description
+    }
+    pub fn agent_name(&self) -> &AgentName {
+        &self.agent_name
+    }
+    pub fn database_marker(&self) -> &DatabaseMarker {
+        &self.database_marker
+    }
+}
+
+#[rustfmt::skip]
+impl Query {
+    pub fn new(topics: Topics, limit: Option<Integer>) -> Self {
+        Self { topics, limit }
+    }
+    pub fn topics(&self) -> &Topics {
+        &self.topics
+    }
+    pub fn limit(&self) -> &Option<Integer> {
+        &self.limit
+    }
+}
+
+#[rustfmt::skip]
+impl RecordReceipt {
+    pub fn new(
+        record_identifier: RecordIdentifier,
+        database_marker: DatabaseMarker,
+        commit_sequence: CommitSequence,
+    ) -> Self {
+        Self {
+            record_identifier,
+            database_marker,
+            commit_sequence,
+        }
+    }
+    pub fn record_identifier(&self) -> &RecordIdentifier {
+        &self.record_identifier
+    }
+    pub fn database_marker(&self) -> &DatabaseMarker {
+        &self.database_marker
+    }
+    pub fn commit_sequence(&self) -> &CommitSequence {
+        &self.commit_sequence
+    }
+}
+
+#[rustfmt::skip]
+impl RecordSet {
+    pub fn new(
+        records: Vec<Entry>,
+        by_topic: std::collections::BTreeMap<Topic, RecordIdentifier>,
+    ) -> Self {
+        Self { records, by_topic }
+    }
+    pub fn records(&self) -> &Vec<Entry> {
+        &self.records
+    }
+    pub fn by_topic(&self) -> &std::collections::BTreeMap<Topic, RecordIdentifier> {
+        &self.by_topic
+    }
+}
+
+#[rustfmt::skip]
 impl Input {
     pub fn record(payload: Entry) -> Self {
         Self::Record(payload)

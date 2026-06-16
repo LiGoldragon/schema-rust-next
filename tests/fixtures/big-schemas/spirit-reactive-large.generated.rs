@@ -422,6 +422,229 @@ impl From<Integer> for DatabaseDigest {
 }
 
 #[rustfmt::skip]
+impl Entry {
+    pub fn new(
+        topics: Topics,
+        kind: Kind,
+        description: Description,
+        magnitude: Magnitude,
+        agent_name: AgentName,
+        timestamp: Timestamp,
+    ) -> Self {
+        Self {
+            topics,
+            kind,
+            description,
+            magnitude,
+            agent_name,
+            timestamp,
+        }
+    }
+    pub fn topics(&self) -> &Topics {
+        &self.topics
+    }
+    pub fn kind(&self) -> &Kind {
+        &self.kind
+    }
+    pub fn description(&self) -> &Description {
+        &self.description
+    }
+    pub fn magnitude(&self) -> &Magnitude {
+        &self.magnitude
+    }
+    pub fn agent_name(&self) -> &AgentName {
+        &self.agent_name
+    }
+    pub fn timestamp(&self) -> &Timestamp {
+        &self.timestamp
+    }
+}
+
+#[rustfmt::skip]
+impl Correction {
+    pub fn new(
+        record_identifier: RecordIdentifier,
+        description: Description,
+        magnitude: Magnitude,
+        agent_name: AgentName,
+        timestamp: Timestamp,
+    ) -> Self {
+        Self {
+            record_identifier,
+            description,
+            magnitude,
+            agent_name,
+            timestamp,
+        }
+    }
+    pub fn record_identifier(&self) -> &RecordIdentifier {
+        &self.record_identifier
+    }
+    pub fn description(&self) -> &Description {
+        &self.description
+    }
+    pub fn magnitude(&self) -> &Magnitude {
+        &self.magnitude
+    }
+    pub fn agent_name(&self) -> &AgentName {
+        &self.agent_name
+    }
+    pub fn timestamp(&self) -> &Timestamp {
+        &self.timestamp
+    }
+}
+
+#[rustfmt::skip]
+impl Query {
+    pub fn new(topics: Topics, kinds: Vec<Kind>, limit: Option<Integer>) -> Self {
+        Self { topics, kinds, limit }
+    }
+    pub fn topics(&self) -> &Topics {
+        &self.topics
+    }
+    pub fn kinds(&self) -> &Vec<Kind> {
+        &self.kinds
+    }
+    pub fn limit(&self) -> &Option<Integer> {
+        &self.limit
+    }
+}
+
+#[rustfmt::skip]
+impl WatchRequest {
+    pub fn new(topics: Topics, kinds: Vec<Kind>, agent_name: AgentName) -> Self {
+        Self { topics, kinds, agent_name }
+    }
+    pub fn topics(&self) -> &Topics {
+        &self.topics
+    }
+    pub fn kinds(&self) -> &Vec<Kind> {
+        &self.kinds
+    }
+    pub fn agent_name(&self) -> &AgentName {
+        &self.agent_name
+    }
+}
+
+#[rustfmt::skip]
+impl RecordReceipt {
+    pub fn new(
+        record_identifier: RecordIdentifier,
+        commit_sequence: CommitSequence,
+        database_digest: DatabaseDigest,
+    ) -> Self {
+        Self {
+            record_identifier,
+            commit_sequence,
+            database_digest,
+        }
+    }
+    pub fn record_identifier(&self) -> &RecordIdentifier {
+        &self.record_identifier
+    }
+    pub fn commit_sequence(&self) -> &CommitSequence {
+        &self.commit_sequence
+    }
+    pub fn database_digest(&self) -> &DatabaseDigest {
+        &self.database_digest
+    }
+}
+
+#[rustfmt::skip]
+impl CorrectionReceipt {
+    pub fn new(
+        record_identifier: RecordIdentifier,
+        commit_sequence: CommitSequence,
+        database_digest: DatabaseDigest,
+    ) -> Self {
+        Self {
+            record_identifier,
+            commit_sequence,
+            database_digest,
+        }
+    }
+    pub fn record_identifier(&self) -> &RecordIdentifier {
+        &self.record_identifier
+    }
+    pub fn commit_sequence(&self) -> &CommitSequence {
+        &self.commit_sequence
+    }
+    pub fn database_digest(&self) -> &DatabaseDigest {
+        &self.database_digest
+    }
+}
+
+#[rustfmt::skip]
+impl RecordSet {
+    pub fn new(
+        records: Vec<Entry>,
+        by_topic: std::collections::BTreeMap<Topic, RecordIdentifier>,
+    ) -> Self {
+        Self { records, by_topic }
+    }
+    pub fn records(&self) -> &Vec<Entry> {
+        &self.records
+    }
+    pub fn by_topic(&self) -> &std::collections::BTreeMap<Topic, RecordIdentifier> {
+        &self.by_topic
+    }
+}
+
+#[rustfmt::skip]
+impl SubscriptionReceipt {
+    pub fn new(
+        subscription_token: SubscriptionToken,
+        commit_sequence: CommitSequence,
+    ) -> Self {
+        Self {
+            subscription_token,
+            commit_sequence,
+        }
+    }
+    pub fn subscription_token(&self) -> &SubscriptionToken {
+        &self.subscription_token
+    }
+    pub fn commit_sequence(&self) -> &CommitSequence {
+        &self.commit_sequence
+    }
+}
+
+#[rustfmt::skip]
+impl Rejection {
+    pub fn new(rejection_reason: RejectionReason, description: Description) -> Self {
+        Self {
+            rejection_reason,
+            description,
+        }
+    }
+    pub fn rejection_reason(&self) -> &RejectionReason {
+        &self.rejection_reason
+    }
+    pub fn description(&self) -> &Description {
+        &self.description
+    }
+}
+
+#[rustfmt::skip]
+impl IndexReceipt {
+    pub fn new(
+        commit_sequence: CommitSequence,
+        database_digest: DatabaseDigest,
+    ) -> Self {
+        Self {
+            commit_sequence,
+            database_digest,
+        }
+    }
+    pub fn commit_sequence(&self) -> &CommitSequence {
+        &self.commit_sequence
+    }
+    pub fn database_digest(&self) -> &DatabaseDigest {
+        &self.database_digest
+    }
+}
+
+#[rustfmt::skip]
 impl Input {
     pub fn record(payload: Entry) -> Self {
         Self::Record(payload)

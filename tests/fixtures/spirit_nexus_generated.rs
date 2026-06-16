@@ -2168,6 +2168,93 @@ impl From<ObserverRetraction> for ObserverTapClosed {
 }
 
 #[rustfmt::skip]
+impl DatabaseMarker {
+    pub fn new(commit_sequence: Integer, state_digest: Integer) -> Self {
+        Self {
+            commit_sequence,
+            state_digest,
+        }
+    }
+    pub fn commit_sequence(&self) -> &Integer {
+        &self.commit_sequence
+    }
+    pub fn state_digest(&self) -> &Integer {
+        &self.state_digest
+    }
+}
+
+#[rustfmt::skip]
+impl SemaReceipt {
+    pub fn new(identifier: RecordIdentifier, marker: DatabaseMarker) -> Self {
+        Self { identifier, marker }
+    }
+    pub fn identifier(&self) -> &RecordIdentifier {
+        &self.identifier
+    }
+    pub fn marker(&self) -> &DatabaseMarker {
+        &self.marker
+    }
+}
+
+#[rustfmt::skip]
+impl GuardianRejection {
+    pub fn new(reason: GuardianRejectionReason, explanation: Explanation) -> Self {
+        Self { reason, explanation }
+    }
+    pub fn reason(&self) -> &GuardianRejectionReason {
+        &self.reason
+    }
+    pub fn explanation(&self) -> &Explanation {
+        &self.explanation
+    }
+}
+
+#[rustfmt::skip]
+impl ReferentGuardianRejection {
+    pub fn new(
+        reason: ReferentGuardianRejectionReason,
+        explanation: Explanation,
+    ) -> Self {
+        Self { reason, explanation }
+    }
+    pub fn reason(&self) -> &ReferentGuardianRejectionReason {
+        &self.reason
+    }
+    pub fn explanation(&self) -> &Explanation {
+        &self.explanation
+    }
+}
+
+#[rustfmt::skip]
+impl StashRequest {
+    pub fn new(records: Records, marker: DatabaseMarker) -> Self {
+        Self { records, marker }
+    }
+    pub fn records(&self) -> &Records {
+        &self.records
+    }
+    pub fn marker(&self) -> &DatabaseMarker {
+        &self.marker
+    }
+}
+
+#[rustfmt::skip]
+impl StashResult {
+    pub fn new(handle: StashHandle, count: RecordCount, marker: DatabaseMarker) -> Self {
+        Self { handle, count, marker }
+    }
+    pub fn handle(&self) -> &StashHandle {
+        &self.handle
+    }
+    pub fn count(&self) -> &RecordCount {
+        &self.count
+    }
+    pub fn marker(&self) -> &DatabaseMarker {
+        &self.marker
+    }
+}
+
+#[rustfmt::skip]
 impl SemaWriteSet {
     pub fn record(payload: Entry) -> Self {
         Self::Record(Record::new(payload))

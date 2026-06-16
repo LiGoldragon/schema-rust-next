@@ -6,5 +6,9 @@
 
   ConfigurationPath String
 
+  Magnitude { value Integer scale Integer }
+
+  Reply [ (Accepted Magnitude) (Rejected ConfigurationPath) ]
+
   ConfigurationPathAsStr {| Composed ConfigurationPath [ (as_str (call (call self payload) as_str)) ] |}
 }

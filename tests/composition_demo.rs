@@ -1,39 +1,49 @@
-//! End-to-end proof of the composition closure (`d3r2`): a method body that
-//! COMPOSES calls to shape-implied primitives is DATA, not hand-written. The
-//! real component method `ConfigurationPath::as_str` — currently hand-written at
+//! End-to-end proof of SHAPE-DERIVED capability resolution (`d3r2`): a method
+//! body that COMPOSES calls is DATA, and every call resolves against its
+//! RECEIVER'S SCHEMA SHAPE — not a global method-name allowlist. The real
+//! component method `ConfigurationPath::as_str` — currently hand-written at
 //! `signal-spirit/src/lib.rs:26` as `self.payload().as_str()` — is declared as
-//! the NOTA expression tree `(call (call (self) payload) as_str)`, parsed
-//! through the real `SchemaEngine`, projected by `Expression::to_rust()`, and
+//! the NOTA expression tree `(call (call self payload) as_str)`, parsed through
+//! the real `SchemaEngine`, projected by `Expression::to_rust(resolver)`, and
 //! the projected body is compiled and RUN to prove behavior.
 //!
 //! The composition node is `Expression::MethodCall(receiver, method, args)`
 //! (`schema-next/.../schema.rs`). It is NOT an expression compiler: the call
-//! head must resolve against the closed shape-implied primitive alphabet
-//! (`ComposablePrimitive`: `payload`, `into_payload`, `as_str`). The first call
-//! that resolves to no primitive is the business-logic boundary — rejected with
-//! the typed `SchemaError::UnresolvedComposition`, never a wrong body, never a
-//! panic. The negative test feeds the real business-logic method `keywords`
-//! (`signal-spirit/src/lib.rs:647`) and asserts the rejection fires.
+//! head must resolve against the RECEIVER'S SHAPE-IMPLIED capability set
+//! (`ReceiverShape::capabilities` via `CapabilityResolver`). `payload` resolves
+//! on `ConfigurationPath` because it IS a newtype; the SAME name is REJECTED on
+//! a struct because a struct shape implies only field projections. The first
+//! call that resolves to no capability of its receiver's shape is the
+//! business-logic boundary — rejected with a typed `SchemaError`, never a wrong
+//! body, never a panic.
 
-use schema_next::{Expression, ImplBody, MethodDeclaration, Name, SchemaError};
+use schema_next::{
+    CapabilityResolver, Declaration, Expression, ImplBody, MethodDeclaration, Name, ReceiverShape,
+    Schema, SchemaError, TypeDeclaration, TypeReference,
+};
 use schema_rust_next::{RustEmissionOptions, RustEmissionTarget, RustEmitter};
 
 mod support;
 
 use support::FixtureSchema;
 
+/// Lower the composition-demo schema through the real engine.
+fn demo_schema() -> Schema {
+    FixtureSchema::new("composition-demo/schema/configuration.schema").lower("composition:demo")
+}
+
 /// Emit the composition-demo schema to Rust source through the real emitter. The
 /// `ConfigurationPath` newtype flows through the standard newtype emitter
-/// (`new` / `payload` / `into_payload`), and the `Composed` impl emits an
-/// inherent `impl ConfigurationPath { pub fn as_str(&self) -> &str { … } }`
-/// whose body is the projected composition.
+/// (`new` / `payload` / `into_payload`), the `Magnitude` struct flows through
+/// the standard struct emitter (`new` + per-field accessors), the `Reply` enum
+/// flows through the variant-constructor emitter, and the `Composed` impl emits
+/// an inherent `impl ConfigurationPath { pub fn as_str(&self) -> &str { … } }`
+/// whose body is the shape-resolved composition.
 fn emit_configuration() -> String {
-    let schema = FixtureSchema::new("composition-demo/schema/configuration.schema")
-        .lower("composition:demo");
     let options = RustEmissionOptions::feature_gated_nota("nota-text")
         .with_target(RustEmissionTarget::NexusRuntime);
     RustEmitter::new(options)
-        .emit_code_from_schema(&schema)
+        .emit_code_from_schema(&demo_schema())
         .as_str()
         .to_owned()
 }
@@ -50,37 +60,65 @@ fn write_configuration_fixture() {
 }
 
 #[test]
-fn composed_inherent_impl_emits_from_data() {
+fn standard_impls_emit_from_data_for_every_shape() {
     let code = emit_configuration();
-    // The newtype emits as a tuple struct over its inner type.
+    // NEWTYPE shape: emitted as a tuple struct over its inner type with the
+    // standard new/payload/into_payload + From<Inner> set — none declared.
     assert!(
         code.contains("pub struct ConfigurationPath(String)")
             || code.contains("pub struct ConfigurationPath (String)"),
         "newtype payload emits:\n{code}"
     );
-    // The composed method emits as an INHERENT impl with the fixed accessor
-    // signature, and the body is the data-projected composition.
     assert!(
         code.contains("impl ConfigurationPath {"),
-        "inherent impl block emits:\n{code}"
-    );
-    assert!(
-        code.contains("pub fn as_str(&self) -> &str"),
-        "as_str signature emits:\n{code}"
+        "newtype inherent impl block emits:\n{code}"
     );
     let normalized: String = code.split_whitespace().collect();
     assert!(
-        normalized.contains("self.payload().as_str()"),
-        "as_str body is the data-emitted composition:\n{code}"
+        normalized.contains("pubfnnew") && normalized.contains("pubfnpayload"),
+        "standard newtype accessors emit:\n{code}"
+    );
+    assert!(
+        normalized.contains("implFrom<String>forConfigurationPath"),
+        "standard newtype From<Inner> emits:\n{code}"
+    );
+
+    // STRUCT shape: the two-field `Magnitude` emits the standard struct impl —
+    // an all-fields `new` plus a per-field borrow accessor — none declared.
+    assert!(
+        code.contains("impl Magnitude {"),
+        "struct inherent impl block emits:\n{code}"
+    );
+    assert!(
+        normalized.contains("pubfnvalue(&self)->&Integer"),
+        "per-field struct accessor emits:\n{code}"
+    );
+    assert!(
+        normalized.contains("pubfnscale(&self)->&Integer"),
+        "second per-field struct accessor emits:\n{code}"
+    );
+    assert!(
+        normalized.contains("pubfnnew(value:Integer,scale:Integer)->Self"),
+        "all-fields struct constructor emits:\n{code}"
+    );
+
+    // ENUM shape: the `Reply` enum emits its per-variant constructor for the
+    // payload-carrying variant — proving enum-shape resolution drives emission.
+    // The existing constructor emitter unwraps a newtype payload to its inner,
+    // so `Rejected ConfigurationPath` constructs from the inner `String`.
+    assert!(
+        normalized.contains("pubfnrejected(payload:String)->Self"),
+        "enum variant constructor emits:\n{code}"
+    );
+    assert!(
+        normalized.contains("Self::Rejected(ConfigurationPath::new(payload))"),
+        "the variant constructor wraps the inner payload:\n{code}"
     );
 }
 
-/// Lower the composition-demo schema through the real engine and return the
-/// single method carried as data by the `Composed ConfigurationPath` impl. This
-/// is the actual NOTA → `Expression` path — the body travels as schema data.
+/// The single method carried as data by the `Composed ConfigurationPath` impl.
 fn composed_as_str_method() -> MethodDeclaration {
-    let schema = FixtureSchema::new("composition-demo/schema/configuration.schema")
-        .lower("composition:demo");
+    let schema = demo_schema();
     let impl_declaration = schema
         .impls()
         .iter()
@@ -100,8 +138,7 @@ fn composed_as_str_method() -> MethodDeclaration {
 fn composed_body_parses_from_nota_as_a_method_call_tree() {
     // The body is the composition node nested over itself: the OUTER call is
     // `as_str` on the receiver `self.payload()`, whose receiver is in turn the
-    // INNER call `payload` on `self`. This is depth-2 composition — strictly
-    // more than the single-projection Deref body the prior slice could carry.
+    // INNER call `payload` on `self`. This is depth-2 composition.
     let method = composed_as_str_method();
     let Expression::MethodCall(outer_receiver, outer_method, outer_arguments) = method.body() else {
         panic!("the as_str body is a method-call composition node");
@@ -125,21 +162,49 @@ fn composed_body_parses_from_nota_as_a_method_call_tree() {
 }
 
 #[test]
-fn composed_body_projects_to_exact_rust() {
+fn composed_body_projects_through_shape_derived_capabilities() {
     // The whole composition contribution: the data tree projects to the EXACT
-    // Rust source of the hand-written body at signal-spirit/src/lib.rs:27.
+    // Rust source of the hand-written body at signal-spirit/src/lib.rs:27 — but
+    // now EVERY call is resolved by walking the type graph. `self.payload()`
+    // typeofs `ConfigurationPath` -> Newtype{String} -> `payload` resolves with
+    // result `String`; `String` is a Builtin leaf -> `as_str` resolves via the
+    // tiny named per-leaf exception.
+    let schema = demo_schema();
+    let self_type = Name::new("ConfigurationPath");
+    let resolver = CapabilityResolver::new(schema.namespace(), &self_type);
     let method = composed_as_str_method();
     let rust = method
         .body()
-        .to_rust()
-        .expect("the composed body resolves to shape-implied primitives");
+        .to_rust(&resolver)
+        .expect("the composed body resolves against the receiver's shape");
     assert_eq!(rust, "self.payload().as_str()");
 }
 
-/// The local stand-in for the generated module: the `ConfigurationPath` newtype
-/// (a tuple struct over `String`, exactly as the emitter produces it) with its
-/// inherent `payload` accessor, plus the inherent `as_str` whose body is the
-/// DATA-EMITTED composition. If the projected body were wrong this would not
+#[test]
+fn type_propagates_through_a_depth_two_composition() {
+    // typeof(self.payload()) is the newtype inner type String — proving the
+    // OUTER call's receiver type is COMPUTED, not assumed. This is what lets
+    // `as_str` resolve as a String-leaf capability rather than a name guess.
+    let schema = demo_schema();
+    let self_type = Name::new("ConfigurationPath");
+    let resolver = CapabilityResolver::new(schema.namespace(), &self_type);
+    let inner_payload_call = Expression::MethodCall(
+        Box::new(Expression::SelfReceiver),
+        Name::new("payload"),
+        Vec::new(),
+    );
+    assert_eq!(
+        resolver
+            .type_of(&inner_payload_call)
+            .expect("payload typeofs"),
+        TypeReference::String,
+    );
+}
+
+/// The local stand-in for the generated module: the emitter-produced
+/// `ConfigurationPath` newtype (a tuple struct over `String`) with its standard
+/// inherent accessors, plus the inherent `as_str` whose body is the
+/// SHAPE-RESOLVED composition. If the projected body were wrong this would not
 /// compile or would return the wrong value, so the behavioral assertion below
 /// proves the code-is-data composition is correct.
 #[allow(dead_code)]
@@ -152,60 +217,104 @@ fn composed_body_compiles_and_runs() {
     use configuration_generated::ConfigurationPath;
 
     let path = ConfigurationPath::new("/etc/spirit/config.nota".to_owned());
-    // `as_str` is the DATA-EMITTED body `self.payload().as_str()` — it composes
-    // the newtype `payload` accessor with the inner `String::as_str` leaf. The
+    // `as_str` is the SHAPE-RESOLVED body `self.payload().as_str()`. The
     // returned `&str` borrows through both calls.
     assert_eq!(path.as_str(), "/etc/spirit/config.nota");
-    // The composed accessor returns the same bytes the inner payload holds.
     assert_eq!(path.as_str(), path.payload().as_str());
 }
 
+/// The `Magnitude` struct name as declared in the demo schema.
+fn magnitude_type() -> Name {
+    Name::new("Magnitude")
+}
+
 #[test]
-fn business_logic_call_is_rejected_with_a_typed_error() {
-    // `keywords` is a real business-logic method on the same component
-    // (signal-spirit/src/lib.rs:647) — it is NOT a shape-implied primitive, so a
-    // body that calls it must be REJECTED, not emitted. We build the body the
-    // same way the reader would (`(call (self) keywords)`) and assert the typed
-    // boundary error fires — never a panic, never a silently-wrong body.
-    let business_logic_body = Expression::MethodCall(
+fn payload_on_a_struct_is_rejected_as_shape_mismatch() {
+    // `payload` was in the OLD name allowlist, so the old resolver wrongly
+    // accepted it on ANY receiver. The shape resolver REJECTS it on a struct
+    // because `Struct::capabilities()` holds only field projections — the case
+    // the name-allowlist got wrong.
+    let schema = demo_schema();
+    let self_type = magnitude_type();
+    let resolver = CapabilityResolver::new(schema.namespace(), &self_type);
+    let body = Expression::MethodCall(
         Box::new(Expression::SelfReceiver),
-        Name::new("keywords"),
+        Name::new("payload"),
         Vec::new(),
     );
-    let rejection = business_logic_body
-        .to_rust()
-        .expect_err("a call to a non-primitive must be rejected");
-    match rejection {
-        SchemaError::UnresolvedComposition { method, receiver } => {
-            assert_eq!(method, "keywords");
-            assert_eq!(receiver, "self");
+    match body
+        .to_rust(&resolver)
+        .expect_err("payload is not a struct capability")
+    {
+        SchemaError::UnresolvedCapability {
+            method,
+            receiver_shape,
+            ..
+        } => {
+            assert_eq!(method, "payload");
+            assert_eq!(receiver_shape, "struct");
         }
-        other => panic!("expected UnresolvedComposition, got {other:?}"),
+        other => panic!("expected UnresolvedCapability, got {other:?}"),
     }
 }
 
 #[test]
-fn first_unresolved_call_in_a_composition_rejects_the_whole_body() {
-    // The sharp edge fires at the FIRST unresolved call even when nested under a
-    // resolvable one: `self.payload().keywords()` resolves `payload` but then
-    // hits the business-logic `keywords` — the whole body is rejected.
-    let mixed_body = Expression::MethodCall(
-        Box::new(Expression::MethodCall(
-            Box::new(Expression::SelfReceiver),
-            Name::new("payload"),
-            Vec::new(),
-        )),
-        Name::new("keywords"),
-        Vec::new(),
-    );
-    let rejection = mixed_body
-        .to_rust()
-        .expect_err("the outer business-logic call rejects the whole body");
+fn unknown_struct_field_is_rejected() {
+    // `(field self nonexistent)` on a struct that declares no such field.
+    let schema = demo_schema();
+    let self_type = magnitude_type();
+    let resolver = CapabilityResolver::new(schema.namespace(), &self_type);
+    let body = Expression::Field(Box::new(Expression::SelfReceiver), Name::new("nonexistent"));
     assert!(
         matches!(
-            rejection,
-            SchemaError::UnresolvedComposition { ref method, .. } if method == "keywords"
+            resolver.type_of(&body).unwrap_err(),
+            SchemaError::UnknownFieldProjection { ref field, .. } if field == "nonexistent"
         ),
-        "the first unresolved call (keywords) is the boundary: {rejection:?}"
+        "an undeclared field projection is a typed rejection"
     );
+}
+
+#[test]
+fn field_resolves_on_struct_and_constructor_resolves_on_enum() {
+    let schema = demo_schema();
+    let self_type = magnitude_type();
+    let resolver = CapabilityResolver::new(schema.namespace(), &self_type);
+    // A real declared field typeofs to its declared reference.
+    assert_eq!(
+        resolver
+            .type_of(&Expression::Field(
+                Box::new(Expression::SelfReceiver),
+                Name::new("value"),
+            ))
+            .expect("value field typeofs"),
+        TypeReference::Integer,
+    );
+    // The enum variant constructor resolves on the enum shape by its emitted
+    // call spelling (the snake_case constructor name `rejected`).
+    let enum_shape = enum_shape_of(&schema, "Reply");
+    assert!(
+        enum_shape.resolve(&Name::new("rejected")).is_some(),
+        "the Rejected variant constructor resolves on the Reply enum shape"
+    );
+    // A non-existent variant does not resolve.
+    assert!(
+        enum_shape.resolve(&Name::new("missing")).is_none(),
+        "an undeclared variant does not resolve on the enum shape"
+    );
+}
+
+/// Build the [`ReceiverShape`] of a named declared enum, straight from the
+/// schema type graph — the same shape the resolver reads.
+fn enum_shape_of(schema: &Schema, name: &str) -> ReceiverShape {
+    let declaration: &Declaration = schema
+        .namespace()
+        .iter()
+        .find(|declaration| declaration.name().as_str() == name)
+        .expect("the demo schema declares the enum");
+    let TypeDeclaration::Enum(enumeration) = declaration.value() else {
+        panic!("{name} is an enum");
+    };
+    ReceiverShape::Enum {
+        variants: enumeration.variants.clone(),
+    }
 }
