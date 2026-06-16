@@ -191,7 +191,10 @@ fn generated_input_round_trips_through_rkyv_via_emitted_constructor() {
     // Construct through the EMITTED constructor (signal_arrived), proving the
     // concrete expanded enum gained its schema-emitted construction surface.
     let arrived: Input = Input::signal_arrived("intent recorded".to_owned());
-    assert_eq!(arrived, Input::SignalArrived(SignalInput::new("intent recorded")));
+    assert_eq!(
+        arrived,
+        Input::SignalArrived(SignalInput::new("intent recorded"))
+    );
 
     let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&arrived).expect("input archives");
     let restored = rkyv::from_bytes::<Input, rkyv::rancor::Error>(&bytes)

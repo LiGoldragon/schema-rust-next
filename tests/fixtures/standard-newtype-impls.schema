@@ -1,0 +1,9 @@
+[(Record NameText)]
+[(Accepted NameText)]
+{
+  NameText String
+  FilePath Path
+  Count Integer
+  Enabled Boolean
+  WrappedName NameText
+}

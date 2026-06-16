@@ -443,6 +443,7 @@ impl LowerToRust<RustModule> for Schema {
 pub struct RustEmissionOptions {
     pub nota_surface: NotaSurface,
     pub target: RustEmissionTarget,
+    pub standard_newtype_impls: bool,
 }
 
 impl Default for RustEmissionOptions {
@@ -459,6 +460,7 @@ impl RustEmissionOptions {
         Self {
             nota_surface: NotaSurface::AlwaysEnabled,
             target: RustEmissionTarget::ComponentRuntime,
+            standard_newtype_impls: false,
         }
     }
 
@@ -474,6 +476,7 @@ impl RustEmissionOptions {
                 feature: feature.into(),
             },
             target: RustEmissionTarget::ComponentRuntime,
+            standard_newtype_impls: false,
         }
     }
 
@@ -486,11 +489,21 @@ impl RustEmissionOptions {
         Self {
             nota_surface: NotaSurface::Disabled,
             target: RustEmissionTarget::ComponentRuntime,
+            standard_newtype_impls: false,
         }
     }
 
     pub fn with_target(mut self, target: RustEmissionTarget) -> Self {
         self.target = target;
+        self
+    }
+
+    /// Emit standard payload-delegating impls for scalar-backed newtypes. This
+    /// is a proposal surface for schema-implied capabilities: the wrapped scalar
+    /// guarantees the implementation, so consumers should not hand-write the
+    /// same one-line delegation repeatedly.
+    pub fn with_standard_newtype_impls(mut self) -> Self {
+        self.standard_newtype_impls = true;
         self
     }
 
@@ -500,6 +513,10 @@ impl RustEmissionOptions {
 
     pub fn target(&self) -> RustEmissionTarget {
         self.target
+    }
+
+    fn standard_newtype_impls(&self) -> bool {
+        self.standard_newtype_impls
     }
 }
 
@@ -1054,6 +1071,10 @@ impl RustNewtype {
     fn is_scope_of(&self) -> bool {
         self.scope_root_name().is_some()
     }
+
+    fn takes_string_constructor(&self) -> bool {
+        matches!(self.reference, TypeReference::String | TypeReference::Path)
+    }
 }
 
 impl LowerToRust<RustNewtype> for NewtypeDeclaration {
@@ -1285,6 +1306,7 @@ struct RustRenderContext {
     map_key_type_names: Vec<String>,
     private_type_names: Vec<String>,
     nota_surface: NotaSurface,
+    standard_newtype_impls: bool,
 }
 
 impl RustRenderContext {
@@ -1292,11 +1314,13 @@ impl RustRenderContext {
         map_key_type_names: Vec<String>,
         private_type_names: Vec<String>,
         nota_surface: NotaSurface,
+        standard_newtype_impls: bool,
     ) -> Self {
         Self {
             map_key_type_names,
             private_type_names,
             nota_surface,
+            standard_newtype_impls,
         }
     }
 
@@ -1401,6 +1425,10 @@ impl RustRenderContext {
                 #[cfg(feature = #feature)]
             }),
         }
+    }
+
+    fn emits_standard_newtype_impls(&self) -> bool {
+        self.standard_newtype_impls
     }
 
     fn field_visibility_tokens(
@@ -1961,7 +1989,7 @@ impl ToTokens for NewtypeInherentImplTokens<'_> {
         // String-backed newtypes take `impl Into<String>` so call sites pass
         // `&str` literals without `.to_string()`; other payloads keep the exact
         // type (integer literals would not infer through `impl Into`).
-        let constructor = if quote! { #payload_type }.to_string() == "String" {
+        let constructor = if self.newtype.takes_string_constructor() {
             quote! {
                 pub fn new(payload: impl Into<String>) -> Self {
                     Self(payload.into())
@@ -1989,6 +2017,107 @@ impl ToTokens for NewtypeInherentImplTokens<'_> {
                     Self::new(payload)
                 }
             }
+        }
+        .to_tokens(tokens);
+    }
+}
+
+/// Renders standard payload-delegating impls for scalar-backed newtypes. These
+/// are the capability methods the schema shape can guarantee without a method
+/// body language: display delegates to the scalar payload, and scalar comparisons
+/// compare the payload directly.
+struct StandardNewtypeImplTokens<'newtype> {
+    newtype: &'newtype RustNewtype,
+}
+
+impl<'newtype> StandardNewtypeImplTokens<'newtype> {
+    fn new(newtype: &'newtype RustNewtype) -> Self {
+        Self { newtype }
+    }
+
+    fn string_like(&self) -> bool {
+        matches!(
+            self.newtype.reference(),
+            TypeReference::String | TypeReference::Path
+        )
+    }
+
+    fn integer_like(&self) -> bool {
+        matches!(self.newtype.reference(), TypeReference::Integer)
+    }
+
+    fn boolean_like(&self) -> bool {
+        matches!(self.newtype.reference(), TypeReference::Boolean)
+    }
+
+    fn scalar_like(&self) -> bool {
+        self.string_like() || self.integer_like() || self.boolean_like()
+    }
+}
+
+impl ToTokens for StandardNewtypeImplTokens<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        if !self.scalar_like() {
+            return;
+        }
+        let name = RustIdentifier::new(self.newtype.name().as_str());
+        let display = quote! {
+            impl std::fmt::Display for #name {
+                fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    self.payload().fmt(formatter)
+                }
+            }
+        };
+        let string_impls = if self.string_like() {
+            quote! {
+                impl AsRef<str> for #name {
+                    fn as_ref(&self) -> &str {
+                        self.payload().as_str()
+                    }
+                }
+
+                impl PartialEq<&str> for #name {
+                    fn eq(&self, other: &&str) -> bool {
+                        self.payload() == other
+                    }
+                }
+            }
+        } else {
+            TokenStream::new()
+        };
+        let integer_impls = if self.integer_like() {
+            quote! {
+                impl PartialEq<u64> for #name {
+                    fn eq(&self, other: &u64) -> bool {
+                        self.payload() == other
+                    }
+                }
+
+                impl PartialOrd<u64> for #name {
+                    fn partial_cmp(&self, other: &u64) -> Option<std::cmp::Ordering> {
+                        self.payload().partial_cmp(other)
+                    }
+                }
+            }
+        } else {
+            TokenStream::new()
+        };
+        let boolean_impls = if self.boolean_like() {
+            quote! {
+                impl PartialEq<bool> for #name {
+                    fn eq(&self, other: &bool) -> bool {
+                        self.payload() == other
+                    }
+                }
+            }
+        } else {
+            TokenStream::new()
+        };
+        quote! {
+            #display
+            #string_impls
+            #integer_impls
+            #boolean_impls
         }
         .to_tokens(tokens);
     }
@@ -4623,6 +4752,7 @@ struct RustModuleRenderer {
     private_type_names: Vec<String>,
     nota_surface: NotaSurface,
     target: RustEmissionTarget,
+    standard_newtype_impls: bool,
 }
 
 struct EnumConstructorPayload {
@@ -4834,6 +4964,7 @@ impl RustModuleRenderer {
             private_type_names: Vec::new(),
             nota_surface: options.nota_surface().clone(),
             target: options.target(),
+            standard_newtype_impls: options.standard_newtype_impls(),
         }
     }
 
@@ -4874,6 +5005,7 @@ impl RustModuleRenderer {
             self.map_key_types.clone(),
             self.private_type_names.clone(),
             self.nota_surface.clone(),
+            self.standard_newtype_impls,
         )
     }
 
@@ -5082,6 +5214,9 @@ impl RustModuleRenderer {
 
     fn emit_newtype_inherent_impl(&mut self, declaration: &RustNewtype) {
         self.emit_item_tokens(NewtypeInherentImplTokens::new(declaration).into_token_stream());
+        if self.render_context().emits_standard_newtype_impls() {
+            self.emit_item_tokens(StandardNewtypeImplTokens::new(declaration).into_token_stream());
+        }
     }
 
     fn emit_root_enum(&mut self, root_enum: &RustEnum) {

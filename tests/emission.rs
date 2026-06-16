@@ -369,6 +369,7 @@ fn emission_can_disable_nota_surface_for_binary_only_consumers() {
     let generated = RustEmitter::new(RustEmissionOptions {
         nota_surface: NotaSurface::Disabled,
         target: RustEmissionTarget::ComponentRuntime,
+        standard_newtype_impls: false,
     })
     .emit_code_from_schema(&schema);
     let code = generated.as_str();
@@ -406,6 +407,7 @@ fn emission_can_gate_nota_surface_behind_text_client_feature() {
             feature: "nota-text".to_owned(),
         },
         target: RustEmissionTarget::ComponentRuntime,
+        standard_newtype_impls: false,
     })
     .emit_code_from_schema(&schema);
     let code = generated.as_str();
