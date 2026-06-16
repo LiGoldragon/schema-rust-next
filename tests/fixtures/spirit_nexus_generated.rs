@@ -551,16 +551,25 @@ pub struct StashResult {
 }
 
 #[rustfmt::skip]
-pub type Input = Work<SignalInput, SemaWriteOutput, SemaReadOutput, EffectOutcome>;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum Input {
+    SignalArrived(SignalInput),
+    SemaWriteCompleted(SemaWriteOutput),
+    SemaReadCompleted(SemaReadOutput),
+    EffectCompleted(EffectOutcome),
+}
 
 #[rustfmt::skip]
-pub type Output = Action<
-    SignalOutput,
-    SemaWriteSet,
-    SemaReadInput,
-    EffectCommand,
-    Work<SignalInput, SemaWriteOutput, SemaReadOutput, EffectOutcome>,
->;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum Output {
+    ReplyToSignal(SignalOutput),
+    CommandSemaWrite(SemaWriteSet),
+    CommandSemaRead(SemaReadInput),
+    CommandEffect(EffectCommand),
+    Continue(Input),
+}
 
 #[rustfmt::skip]
 impl SignalInput {
@@ -2308,6 +2317,41 @@ impl EffectOutcome {
 }
 
 #[rustfmt::skip]
+impl Input {
+    pub fn signal_arrived(payload: String) -> Self {
+        Self::SignalArrived(SignalInput::new(payload))
+    }
+    pub fn sema_write_completed(payload: Boolean) -> Self {
+        Self::SemaWriteCompleted(SemaWriteOutput::new(payload))
+    }
+    pub fn sema_read_completed(payload: Integer) -> Self {
+        Self::SemaReadCompleted(SemaReadOutput::new(payload))
+    }
+    pub fn effect_completed(payload: EffectOutcome) -> Self {
+        Self::EffectCompleted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Output {
+    pub fn reply_to_signal(payload: String) -> Self {
+        Self::ReplyToSignal(SignalOutput::new(payload))
+    }
+    pub fn command_sema_write(payload: SemaWriteSet) -> Self {
+        Self::CommandSemaWrite(payload)
+    }
+    pub fn command_sema_read(payload: String) -> Self {
+        Self::CommandSemaRead(SemaReadInput::new(payload))
+    }
+    pub fn command_effect(payload: EffectCommand) -> Self {
+        Self::CommandEffect(payload)
+    }
+    pub fn r#continue(payload: Input) -> Self {
+        Self::Continue(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl From<Record> for SemaWriteSet {
     fn from(payload: Record) -> Self {
         Self::Record(payload)
@@ -2619,6 +2663,101 @@ impl From<ObserverTapOpened> for EffectOutcome {
 impl From<ObserverTapClosed> for EffectOutcome {
     fn from(payload: ObserverTapClosed) -> Self {
         Self::ObserverTapClosed(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<SignalInput> for Input {
+    fn from(payload: SignalInput) -> Self {
+        Self::SignalArrived(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<SemaWriteOutput> for Input {
+    fn from(payload: SemaWriteOutput) -> Self {
+        Self::SemaWriteCompleted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<SemaReadOutput> for Input {
+    fn from(payload: SemaReadOutput) -> Self {
+        Self::SemaReadCompleted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<EffectOutcome> for Input {
+    fn from(payload: EffectOutcome) -> Self {
+        Self::EffectCompleted(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<SignalOutput> for Output {
+    fn from(payload: SignalOutput) -> Self {
+        Self::ReplyToSignal(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<SemaWriteSet> for Output {
+    fn from(payload: SemaWriteSet) -> Self {
+        Self::CommandSemaWrite(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<SemaReadInput> for Output {
+    fn from(payload: SemaReadInput) -> Self {
+        Self::CommandSemaRead(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<EffectCommand> for Output {
+    fn from(payload: EffectCommand) -> Self {
+        Self::CommandEffect(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<Input> for Output {
+    fn from(payload: Input) -> Self {
+        Self::Continue(payload)
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl std::str::FromStr for Input {
+    type Err = NotaDecodeError;
+    fn from_str(source: &str) -> Result<Self, Self::Err> {
+        NotaSource::new(source).parse::<Self>()
+    }
+}
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl std::fmt::Display for Input {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&<Self as NotaEncode>::to_nota(self))
+    }
+}
+
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl std::str::FromStr for Output {
+    type Err = NotaDecodeError;
+    fn from_str(source: &str) -> Result<Self, Self::Err> {
+        NotaSource::new(source).parse::<Self>()
+    }
+}
+#[rustfmt::skip]
+#[cfg(feature = "nota-text")]
+impl std::fmt::Display for Output {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&<Self as NotaEncode>::to_nota(self))
     }
 }
 

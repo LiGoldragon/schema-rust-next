@@ -372,18 +372,30 @@ impl LowerToRust<RustModule> for Schema {
             .iter()
             .map(|declaration| declaration.lower_to_rust(context))
             .collect::<Vec<_>>();
-        let root_enums = self
+        // Concrete enum-body roots lower directly. Application-form roots are
+        // monomorphized first: expanding the applied frame head produces a
+        // CONCRETE `EnumDeclaration` (empty parameters) that lowers through the
+        // same concrete-enum path, so constructors / From / accessors / nota /
+        // wire emission cover it unchanged. An application whose head names no
+        // resolvable frame falls back to the legacy type-alias path (rollback
+        // safety) — that path stays until the expansion is proven.
+        let mut root_enums = self
             .input_and_output()
             .into_iter()
             .filter_map(Root::as_enum)
             .map(|root| root.lower_to_rust(context))
             .collect::<Vec<_>>();
-        let applied_roots = self
+        let mut applied_roots = Vec::new();
+        for application in self
             .input_and_output()
             .into_iter()
             .filter_map(Root::as_application)
-            .map(|application| application.lower_to_rust(context))
-            .collect::<Vec<_>>();
+        {
+            match self.expand_application_root(application) {
+                Some(expanded) => root_enums.push(expanded.lower_to_rust(context)),
+                None => applied_roots.push(application.lower_to_rust(context)),
+            }
+        }
         RustModule {
             file_path: RustModulePath::new(self.identity().component().clone()).to_file_path(),
             generator_name: context.generator_name().to_owned(),
