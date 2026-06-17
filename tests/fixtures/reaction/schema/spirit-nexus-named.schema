@@ -1,0 +1,24 @@
+{}
+[]
+[]
+{
+  (| Work Event WriteDone ReadDone EffectDone |) [(SignalArrived Event) (SemaWriteCompleted WriteDone) (SemaReadCompleted ReadDone) (EffectCompleted EffectDone)]
+  (| Action Reply Write Read Effect Continuation |) [(ReplyToSignal Reply) (CommandSemaWrite Write) (CommandSemaRead Read) (CommandEffect Effect) (Continue Continuation)]
+
+  SignalInput { payload String }
+  SignalOutput { reply String }
+  SemaReadInput { selector String }
+  SemaReadOutput { records Integer }
+  SemaWriteOutput { written Boolean }
+
+  SemaWriteInput [(Record)]
+  Record SignalInput
+
+  NexusEffectCommand [(Stash)]
+  Stash SignalInput
+  NexusEffectResult [(Stashed)]
+  Stashed SignalOutput
+
+  NexusWork (Work SignalInput SemaWriteOutput SemaReadOutput NexusEffectResult)
+  NexusAction (Action SignalOutput SemaWriteInput SemaReadInput NexusEffectCommand NexusWork)
+}

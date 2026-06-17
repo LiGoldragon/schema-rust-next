@@ -51,6 +51,19 @@ fn emit_spirit_nexus() -> String {
         .to_owned()
 }
 
+fn emit_named_spirit_nexus() -> String {
+    let source = FixtureSchema::new("reaction/schema/spirit-nexus-named.schema").read();
+    let schema = SchemaEngine::default()
+        .lower_source(&source, SchemaIdentity::new("spirit:nexus", "0.1.0"))
+        .expect("spirit-nexus named frame applications lower");
+    let options = RustEmissionOptions::feature_gated_nota("nota-text")
+        .with_target(RustEmissionTarget::NexusRuntime);
+    RustEmitter::new(options)
+        .emit_code_from_schema(&schema)
+        .as_str()
+        .to_owned()
+}
+
 #[test]
 fn spirit_expands_applied_roots_to_concrete_enums() {
     let code = emit_spirit_nexus();
@@ -123,6 +136,49 @@ fn spirit_expands_applied_roots_to_concrete_enums() {
     assert!(
         !code.contains("into_next_step"),
         "no into_next_step shim:\n{code}"
+    );
+}
+
+#[test]
+fn spirit_expands_named_nexus_frame_applications_to_concrete_enums() {
+    let code = emit_named_spirit_nexus();
+
+    assert!(
+        code.contains("pub enum NexusWork {"),
+        "named NexusWork frame application expands to a concrete enum:\n{code}"
+    );
+    for leg in [
+        "SignalArrived(SignalInput)",
+        "SemaWriteCompleted(SemaWriteOutput)",
+        "SemaReadCompleted(SemaReadOutput)",
+        "EffectCompleted(NexusEffectResult)",
+    ] {
+        assert!(code.contains(leg), "NexusWork carries leg {leg}:\n{code}");
+    }
+    assert!(
+        code.contains("pub enum NexusAction {"),
+        "named NexusAction frame application expands to a concrete enum:\n{code}"
+    );
+    for leg in [
+        "ReplyToSignal(SignalOutput)",
+        "CommandSemaWrite(SemaWriteInput)",
+        "CommandSemaRead(SemaReadInput)",
+        "CommandEffect(NexusEffectCommand)",
+        "Continue(NexusWork)",
+    ] {
+        assert!(code.contains(leg), "NexusAction carries leg {leg}:\n{code}");
+    }
+    assert!(
+        !code.contains("pub struct NexusWork") && !code.contains("pub struct NexusAction"),
+        "named frame applications must not emit wrapper newtypes:\n{code}"
+    );
+    assert!(
+        code.contains("impl triad_runtime::NexusWork for NexusWork {}"),
+        "expanded NexusWork remains the runtime work type:\n{code}"
+    );
+    assert!(
+        code.contains("impl triad_runtime::NexusAction for NexusAction"),
+        "expanded NexusAction remains the runtime action type:\n{code}"
     );
 }
 

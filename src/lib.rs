@@ -207,6 +207,41 @@ impl RustLoweringContext {
     fn options(&self) -> RustEmissionOptions {
         self.options.clone()
     }
+
+    fn lower_namespace_declaration(
+        &self,
+        schema: &Schema,
+        declaration: &Declaration,
+    ) -> RustDeclaration {
+        if let Some(expanded) = self.expand_newtype_frame_application(schema, declaration) {
+            return expanded.lower_to_rust(self);
+        }
+        declaration.lower_to_rust(self)
+    }
+
+    fn expand_newtype_frame_application(
+        &self,
+        schema: &Schema,
+        declaration: &Declaration,
+    ) -> Option<Declaration> {
+        if !declaration.parameters().is_empty() {
+            return None;
+        }
+        let TypeDeclaration::Newtype(newtype) = declaration.value() else {
+            return None;
+        };
+        let TypeReference::Application { head, arguments } = &newtype.reference else {
+            return None;
+        };
+        let application =
+            RootApplication::new(declaration.name().clone(), head.clone(), arguments.clone());
+        let expanded = schema.expand_application_root(&application)?;
+        let value = TypeDeclaration::Enum(expanded);
+        match declaration.visibility() {
+            Visibility::Public => Some(Declaration::public(value)),
+            Visibility::Private => Some(Declaration::private(value)),
+        }
+    }
 }
 
 pub trait LowerToRust<Target> {
@@ -370,7 +405,7 @@ impl LowerToRust<RustModule> for Schema {
         let declarations = self
             .namespace()
             .iter()
-            .map(|declaration| declaration.lower_to_rust(context))
+            .map(|declaration| context.lower_namespace_declaration(self, declaration))
             .collect::<Vec<_>>();
         // Concrete enum-body roots lower directly. Application-form roots are
         // monomorphized first: expanding the applied frame head produces a
