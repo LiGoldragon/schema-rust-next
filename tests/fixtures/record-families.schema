@@ -4,9 +4,9 @@
   Topic String
   Description String
   RecordIdentifier Integer
-  Entry { topic Topic description Description }
-  Observation { note Description }
-  Query { Topic * }
+  Entry { Topic Description }
+  Observation { note.Description }
+  Query { Topic }
   RecordSet (Vector Entry)
   EntryFamily (Family { record Entry table entries key Domain })
   ObservationFamily (Family { record Observation table observations key Identified })

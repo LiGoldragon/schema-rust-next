@@ -2,8 +2,9 @@ use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{ToTokens, quote};
 use schema_next::{
     Declaration, EnumDeclaration, EnumVariant, FamilyDeclaration, FamilyKey, FieldDeclaration,
-    ImportResolver, Name, NewtypeDeclaration, RelationDeclaration, RelationValue, ResolvedImport,
-    Root, RootApplication, Schema, SchemaEngine, SchemaError, SchemaIdentity, SchemaSource,
+    ImplFact, ImplReference, ImportResolver, MethodParameter, MethodSignature, Name,
+    NewtypeDeclaration, ReferencedImpl, RelationDeclaration, RelationValue, ResolvedImport, Root,
+    RootApplication, RustSurface, Schema, SchemaEngine, SchemaError, SchemaIdentity, SchemaSource,
     StreamDeclaration, StructDeclaration, TypeDeclaration, TypeReference, Visibility,
 };
 
@@ -178,7 +179,14 @@ impl RustSchemaSourceLowering for SchemaSource {
         emitter: &RustEmitter,
     ) -> Result<RustModule, SchemaError> {
         let schema = engine.lower_schema_source_with_resolver(self, identity, resolver)?;
-        Ok(schema.lower_to_rust_module(emitter))
+        let module = schema.lower_to_rust_module(emitter);
+        // Emission boundary: a malformed schema name (NOTA accepts symbol atoms
+        // Rust rejects as identifiers) becomes a typed error here instead of a
+        // panic at `Ident::new`, and the recognized `{| … |}` catalog subset is
+        // verified against the surface the module actually emits.
+        module.verify_names()?;
+        module.verify_catalog(&schema)?;
+        Ok(module)
     }
 }
 
@@ -261,6 +269,7 @@ pub struct RustModule {
     relations: Vec<RustRelation>,
     versioned_store: RustVersionedStore,
     support: RustSupportModel,
+    referenced_impls: Vec<RustImplReference>,
     options: RustEmissionOptions,
 }
 
@@ -312,9 +321,150 @@ impl RustModule {
             .find(|declaration| declaration.name().as_str() == name)
     }
 
+    pub fn referenced_impls(&self) -> &[RustImplReference] {
+        &self.referenced_impls
+    }
+
+    /// The type names the `{| … |}` catalog references an ordering-class trait
+    /// (`Ord`/`PartialOrd` on a non-integer shape) for — the set that gets the
+    /// `PartialOrd, Ord` derive folded in. Integer `PartialOrd` is a body, not
+    /// a derive, so it is excluded here (the recipe emits the comparison impl).
+    fn ordering_type_names(&self) -> Vec<String> {
+        self.referenced_impls
+            .iter()
+            .filter_map(|reference| {
+                let trait_name = reference.entry().trait_name()?;
+                let shape = self.target_scalar_shape(reference.target());
+                StandardImplRecipe::new(reference.target().clone(), trait_name.clone(), shape)
+                    .is_derive_class()
+                    .then(|| reference.target().as_str().to_owned())
+            })
+            .collect()
+    }
+
+    /// The backing scalar shape of a referenced impl's target, resolved through
+    /// the module's newtype chain. A non-newtype target (struct, enum, absent)
+    /// resolves to [`ScalarShape::NonScalar`].
+    fn target_scalar_shape(&self, target: &Name) -> ScalarShape {
+        match self
+            .declarations
+            .iter()
+            .find(|declaration| declaration.name() == target)
+            .map(RustDeclaration::value)
+        {
+            Some(RustTypeDeclaration::Newtype(newtype)) => {
+                ScalarShape::resolve(newtype.reference(), &self.declarations)
+            }
+            _ => ScalarShape::NonScalar,
+        }
+    }
+
+    /// Validate every emitted Rust identifier — type names, field names, enum
+    /// variants, generic parameters — as a legal Rust identifier BEFORE any
+    /// `ToTokens` runs. NOTA accepts a far broader symbol atom than Rust accepts
+    /// as an identifier (`Foo-Bar`, `2Things`, `A/B` all parse as schema
+    /// names), so a malformed name would otherwise reach `Ident::new` and PANIC.
+    /// This boundary turns that panic into a typed [`SchemaError`] naming the
+    /// offending identifier.
+    pub fn verify_names(&self) -> Result<(), SchemaError> {
+        for declaration in &self.declarations {
+            RustIdentifier::verify(declaration.name(), "type")?;
+            for parameter in declaration.parameters() {
+                RustIdentifier::verify(parameter, "type parameter")?;
+            }
+            match declaration.value() {
+                RustTypeDeclaration::Struct(structure) => {
+                    for field in structure.fields() {
+                        RustIdentifier::verify_field(field.name())?;
+                    }
+                }
+                RustTypeDeclaration::Enum(enumeration) => {
+                    for variant in enumeration.variants() {
+                        RustIdentifier::verify(variant.name(), "enum variant")?;
+                    }
+                }
+                RustTypeDeclaration::Newtype(_) => {}
+            }
+        }
+        for root_enum in &self.root_enums {
+            RustIdentifier::verify(root_enum.name(), "root enum")?;
+            for variant in root_enum.variants() {
+                RustIdentifier::verify(variant.name(), "enum variant")?;
+            }
+        }
+        for applied_root in &self.applied_roots {
+            RustIdentifier::verify(applied_root.name(), "applied root")?;
+        }
+        Ok(())
+    }
+
+    /// Verify the `{| … |}` catalog against the Rust surface this module
+    /// ACTUALLY emits. This is the half that turns
+    /// [`schema_next::RustSurface::verify_catalog`] from a test-only check into
+    /// a build invariant: the facts come from [`EmittedRustSurface::from`]
+    /// walking `self` (the standard impls Move 3 emitted, the intrinsic newtype
+    /// inherents, and the ordering-class derives), not a hand-built test vector.
+    ///
+    /// The two-tier trust boundary: a RECOGNIZED reference (a standard trait
+    /// under a scalar shape, or an ordering-class derive) contributes a fact to
+    /// the surface only when the generator genuinely emits/derives it — so a
+    /// recognized reference whose body is missing fails verification with
+    /// [`SchemaError::UnverifiedImplReference`] naming the exact target. An
+    /// UNRECOGNIZED reference (a hand-written runtime trait or inherent method)
+    /// is passed through as externally-provided-unverified — its facts are
+    /// trusted into the surface so the check does not reject the crate-provided
+    /// impl. The full real-crate scan that would verify those too is a named
+    /// follow-up, not silently claimed here.
+    pub fn verify_catalog(&self, schema: &Schema) -> Result<(), SchemaError> {
+        EmittedRustSurface::for_schema(self, schema)
+            .into_surface()
+            .verify_catalog(schema)
+    }
+
+    /// Whether the generator OWNS a body (or derive) for this catalog entry on
+    /// this target — the recognized closed set under a scalar-backed shape, or
+    /// an ordering-class derive. An entry the generator does not recognize is
+    /// trusted to the crate and passed through unverified.
+    fn recognizes(&self, target: &Name, entry: &ImplReference) -> bool {
+        let Some(trait_name) = entry.trait_name() else {
+            return false;
+        };
+        let shape = self.target_scalar_shape(target);
+        let recipe = StandardImplRecipe::new(target.clone(), trait_name.clone(), shape);
+        recipe.recipe().is_some() || recipe.is_derive_class()
+    }
+
+    /// The [`ImplFact`]s the generated Rust surface genuinely exposes for one
+    /// target newtype: the standard recipe bodies the catalog drove, the
+    /// ordering-class derive when the catalog references it, and the intrinsic
+    /// newtype inherents (`new` / `payload` / `into_payload`). Only facts the
+    /// generator actually emits are added — a recognized-but-absent reference
+    /// therefore has no fact, and verification catches it.
+    fn emitted_facts(&self) -> Vec<ImplFact> {
+        let mut facts = Vec::new();
+        for reference in &self.referenced_impls {
+            let Some(trait_name) = reference.entry().trait_name() else {
+                continue;
+            };
+            let shape = self.target_scalar_shape(reference.target());
+            let recipe =
+                StandardImplRecipe::new(reference.target().clone(), trait_name.clone(), shape);
+            if let Some(body) = recipe.recipe() {
+                facts.push(body.fact());
+            } else if recipe.is_derive_class() {
+                facts.push(ImplFact::trait_impl(
+                    reference.target().clone(),
+                    trait_name.clone(),
+                ));
+            }
+        }
+        facts
+    }
+
     pub fn render(&self) -> RustCode {
         let mut writer = RustModuleRenderer::new(self.options.clone());
         writer.note_map_key_types(self.support.map_key_type_names().to_vec());
+        writer.note_ordering_types(self.ordering_type_names());
         writer.note_private_type_names(self.support.private_type_names().to_vec());
         writer.line(format!("// @generated by {}", self.generator_name));
         writer.blank();
@@ -352,6 +502,7 @@ impl RustModule {
         }
 
         writer.emit_newtype_inherent_impls(&self.declarations);
+        writer.emit_catalog_impls(&self.referenced_impls, &self.declarations);
         writer.emit_enum_variant_constructors(
             &self.declarations,
             writer.emitted_root_enums(&self.root_enums),
@@ -453,6 +604,11 @@ impl LowerToRust<RustModule> for Schema {
                 self, context,
             ),
             support: <Self as LowerToRust<RustSupportModel>>::lower_to_rust(self, context),
+            referenced_impls: self
+                .referenced_impls()
+                .iter()
+                .map(|reference| reference.lower_to_rust(context))
+                .collect(),
             options: context.options(),
         }
     }
@@ -478,7 +634,6 @@ impl LowerToRust<RustModule> for Schema {
 pub struct RustEmissionOptions {
     pub nota_surface: NotaSurface,
     pub target: RustEmissionTarget,
-    pub standard_newtype_impls: bool,
 }
 
 impl Default for RustEmissionOptions {
@@ -495,7 +650,6 @@ impl RustEmissionOptions {
         Self {
             nota_surface: NotaSurface::AlwaysEnabled,
             target: RustEmissionTarget::ComponentRuntime,
-            standard_newtype_impls: false,
         }
     }
 
@@ -511,7 +665,6 @@ impl RustEmissionOptions {
                 feature: feature.into(),
             },
             target: RustEmissionTarget::ComponentRuntime,
-            standard_newtype_impls: false,
         }
     }
 
@@ -524,21 +677,11 @@ impl RustEmissionOptions {
         Self {
             nota_surface: NotaSurface::Disabled,
             target: RustEmissionTarget::ComponentRuntime,
-            standard_newtype_impls: false,
         }
     }
 
     pub fn with_target(mut self, target: RustEmissionTarget) -> Self {
         self.target = target;
-        self
-    }
-
-    /// Emit standard payload-delegating impls for scalar-backed newtypes. This
-    /// is a proposal surface for schema-implied capabilities: the wrapped scalar
-    /// guarantees the implementation, so consumers should not hand-write the
-    /// same one-line delegation repeatedly.
-    pub fn with_standard_newtype_impls(mut self) -> Self {
-        self.standard_newtype_impls = true;
         self
     }
 
@@ -548,10 +691,6 @@ impl RustEmissionOptions {
 
     pub fn target(&self) -> RustEmissionTarget {
         self.target
-    }
-
-    fn standard_newtype_impls(&self) -> bool {
-        self.standard_newtype_impls
     }
 }
 
@@ -1294,6 +1433,178 @@ impl LowerToRust<RustAppliedRoot> for RootApplication {
     }
 }
 
+/// An owned mirror of one [`schema_next::ReferencedImpl`] — an entry from the
+/// schema-wide `{| … |}` impl catalog, paired with the type it targets. The
+/// borrowed `ReferencedImpl<'schema>` cannot cross into the owned
+/// [`RustModule`], so lowering clones it into this noun. The catalog carries
+/// no Rust body: this is the *selection* data that drives which standard impls
+/// the module emits and the *manifest* the emitted surface is verified against.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustImplReference {
+    target: Name,
+    entry: RustImplEntry,
+}
+
+impl RustImplReference {
+    pub fn target(&self) -> &Name {
+        &self.target
+    }
+
+    pub fn entry(&self) -> &RustImplEntry {
+        &self.entry
+    }
+}
+
+impl LowerToRust<RustImplReference> for ReferencedImpl<'_> {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustImplReference {
+        RustImplReference {
+            target: self.target().clone(),
+            entry: self.entry().lower_to_rust(context),
+        }
+    }
+}
+
+/// The owned lowering of one [`schema_next::ImplReference`]: a bare trait
+/// marker, a body-bearing trait impl with its required method signatures, or a
+/// single inherent method signature. Mirrors the schema-next enum shape so the
+/// module owns its catalog without borrowing the source schema.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RustImplEntry {
+    Marker(Name),
+    TraitImpl(Name, Vec<RustMethodSignature>),
+    InherentMethod(RustMethodSignature),
+}
+
+impl RustImplEntry {
+    /// The trait this entry names, if any. Inherent methods name no trait.
+    pub fn trait_name(&self) -> Option<&Name> {
+        match self {
+            Self::Marker(trait_name) | Self::TraitImpl(trait_name, _) => Some(trait_name),
+            Self::InherentMethod(_) => None,
+        }
+    }
+
+    /// The method signatures this entry references — none for a marker, the
+    /// required methods for a trait impl, exactly itself for an inherent
+    /// method. Mirrors [`schema_next::ImplReference::methods`].
+    pub fn methods(&self) -> &[RustMethodSignature] {
+        match self {
+            Self::Marker(_) => &[],
+            Self::TraitImpl(_, methods) => methods,
+            Self::InherentMethod(signature) => std::slice::from_ref(signature),
+        }
+    }
+}
+
+impl LowerToRust<RustImplEntry> for ImplReference {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustImplEntry {
+        match self {
+            ImplReference::Marker(trait_name) => RustImplEntry::Marker(trait_name.clone()),
+            ImplReference::TraitImpl(trait_name, methods) => RustImplEntry::TraitImpl(
+                trait_name.clone(),
+                methods
+                    .iter()
+                    .map(|signature| signature.lower_to_rust(context))
+                    .collect(),
+            ),
+            ImplReference::InherentMethod(signature) => {
+                RustImplEntry::InherentMethod(signature.lower_to_rust(context))
+            }
+        }
+    }
+}
+
+/// The owned lowering of one [`schema_next::MethodSignature`]: a method name,
+/// its parameters, and its return type reference. It re-derives the canonical
+/// rendering schema-next uses for duplicate detection and unverified-reference
+/// errors so an emitted [`ImplFact`] and the source catalog entry match
+/// signature-for-signature.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustMethodSignature {
+    name: Name,
+    parameters: Vec<RustMethodParameter>,
+    return_reference: TypeReference,
+}
+
+impl RustMethodSignature {
+    pub fn name(&self) -> &Name {
+        &self.name
+    }
+
+    pub fn parameters(&self) -> &[RustMethodParameter] {
+        &self.parameters
+    }
+
+    pub fn return_reference(&self) -> &TypeReference {
+        &self.return_reference
+    }
+}
+
+impl LowerToRust<RustMethodSignature> for MethodSignature {
+    fn lower_to_rust(&self, context: &RustLoweringContext) -> RustMethodSignature {
+        RustMethodSignature {
+            name: self.name().clone(),
+            parameters: self
+                .parameters()
+                .iter()
+                .map(|parameter| parameter.lower_to_rust(context))
+                .collect(),
+            return_reference: self.return_reference().clone(),
+        }
+    }
+}
+
+/// The schema-next [`MethodSignature`] this owned signature corresponds to —
+/// the bridge back into a [`schema_next::ImplFact`] for the emitted surface.
+/// Reconstructs the source-side parameter and return types so the surface fact
+/// renders the exact canonical signature `RustSurface::verify_catalog` matches.
+impl From<&RustMethodSignature> for MethodSignature {
+    fn from(signature: &RustMethodSignature) -> Self {
+        MethodSignature::new(
+            signature.name.clone(),
+            signature
+                .parameters
+                .iter()
+                .map(MethodParameter::from)
+                .collect(),
+            signature.return_reference.clone(),
+        )
+    }
+}
+
+/// The owned lowering of one [`schema_next::MethodParameter`]: a parameter name
+/// and its resolved type reference.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustMethodParameter {
+    name: Name,
+    reference: TypeReference,
+}
+
+impl RustMethodParameter {
+    pub fn name(&self) -> &Name {
+        &self.name
+    }
+
+    pub fn reference(&self) -> &TypeReference {
+        &self.reference
+    }
+}
+
+impl LowerToRust<RustMethodParameter> for MethodParameter {
+    fn lower_to_rust(&self, _context: &RustLoweringContext) -> RustMethodParameter {
+        RustMethodParameter {
+            name: self.name().clone(),
+            reference: self.reference().clone(),
+        }
+    }
+}
+
+impl From<&RustMethodParameter> for MethodParameter {
+    fn from(parameter: &RustMethodParameter) -> Self {
+        MethodParameter::new(parameter.name.clone(), parameter.reference.clone())
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct RustSupportModel {
     map_key_type_names: Vec<String>,
@@ -1339,33 +1650,39 @@ impl LowerToRust<RustSupportModel> for Schema {
 #[derive(Clone, Debug)]
 struct RustRenderContext {
     map_key_type_names: Vec<String>,
+    ordering_type_names: Vec<String>,
     private_type_names: Vec<String>,
     nota_surface: NotaSurface,
-    standard_newtype_impls: bool,
 }
 
 impl RustRenderContext {
     fn new(
         map_key_type_names: Vec<String>,
+        ordering_type_names: Vec<String>,
         private_type_names: Vec<String>,
         nota_surface: NotaSurface,
-        standard_newtype_impls: bool,
     ) -> Self {
         Self {
             map_key_type_names,
+            ordering_type_names,
             private_type_names,
             nota_surface,
-            standard_newtype_impls,
         }
     }
 
+    /// Whether the data type gets the `PartialOrd, Ord` derive class — true for
+    /// a `BTreeMap` key type (so the map compiles) or a type the `{| … |}`
+    /// catalog references `Ord`/`PartialOrd` for (the derive *is* the body for
+    /// an ordering-class marker, so the catalog entry is satisfied by it).
+    fn is_ordering_class(&self, type_name: &Name) -> bool {
+        self.map_key_type_names
+            .iter()
+            .chain(self.ordering_type_names.iter())
+            .any(|name| name == type_name.as_str())
+    }
+
     fn data_type_attributes(&self, type_name: &Name) -> Vec<TokenStream> {
-        self.derive_attributes(
-            false,
-            self.map_key_type_names
-                .iter()
-                .any(|name| name == type_name.as_str()),
-        )
+        self.derive_attributes(false, self.is_ordering_class(type_name))
     }
 
     fn enum_type_attributes(&self, enumeration: &RustEnum) -> Vec<TokenStream> {
@@ -1462,10 +1779,6 @@ impl RustRenderContext {
         }
     }
 
-    fn emits_standard_newtype_impls(&self) -> bool {
-        self.standard_newtype_impls
-    }
-
     fn field_visibility_tokens(
         &self,
         visibility: Visibility,
@@ -1519,6 +1832,38 @@ impl<'name> RustIdentifier<'name> {
         } else {
             Ident::new(self.name, Span::call_site())
         }
+    }
+
+    /// Whether this name is a legal Rust identifier (raw or plain) — the
+    /// non-panicking pre-check `ident()` relies on. `Ident::new` PANICS on a
+    /// malformed name; this answers the same question without aborting, so a bad
+    /// schema name becomes a typed error at the emission boundary instead.
+    fn is_legal(&self) -> bool {
+        RustKeyword::new(self.name).is_reserved()
+            || syn::parse_str::<syn::Ident>(self.name).is_ok()
+    }
+
+    /// Validate a schema-derived name in a type/variant/parameter position as a
+    /// legal Rust identifier, yielding a typed [`SchemaError`] (not a panic)
+    /// when it is not. NOTA accepts symbol atoms (`Foo-Bar`, `A/B`, `2Things`)
+    /// far broader than Rust identifiers, so this gate is what stops a malformed
+    /// schema name from reaching `Ident::new` and aborting the generator.
+    fn verify(name: &Name, position: &str) -> Result<(), SchemaError> {
+        if (RustIdentifier { name: name.as_str() }).is_legal() {
+            return Ok(());
+        }
+        Err(SchemaError::MalformedSchemaNode {
+            found: format!(
+                "{position} name `{}` is not a legal Rust identifier",
+                name.as_str()
+            ),
+        })
+    }
+
+    /// Validate a struct field name. Fields render through the same
+    /// `RustIdentifier` path as types, so the same identifier gate applies.
+    fn verify_field(name: &Name) -> Result<(), SchemaError> {
+        Self::verify(name, "field")
     }
 }
 
@@ -2057,104 +2402,294 @@ impl ToTokens for NewtypeInherentImplTokens<'_> {
     }
 }
 
-/// Renders standard payload-delegating impls for scalar-backed newtypes. These
-/// are the capability methods the schema shape can guarantee without a method
-/// body language: display delegates to the scalar payload, and scalar comparisons
-/// compare the payload directly.
-struct StandardNewtypeImplTokens<'newtype> {
-    newtype: &'newtype RustNewtype,
+/// The backing scalar shape a recipe's payload-delegating body is valid for.
+/// A standard impl body delegates to `self.payload()`, so the body is only
+/// sound when the target newtype is ultimately backed by a primitive scalar.
+/// [`Self::resolve`] follows a chain of `Plain` newtype references through the
+/// module's declarations to the underlying scalar — so a transitive newtype
+/// (`Statement(StatementText(String))`) resolves to `String`, closing the
+/// blind spot the old direct-`TypeReference`-match `scalar_like()` left open.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ScalarShape {
+    String,
+    Integer,
+    Boolean,
+    NonScalar,
 }
 
-impl<'newtype> StandardNewtypeImplTokens<'newtype> {
-    fn new(newtype: &'newtype RustNewtype) -> Self {
-        Self { newtype }
-    }
-
-    fn string_like(&self) -> bool {
-        matches!(
-            self.newtype.reference(),
-            TypeReference::String | TypeReference::Path
-        )
-    }
-
-    fn integer_like(&self) -> bool {
-        matches!(self.newtype.reference(), TypeReference::Integer)
-    }
-
-    fn boolean_like(&self) -> bool {
-        matches!(self.newtype.reference(), TypeReference::Boolean)
-    }
-
-    fn scalar_like(&self) -> bool {
-        self.string_like() || self.integer_like() || self.boolean_like()
-    }
-}
-
-impl ToTokens for StandardNewtypeImplTokens<'_> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        if !self.scalar_like() {
-            return;
+impl ScalarShape {
+    /// Classify a type reference into its backing scalar, following `Plain`
+    /// newtype references through the supplied declarations. A reference cycle
+    /// or an unresolved plain name terminates as [`Self::NonScalar`].
+    fn resolve(reference: &TypeReference, declarations: &[RustDeclaration]) -> Self {
+        let mut current = reference.clone();
+        let mut seen: Vec<String> = Vec::new();
+        loop {
+            match &current {
+                TypeReference::String | TypeReference::Path => return Self::String,
+                TypeReference::Integer => return Self::Integer,
+                TypeReference::Boolean => return Self::Boolean,
+                TypeReference::Plain(name) => {
+                    let name = name.as_str().to_owned();
+                    if seen.contains(&name) {
+                        return Self::NonScalar;
+                    }
+                    seen.push(name.clone());
+                    match declarations
+                        .iter()
+                        .find(|declaration| declaration.name().as_str() == name)
+                        .map(RustDeclaration::value)
+                    {
+                        Some(RustTypeDeclaration::Newtype(newtype)) => {
+                            current = newtype.reference().clone();
+                        }
+                        _ => return Self::NonScalar,
+                    }
+                }
+                _ => return Self::NonScalar,
+            }
         }
-        let name = RustIdentifier::new(self.newtype.name().as_str());
-        let display = quote! {
-            impl std::fmt::Display for #name {
-                fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    self.payload().fmt(formatter)
-                }
-            }
-        };
-        let string_impls = if self.string_like() {
-            quote! {
-                impl AsRef<str> for #name {
-                    fn as_ref(&self) -> &str {
-                        self.payload().as_str()
-                    }
-                }
+    }
 
-                impl PartialEq<&str> for #name {
-                    fn eq(&self, other: &&str) -> bool {
-                        self.payload() == other
-                    }
-                }
-            }
-        } else {
-            TokenStream::new()
-        };
-        let integer_impls = if self.integer_like() {
-            quote! {
-                impl PartialEq<u64> for #name {
-                    fn eq(&self, other: &u64) -> bool {
-                        self.payload() == other
-                    }
-                }
+    fn is_string(self) -> bool {
+        matches!(self, Self::String)
+    }
 
-                impl PartialOrd<u64> for #name {
-                    fn partial_cmp(&self, other: &u64) -> Option<std::cmp::Ordering> {
-                        self.payload().partial_cmp(other)
+    fn is_integer(self) -> bool {
+        matches!(self, Self::Integer)
+    }
+
+    fn is_boolean(self) -> bool {
+        matches!(self, Self::Boolean)
+    }
+
+    fn is_scalar(self) -> bool {
+        !matches!(self, Self::NonScalar)
+    }
+}
+
+/// One recognized standard-impl recipe body, addressable per trait. Each body
+/// is the payload-delegating one-liner the catalog trait names and the
+/// generator owns — `Display` delegates to the scalar payload's own `Display`,
+/// scalar comparisons compare the payload directly. The body carries the target
+/// type name so it renders a complete `impl` block. This is the body library
+/// the `{| … |}` catalog *selects from*; the catalog carries no Rust body.
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum StandardImplBody {
+    Display(Name),
+    AsRefStr(Name),
+    PartialEqStr(Name),
+    PartialEqU64(Name),
+    PartialOrdU64(Name),
+    PartialEqBool(Name),
+}
+
+impl StandardImplBody {
+    /// The [`ImplFact`] this emitted body attests to on the generated Rust
+    /// surface — a trait impl of the corresponding `std` (or comparison) trait
+    /// for the target type, keyed by the catalog trait atom the surface
+    /// verifies against. The surface speaks the catalog's trait vocabulary
+    /// (`Display`, `AsRef`, `PartialEq`, `PartialOrd`), not the spelled-out
+    /// generic argument, so an emitted `PartialEq<&str>` attests the `PartialEq`
+    /// reference the catalog carries.
+    fn fact(&self) -> ImplFact {
+        let (target, trait_atom) = match self {
+            Self::Display(target) => (target, "Display"),
+            Self::AsRefStr(target) => (target, "AsRef"),
+            Self::PartialEqStr(target) | Self::PartialEqU64(target) | Self::PartialEqBool(target) => {
+                (target, "PartialEq")
+            }
+            Self::PartialOrdU64(target) => (target, "PartialOrd"),
+        };
+        ImplFact::trait_impl(target.clone(), Name::new(trait_atom))
+    }
+}
+
+impl ToTokens for StandardImplBody {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::Display(target) => {
+                let name = RustIdentifier::new(target.as_str());
+                quote! {
+                    impl std::fmt::Display for #name {
+                        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                            self.payload().fmt(formatter)
+                        }
                     }
                 }
             }
-        } else {
-            TokenStream::new()
-        };
-        let boolean_impls = if self.boolean_like() {
-            quote! {
-                impl PartialEq<bool> for #name {
-                    fn eq(&self, other: &bool) -> bool {
-                        self.payload() == other
+            Self::AsRefStr(target) => {
+                let name = RustIdentifier::new(target.as_str());
+                quote! {
+                    impl AsRef<str> for #name {
+                        fn as_ref(&self) -> &str {
+                            self.payload().as_str()
+                        }
                     }
                 }
             }
-        } else {
-            TokenStream::new()
-        };
-        quote! {
-            #display
-            #string_impls
-            #integer_impls
-            #boolean_impls
+            Self::PartialEqStr(target) => {
+                let name = RustIdentifier::new(target.as_str());
+                quote! {
+                    impl PartialEq<&str> for #name {
+                        fn eq(&self, other: &&str) -> bool {
+                            self.payload() == other
+                        }
+                    }
+                }
+            }
+            Self::PartialEqU64(target) => {
+                let name = RustIdentifier::new(target.as_str());
+                quote! {
+                    impl PartialEq<u64> for #name {
+                        fn eq(&self, other: &u64) -> bool {
+                            self.payload() == other
+                        }
+                    }
+                }
+            }
+            Self::PartialOrdU64(target) => {
+                let name = RustIdentifier::new(target.as_str());
+                quote! {
+                    impl PartialOrd<u64> for #name {
+                        fn partial_cmp(&self, other: &u64) -> Option<std::cmp::Ordering> {
+                            self.payload().partial_cmp(other)
+                        }
+                    }
+                }
+            }
+            Self::PartialEqBool(target) => {
+                let name = RustIdentifier::new(target.as_str());
+                quote! {
+                    impl PartialEq<bool> for #name {
+                        fn eq(&self, other: &bool) -> bool {
+                            self.payload() == other
+                        }
+                    }
+                }
+            }
         }
         .to_tokens(tokens);
+    }
+}
+
+/// Resolves one `(trait, target-shape)` pair from the `{| … |}` catalog to the
+/// standard-impl body the generator owns for it — the selection half of
+/// catalog consumption. It holds the target type name, the catalog trait atom,
+/// and the resolved backing [`ScalarShape`]; [`Self::recipe`] answers `Some`
+/// for the recognized closed set under a scalar-backed shape, `None` for an
+/// unrecognized trait, a derive-class trait (`Ord`), or a non-scalar shape —
+/// `None` meaning "emit nothing, verify only." The scalar-shape predicates are
+/// a GUARD here, not the trigger: the catalog says *whether* a type gets the
+/// impl; the shape says *whether* the payload-delegating body is valid for it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StandardImplRecipe {
+    target: Name,
+    trait_name: Name,
+    shape: ScalarShape,
+}
+
+impl StandardImplRecipe {
+    fn new(target: Name, trait_name: Name, shape: ScalarShape) -> Self {
+        Self {
+            target,
+            trait_name,
+            shape,
+        }
+    }
+
+    /// Whether this entry is the derive-class `Ord` marker — recognized, but
+    /// folded into the derive set rather than emitted as an `impl` body. The
+    /// data types already derive `PartialOrd, Ord` when they are ordering-class,
+    /// so an `Ord` reference is satisfied by the derive, not a hand body.
+    fn is_derive_class(&self) -> bool {
+        matches!(self.trait_name.as_str(), "Ord" | "PartialOrd")
+            && !self.shape.is_integer()
+    }
+
+    /// The standard body this `(trait, shape)` resolves to, or `None` when the
+    /// generator owns no body for it under this shape (verify-only).
+    fn recipe(&self) -> Option<StandardImplBody> {
+        if !self.shape.is_scalar() {
+            return None;
+        }
+        match self.trait_name.as_str() {
+            "Display" => Some(StandardImplBody::Display(self.target.clone())),
+            "AsRef" if self.shape.is_string() => {
+                Some(StandardImplBody::AsRefStr(self.target.clone()))
+            }
+            "PartialEq" if self.shape.is_string() => {
+                Some(StandardImplBody::PartialEqStr(self.target.clone()))
+            }
+            "PartialEq" if self.shape.is_integer() => {
+                Some(StandardImplBody::PartialEqU64(self.target.clone()))
+            }
+            "PartialEq" if self.shape.is_boolean() => {
+                Some(StandardImplBody::PartialEqBool(self.target.clone()))
+            }
+            "PartialOrd" if self.shape.is_integer() => {
+                Some(StandardImplBody::PartialOrdU64(self.target.clone()))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// The Rust impl surface a [`RustModule`] genuinely emits, expressed as a
+/// [`schema_next::ImplFact`] set — the producer that makes
+/// [`schema_next::RustSurface::verify_catalog`] meaningful on a GENERATED
+/// surface rather than the hand-built facts in schema-next's tests. The
+/// [`From<&RustModule>`] form carries only what the generator emits/derives;
+/// [`Self::for_schema`] additionally trusts the unrecognized references through,
+/// so the trust boundary verifies the recognized subset and passes the rest.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct EmittedRustSurface {
+    facts: Vec<ImplFact>,
+}
+
+impl EmittedRustSurface {
+    /// The emitted surface for verifying `schema` against `module`: the facts
+    /// the generator genuinely emits, plus a trusted passthrough fact for every
+    /// reference the generator does not recognize (externally-provided). A
+    /// recognized reference contributes a fact only when genuinely emitted, so a
+    /// missing recognized body still fails verification.
+    fn for_schema(module: &RustModule, schema: &Schema) -> Self {
+        let mut surface = Self::from(module);
+        for reference in schema.referenced_impls() {
+            if module.recognizes(reference.target(), reference.entry()) {
+                continue;
+            }
+            Self::push_trusted_reference(&mut surface.facts, reference.target(), reference.entry());
+        }
+        surface
+    }
+
+    /// Add the facts an unrecognized reference is TRUSTED to provide: its trait
+    /// impl (if any) and each of its method signatures. This is the
+    /// externally-provided-unverified passthrough — the crate is trusted to
+    /// carry these, so the boundary does not reject them.
+    fn push_trusted_reference(facts: &mut Vec<ImplFact>, target: &Name, entry: &ImplReference) {
+        if let Some(trait_name) = entry.trait_name() {
+            facts.push(ImplFact::trait_impl(target.clone(), trait_name.clone()));
+        }
+        for signature in entry.methods() {
+            facts.push(ImplFact::method(target.clone(), signature.clone()));
+        }
+    }
+
+    fn into_surface(self) -> RustSurface {
+        RustSurface::new(self.facts)
+    }
+}
+
+/// The bare emitted surface — every [`ImplFact`] the module's own emission and
+/// derives produce, with no trusted passthrough. This is the honest record of
+/// what schema-rust-next ITSELF generates.
+impl From<&RustModule> for EmittedRustSurface {
+    fn from(module: &RustModule) -> Self {
+        Self {
+            facts: module.emitted_facts(),
+        }
     }
 }
 
@@ -4784,10 +5319,10 @@ impl<'schema> CollectionScan<'schema> {
 struct RustModuleRenderer {
     output: String,
     map_key_types: Vec<String>,
+    ordering_types: Vec<String>,
     private_type_names: Vec<String>,
     nota_surface: NotaSurface,
     target: RustEmissionTarget,
-    standard_newtype_impls: bool,
 }
 
 struct EnumConstructorPayload {
@@ -4996,10 +5531,10 @@ impl RustModuleRenderer {
         Self {
             output: String::new(),
             map_key_types: Vec::new(),
+            ordering_types: Vec::new(),
             private_type_names: Vec::new(),
             nota_surface: options.nota_surface().clone(),
             target: options.target(),
-            standard_newtype_impls: options.standard_newtype_impls(),
         }
     }
 
@@ -5038,9 +5573,9 @@ impl RustModuleRenderer {
     fn render_context(&self) -> RustRenderContext {
         RustRenderContext::new(
             self.map_key_types.clone(),
+            self.ordering_types.clone(),
             self.private_type_names.clone(),
             self.nota_surface.clone(),
-            self.standard_newtype_impls,
         )
     }
 
@@ -5055,6 +5590,15 @@ impl RustModuleRenderer {
     /// collection-free schema's emission stays byte-identical.
     fn note_map_key_types(&mut self, key_types: Vec<String>) {
         self.map_key_types = key_types;
+    }
+
+    /// Record the type names the `{| … |}` catalog references an ordering-class
+    /// trait (`Ord`/`PartialOrd`) for. Like a map-key type, an ordering-class
+    /// type additionally derives `PartialOrd, Ord`; the derive *is* the body for
+    /// an ordering marker, so the catalog entry is satisfied by it and the
+    /// emitted surface attests the trait.
+    fn note_ordering_types(&mut self, ordering_types: Vec<String>) {
+        self.ordering_types = ordering_types;
     }
 
     fn note_private_type_names(&mut self, names: Vec<String>) {
@@ -5248,9 +5792,48 @@ impl RustModuleRenderer {
     }
 
     fn emit_newtype_inherent_impl(&mut self, declaration: &RustNewtype) {
+        // The intrinsic Bucket-1 surface (`new` / `payload` / `into_payload` /
+        // `From`) is unconditional — it is what being a newtype MEANS, not a
+        // catalog entry. Standard payload-delegating impls (Display, AsRef,
+        // scalar comparisons) are no longer emitted here on a flag; they are
+        // driven by the `{| … |}` catalog through `emit_catalog_impls`.
         self.emit_item_tokens(NewtypeInherentImplTokens::new(declaration).into_token_stream());
-        if self.render_context().emits_standard_newtype_impls() {
-            self.emit_item_tokens(StandardNewtypeImplTokens::new(declaration).into_token_stream());
+    }
+
+    /// Drive standard-impl emission from the `{| … |}` catalog rather than
+    /// `scalar_like()` shape inference. For each referenced impl, resolve the
+    /// target's backing scalar shape, build a [`StandardImplRecipe`], and:
+    /// `Some(body)` → emit the body the generator owns; derive-class (`Ord`) →
+    /// already folded into the derive set by `note_ordering_types`, emit no
+    /// body; unrecognized trait / hand-written method → emit nothing (the
+    /// crate is trusted to provide it; the verify loop is the trust boundary).
+    fn emit_catalog_impls(
+        &mut self,
+        referenced_impls: &[RustImplReference],
+        declarations: &[RustDeclaration],
+    ) {
+        for reference in referenced_impls {
+            let Some(trait_name) = reference.entry().trait_name() else {
+                // An inherent-method reference names no trait; the generator
+                // owns no body recipe for it, so it is verify-only.
+                continue;
+            };
+            let shape = match declarations
+                .iter()
+                .find(|declaration| declaration.name() == reference.target())
+                .map(RustDeclaration::value)
+            {
+                Some(RustTypeDeclaration::Newtype(newtype)) => {
+                    ScalarShape::resolve(newtype.reference(), declarations)
+                }
+                _ => ScalarShape::NonScalar,
+            };
+            let recipe =
+                StandardImplRecipe::new(reference.target().clone(), trait_name.clone(), shape);
+            if let Some(body) = recipe.recipe() {
+                self.emit_item_tokens(body.into_token_stream());
+                self.blank();
+            }
         }
     }
 

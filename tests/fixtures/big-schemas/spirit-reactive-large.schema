@@ -25,14 +25,18 @@
   Magnitude [Minimum VeryLow Low Medium High VeryHigh Maximum]
   Kind [Decision Principle Correction Clarification Constraint Observation Question]
   RejectionReason [Malformed Unauthorized Conflict Unsupported StaleVersion]
-  Entry { Topics * kind Kind description Description magnitude Magnitude agentName AgentName timestamp Timestamp }
-  Correction { RecordIdentifier * description Description magnitude Magnitude agentName AgentName timestamp Timestamp }
-  Query { Topics * kinds (Vector Kind) limit (Optional Integer) }
-  WatchRequest { Topics * kinds (Vector Kind) agentName AgentName }
-  RecordReceipt { RecordIdentifier * commitSequence CommitSequence databaseDigest DatabaseDigest }
-  CorrectionReceipt { RecordIdentifier * commitSequence CommitSequence databaseDigest DatabaseDigest }
-  RecordSet { records (Vector Entry) byTopic (Map Topic RecordIdentifier) }
-  SubscriptionReceipt { SubscriptionToken * commitSequence CommitSequence }
-  Rejection { RejectionReason * description Description }
-  IndexReceipt { CommitSequence * databaseDigest DatabaseDigest }
+  Kinds (Vector Kind)
+  Limit (Optional Integer)
+  Entries (Vector Entry)
+  ByTopic (Map Topic RecordIdentifier)
+  Entry { Topics Kind Description Magnitude AgentName Timestamp }
+  Correction { RecordIdentifier Description Magnitude AgentName Timestamp }
+  Query { Topics Kinds Limit }
+  WatchRequest { Topics Kinds AgentName }
+  RecordReceipt { RecordIdentifier CommitSequence DatabaseDigest }
+  CorrectionReceipt { RecordIdentifier CommitSequence DatabaseDigest }
+  RecordSet { Entries ByTopic }
+  SubscriptionReceipt { SubscriptionToken CommitSequence }
+  Rejection { RejectionReason Description }
+  IndexReceipt { CommitSequence DatabaseDigest }
 }

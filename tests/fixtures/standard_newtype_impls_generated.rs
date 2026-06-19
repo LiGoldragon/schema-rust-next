@@ -59,24 +59,6 @@ impl From<String> for NameText {
         Self::new(payload)
     }
 }
-#[rustfmt::skip]
-impl std::fmt::Display for NameText {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.payload().fmt(formatter)
-    }
-}
-#[rustfmt::skip]
-impl AsRef<str> for NameText {
-    fn as_ref(&self) -> &str {
-        self.payload().as_str()
-    }
-}
-#[rustfmt::skip]
-impl PartialEq<&str> for NameText {
-    fn eq(&self, other: &&str) -> bool {
-        self.payload() == other
-    }
-}
 
 #[rustfmt::skip]
 impl FilePath {
@@ -94,24 +76,6 @@ impl FilePath {
 impl From<Path> for FilePath {
     fn from(payload: Path) -> Self {
         Self::new(payload)
-    }
-}
-#[rustfmt::skip]
-impl std::fmt::Display for FilePath {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.payload().fmt(formatter)
-    }
-}
-#[rustfmt::skip]
-impl AsRef<str> for FilePath {
-    fn as_ref(&self) -> &str {
-        self.payload().as_str()
-    }
-}
-#[rustfmt::skip]
-impl PartialEq<&str> for FilePath {
-    fn eq(&self, other: &&str) -> bool {
-        self.payload() == other
     }
 }
 
@@ -133,24 +97,6 @@ impl From<Integer> for Count {
         Self::new(payload)
     }
 }
-#[rustfmt::skip]
-impl std::fmt::Display for Count {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.payload().fmt(formatter)
-    }
-}
-#[rustfmt::skip]
-impl PartialEq<u64> for Count {
-    fn eq(&self, other: &u64) -> bool {
-        self.payload() == other
-    }
-}
-#[rustfmt::skip]
-impl PartialOrd<u64> for Count {
-    fn partial_cmp(&self, other: &u64) -> Option<std::cmp::Ordering> {
-        self.payload().partial_cmp(other)
-    }
-}
 
 #[rustfmt::skip]
 impl Enabled {
@@ -170,18 +116,6 @@ impl From<Boolean> for Enabled {
         Self::new(payload)
     }
 }
-#[rustfmt::skip]
-impl std::fmt::Display for Enabled {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.payload().fmt(formatter)
-    }
-}
-#[rustfmt::skip]
-impl PartialEq<bool> for Enabled {
-    fn eq(&self, other: &bool) -> bool {
-        self.payload() == other
-    }
-}
 
 #[rustfmt::skip]
 impl WrappedName {
@@ -199,6 +133,83 @@ impl WrappedName {
 impl From<NameText> for WrappedName {
     fn from(payload: NameText) -> Self {
         Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl std::fmt::Display for NameText {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.payload().fmt(formatter)
+    }
+}
+
+#[rustfmt::skip]
+impl AsRef<str> for NameText {
+    fn as_ref(&self) -> &str {
+        self.payload().as_str()
+    }
+}
+
+#[rustfmt::skip]
+impl PartialEq<&str> for NameText {
+    fn eq(&self, other: &&str) -> bool {
+        self.payload() == other
+    }
+}
+
+#[rustfmt::skip]
+impl std::fmt::Display for FilePath {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.payload().fmt(formatter)
+    }
+}
+
+#[rustfmt::skip]
+impl AsRef<str> for FilePath {
+    fn as_ref(&self) -> &str {
+        self.payload().as_str()
+    }
+}
+
+#[rustfmt::skip]
+impl PartialEq<&str> for FilePath {
+    fn eq(&self, other: &&str) -> bool {
+        self.payload() == other
+    }
+}
+
+#[rustfmt::skip]
+impl std::fmt::Display for Count {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.payload().fmt(formatter)
+    }
+}
+
+#[rustfmt::skip]
+impl PartialEq<u64> for Count {
+    fn eq(&self, other: &u64) -> bool {
+        self.payload() == other
+    }
+}
+
+#[rustfmt::skip]
+impl PartialOrd<u64> for Count {
+    fn partial_cmp(&self, other: &u64) -> Option<std::cmp::Ordering> {
+        self.payload().partial_cmp(other)
+    }
+}
+
+#[rustfmt::skip]
+impl std::fmt::Display for Enabled {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.payload().fmt(formatter)
+    }
+}
+
+#[rustfmt::skip]
+impl PartialEq<bool> for Enabled {
+    fn eq(&self, other: &bool) -> bool {
+        self.payload() == other
     }
 }
 

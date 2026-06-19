@@ -5,8 +5,12 @@ mod support;
 use support::FixtureSchema;
 
 fn emit_standard_newtype_impls() -> String {
+    // No flag: the standard payload-delegating impls are now DRIVEN by the
+    // `{| … |}` catalog the fixture carries, not by an emission flag. The
+    // catalog rides inside the lowered module, so even the infallible
+    // `emit_code_from_schema` path emits them.
     let schema = FixtureSchema::new("standard-newtype-impls.schema").lower("standard:impls");
-    let options = RustEmissionOptions::binary_only().with_standard_newtype_impls();
+    let options = RustEmissionOptions::binary_only();
     RustEmitter::new(options)
         .emit_code_from_schema(&schema)
         .as_str()
@@ -57,7 +61,7 @@ fn scalar_newtypes_emit_standard_impls() {
     );
     assert!(
         !code.contains("impl std::fmt::Display for WrappedName"),
-        "plain newtype over schema type is not treated as scalar-backed:\n{code}"
+        "a newtype with NO catalog entry gets no standard impls:\n{code}"
     );
 }
 

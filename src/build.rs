@@ -155,8 +155,7 @@ impl ModuleEmission {
         Self::new(
             module,
             RustEmissionOptions::feature_gated_nota("nota-text")
-                .with_target(RustEmissionTarget::WireContract)
-                .with_standard_newtype_impls(),
+                .with_target(RustEmissionTarget::WireContract),
         )
     }
 

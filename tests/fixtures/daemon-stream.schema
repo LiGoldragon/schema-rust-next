@@ -14,10 +14,10 @@
   RecordAccepted RecordIdentifier
   SubscriptionStarted IntentSubscription
 
-  Entry { Topics * Description * }
-  Query { Topics * }
-  IntentSubscription { SubscriptionToken * }
-  IntentRecorded { Entry * RecordIdentifier * }
+  Entry { Topics Description }
+  Query { Topics }
+  IntentSubscription { SubscriptionToken }
+  IntentRecorded { Entry RecordIdentifier }
   IntentEvent [(IntentRecorded IntentRecorded belongs IntentEventStream)]
   IntentEventStream (Stream { token SubscriptionToken opened SubscriptionStarted event IntentEvent close SubscriptionToken })
 }

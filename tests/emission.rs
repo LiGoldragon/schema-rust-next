@@ -369,7 +369,6 @@ fn emission_can_disable_nota_surface_for_binary_only_consumers() {
     let generated = RustEmitter::new(RustEmissionOptions {
         nota_surface: NotaSurface::Disabled,
         target: RustEmissionTarget::ComponentRuntime,
-        standard_newtype_impls: false,
     })
     .emit_code_from_schema(&schema);
     let code = generated.as_str();
@@ -407,7 +406,6 @@ fn emission_can_gate_nota_surface_behind_text_client_feature() {
             feature: "nota-text".to_owned(),
         },
         target: RustEmissionTarget::ComponentRuntime,
-        standard_newtype_impls: false,
     })
     .emit_code_from_schema(&schema);
     let code = generated.as_str();
@@ -455,6 +453,15 @@ fn emitted_path_mirrors_schema_module_identity() {
 
 #[test]
 fn inline_private_schema_types_emit_crate_local_rust_boundary() {
+    // A crate-private nested type emits a `pub(crate)` Rust boundary, and a
+    // public type whose fields reference it borrows that boundary onto each
+    // field. The crate-private declaration is `Receipt`, minted as a
+    // `PrivateHelper` inline declaration inside a nested root-enum variant
+    // payload (`Select [(Receipt { … })]`) — the currently-supported
+    // private-declaration spelling now that the strict-positional grammar no
+    // longer parses a Type-followed-by-brace as a struct field. `Entry` is a
+    // public namespace struct that references `Receipt` by name, so both of
+    // its fields downgrade to `pub(crate)` to keep the boundary closed.
     let schema = FixtureSchema::new("inline-private-type.schema").lower("example:inline");
     let generated = RustEmitter::default().emit_file_from_schema(&schema);
     let code = generated.code.as_str();
@@ -1397,10 +1404,15 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     ));
     assert!(!code.contains("impl NotaDecode for Cluster"));
     assert!(!code.contains("impl NotaEncode for Cluster"));
-    // Vec / KeyValue->BTreeMap / Option render at the field positions.
-    assert!(code.contains("pub services: Vec<Service>,"));
-    assert!(code.contains("pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,"));
-    assert!(code.contains("pub cache: Option<NodeConfig>,"));
+    // Vec / KeyValue->BTreeMap / Option render at the field positions. The new
+    // schema-source grammar derives a complex positional field's name from its
+    // type (a custom name needs a named newtype), so the inline collection
+    // fields carry their derived names.
+    assert!(code.contains("pub service_vector: Vec<Service>,"));
+    assert!(code.contains(
+        "pub node_config_by_node_name: std::collections::BTreeMap<NodeName, NodeConfig>,"
+    ));
+    assert!(code.contains("pub optional_node_config: Option<NodeConfig>,"));
     assert!(code.contains("pub healthy: Boolean,"));
     assert!(code.contains("pub config_path: Path,"));
     assert!(code.contains("pub type Path = std::string::String;"));
@@ -1430,11 +1442,11 @@ fn generated_collection_struct_round_trips_through_nota() {
     // Author a Cluster carrying all three collection kinds, encode it
     // to NOTA, parse it back, and confirm the value survives.
     let cluster = collections_generated::Cluster {
-        services: vec![
+        service_vector: vec![
             collections_generated::Service::new("dns"),
             collections_generated::Service::new("mail"),
         ],
-        nodes: {
+        node_config_by_node_name: {
             let mut nodes = std::collections::BTreeMap::new();
             nodes.insert(
                 collections_generated::NodeName::new("alpha"),
@@ -1446,7 +1458,7 @@ fn generated_collection_struct_round_trips_through_nota() {
             );
             nodes
         },
-        cache: Some(collections_generated::NodeConfig::new("warm")),
+        optional_node_config: Some(collections_generated::NodeConfig::new("warm")),
         healthy: true,
         config_path: "/tmp/cluster.nota".to_owned(),
         digest: collections_generated::Digest::new(collections_generated::Bytes::new(vec![
@@ -1465,9 +1477,9 @@ fn generated_collection_struct_round_trips_through_nota() {
     assert_eq!(parsed, cluster);
     // The empty / None forms also round-trip.
     let empty = collections_generated::Cluster {
-        services: Vec::new(),
-        nodes: std::collections::BTreeMap::new(),
-        cache: None,
+        service_vector: Vec::new(),
+        node_config_by_node_name: std::collections::BTreeMap::new(),
+        optional_node_config: None,
         healthy: false,
         config_path: "/tmp/empty.nota".to_owned(),
         digest: collections_generated::Digest::new(collections_generated::Bytes::new(Vec::new())),

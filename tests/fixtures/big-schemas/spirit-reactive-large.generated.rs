@@ -136,6 +136,26 @@ pub enum RejectionReason {
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Kinds(Vec<Kind>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Limit(Option<Integer>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Entries(Vec<Entry>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ByTopic(std::collections::BTreeMap<Topic, RecordIdentifier>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     pub topics: Topics,
     pub kind: Kind,
@@ -161,8 +181,8 @@ pub struct Correction {
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Query {
     pub topics: Topics,
-    pub kinds: Vec<Kind>,
-    pub limit: Option<Integer>,
+    pub kinds: Kinds,
+    pub limit: Limit,
 }
 
 #[rustfmt::skip]
@@ -170,7 +190,7 @@ pub struct Query {
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct WatchRequest {
     pub topics: Topics,
-    pub kinds: Vec<Kind>,
+    pub kinds: Kinds,
     pub agent_name: AgentName,
 }
 
@@ -196,8 +216,8 @@ pub struct CorrectionReceipt {
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RecordSet {
-    pub records: Vec<Entry>,
-    pub by_topic: std::collections::BTreeMap<Topic, RecordIdentifier>,
+    pub entries: Entries,
+    pub by_topic: ByTopic,
 }
 
 #[rustfmt::skip]
@@ -417,6 +437,82 @@ impl DatabaseDigest {
 #[rustfmt::skip]
 impl From<Integer> for DatabaseDigest {
     fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Kinds {
+    pub fn new(payload: Vec<Kind>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Vec<Kind> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Vec<Kind> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Vec<Kind>> for Kinds {
+    fn from(payload: Vec<Kind>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Limit {
+    pub fn new(payload: Option<Integer>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Option<Integer> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Option<Integer> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Option<Integer>> for Limit {
+    fn from(payload: Option<Integer>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Entries {
+    pub fn new(payload: Vec<Entry>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Vec<Entry> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Vec<Entry> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Vec<Entry>> for Entries {
+    fn from(payload: Vec<Entry>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl ByTopic {
+    pub fn new(payload: std::collections::BTreeMap<Topic, RecordIdentifier>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &std::collections::BTreeMap<Topic, RecordIdentifier> {
+        &self.0
+    }
+    pub fn into_payload(self) -> std::collections::BTreeMap<Topic, RecordIdentifier> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<std::collections::BTreeMap<Topic, RecordIdentifier>> for ByTopic {
+    fn from(payload: std::collections::BTreeMap<Topic, RecordIdentifier>) -> Self {
         Self::new(payload)
     }
 }

@@ -117,9 +117,9 @@ pub struct Fingerprint(FixedBytes<4>);
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Cluster {
-    pub services: Vec<Service>,
-    pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,
-    pub cache: Option<NodeConfig>,
+    pub service_vector: Vec<Service>,
+    pub node_config_by_node_name: std::collections::BTreeMap<NodeName, NodeConfig>,
+    pub optional_node_config: Option<NodeConfig>,
     pub healthy: Boolean,
     pub config_path: Path,
     pub digest: Digest,

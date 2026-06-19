@@ -1,5 +1,5 @@
-[]
+[(Record Entry) (Select [(Receipt { recordIdentifier.Integer message.String })])]
 []
 {
-  Entry { Receipt { recordIdentifier Integer message String } later Receipt }
+  Entry { Receipt later.Receipt }
 }

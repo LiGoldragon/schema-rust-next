@@ -3,5 +3,5 @@
 {
   CommitSequence Integer
   StateDigest Integer
-  DatabaseMarker { CommitSequence * stateDigest StateDigest }
+  DatabaseMarker { CommitSequence StateDigest }
 }

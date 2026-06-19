@@ -290,8 +290,11 @@ fn generated_big_rust_contains_the_current_schema_stack_surfaces() {
     assert!(!spirit.contains("pub trait InputNexus"));
     assert!(!spirit.contains("dispatch_mail_with_nexus"));
     assert!(spirit.contains("pub topics: Topics,"));
-    assert!(spirit.contains("pub records: Vec<Entry>,"));
-    assert!(spirit.contains("pub by_topic: std::collections::BTreeMap<Topic, RecordIdentifier>,"));
+    // The body-optional/inline-complex struct fields now route through named
+    // newtypes (Entries / ByTopic) — the new schema-source grammar expresses a
+    // custom-named complex field by declaring it as a newtype, not inline.
+    assert!(spirit.contains("pub entries: Entries,"));
+    assert!(spirit.contains("pub by_topic: ByTopic,"));
 
     assert!(triad.contains("pub enum SignalRequest"));
     assert!(triad.contains("pub enum NexusRequest"));

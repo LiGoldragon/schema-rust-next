@@ -4,6 +4,6 @@
   SemaReadInput [(Observe Query)]
   SemaReadOutput [(Observed Result)]
   Topic String
-  Query { Topic * }
-  Result { Topic * }
+  Query { Topic }
+  Result { Topic }
 }

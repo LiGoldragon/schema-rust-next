@@ -8,5 +8,5 @@
   Topic String
   Digest Bytes
   Fingerprint (Bytes 4)
-  Cluster { services (Vector Service) nodes (Map NodeName NodeConfig) cache (Optional NodeConfig) healthy Boolean configPath Path digest Digest fingerprint Fingerprint }
+  Cluster { (Vector Service) (Map NodeName NodeConfig) (Optional NodeConfig) healthy.Boolean configPath.Path Digest Fingerprint }
 }
