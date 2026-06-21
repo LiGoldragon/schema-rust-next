@@ -57,6 +57,11 @@ pub struct RecordIdentifier(Integer);
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Limit(Option<Integer>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Rejection(Description);
 
 #[rustfmt::skip]
@@ -74,7 +79,7 @@ pub struct Entry {
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Query {
     pub topics: Topics,
-    pub limit: Option<Integer>,
+    pub limit: Limit,
 }
 
 #[rustfmt::skip]
@@ -89,9 +94,19 @@ pub struct RecordReceipt {
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Records(Vec<Entry>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ByTopic(std::collections::BTreeMap<Topic, RecordIdentifier>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RecordSet {
-    pub records: Vec<Entry>,
-    pub by_topic: std::collections::BTreeMap<Topic, RecordIdentifier>,
+    pub(crate) records: Records,
+    pub(crate) by_topic: ByTopic,
 }
 
 #[rustfmt::skip]
@@ -211,6 +226,25 @@ impl From<Integer> for RecordIdentifier {
 }
 
 #[rustfmt::skip]
+impl Limit {
+    pub fn new(payload: Option<Integer>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Option<Integer> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Option<Integer> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Option<Integer>> for Limit {
+    fn from(payload: Option<Integer>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl Rejection {
     pub fn new(payload: Description) -> Self {
         Self(payload)
@@ -225,6 +259,44 @@ impl Rejection {
 #[rustfmt::skip]
 impl From<Description> for Rejection {
     fn from(payload: Description) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Records {
+    pub fn new(payload: Vec<Entry>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Vec<Entry> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Vec<Entry> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Vec<Entry>> for Records {
+    fn from(payload: Vec<Entry>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl ByTopic {
+    pub fn new(payload: std::collections::BTreeMap<Topic, RecordIdentifier>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &std::collections::BTreeMap<Topic, RecordIdentifier> {
+        &self.0
+    }
+    pub fn into_payload(self) -> std::collections::BTreeMap<Topic, RecordIdentifier> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<std::collections::BTreeMap<Topic, RecordIdentifier>> for ByTopic {
+    fn from(payload: std::collections::BTreeMap<Topic, RecordIdentifier>) -> Self {
         Self::new(payload)
     }
 }

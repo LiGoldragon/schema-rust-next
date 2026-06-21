@@ -1,0 +1,18 @@
+{
+  OrdinaryInput signal-lojix:lib:Input
+  OrdinaryOutput signal-lojix:lib:Output
+  MetaInput meta-signal-lojix:lib:Input
+  MetaOutput meta-signal-lojix:lib:Output
+  DeployClosure signal-lojix:lib:DeployClosure
+  ContainedTarget signal-lojix:lib:ContainedTarget
+  ProductionNode meta-signal-lojix:lib:ProductionNode
+}
+[]
+[]
+{
+  NexusWork [(OrdinaryArrived OrdinaryInput) (MetaArrived MetaInput) (ContainedPipelineCompleted OrdinaryOutput) (ProductionPipelineCompleted MetaOutput)]
+  NexusAction [(RunContainedDeploy ContainedPipelineCommand) (RunProductionDeploy ProductionPipelineCommand) (ReplyOrdinary OrdinaryOutput) (ReplyMeta MetaOutput)]
+
+  ContainedPipelineCommand { DeployClosure ContainedTarget }
+  ProductionPipelineCommand { DeployClosure ProductionNode }
+}

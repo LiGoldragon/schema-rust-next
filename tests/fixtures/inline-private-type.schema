@@ -1,5 +1,6 @@
 []
 []
 {
-  Entry { Receipt { recordIdentifier Integer message String } later Receipt }
+  Entry { (Receipts (Vector RecordIdentifier)) later.Receipts }
+  RecordIdentifier Integer
 }

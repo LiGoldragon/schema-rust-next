@@ -290,8 +290,12 @@ fn generated_big_rust_contains_the_current_schema_stack_surfaces() {
     assert!(!spirit.contains("pub trait InputNexus"));
     assert!(!spirit.contains("dispatch_mail_with_nexus"));
     assert!(spirit.contains("pub topics: Topics,"));
-    assert!(spirit.contains("pub records: Vec<Entry>,"));
-    assert!(spirit.contains("pub by_topic: std::collections::BTreeMap<Topic, RecordIdentifier>,"));
+    assert!(spirit.contains("pub(crate) struct Records(Vec<Entry>);"));
+    assert!(spirit.contains(
+        "pub(crate) struct ByTopic(std::collections::BTreeMap<Topic, RecordIdentifier>);"
+    ));
+    assert!(spirit.contains("pub(crate) records: Records,"));
+    assert!(spirit.contains("pub(crate) by_topic: ByTopic,"));
 
     assert!(triad.contains("pub enum SignalRequest"));
     assert!(triad.contains("pub enum NexusRequest"));

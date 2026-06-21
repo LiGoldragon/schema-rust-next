@@ -23,5 +23,5 @@
     (CommandSemaWrite SemaWriteInput)
     (ReplyToSignal ContractOutput)
   ]
-  DecisionReceipt { integer Integer }
+  DecisionReceipt { integer.Integer }
 }

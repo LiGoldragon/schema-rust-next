@@ -1,0 +1,17 @@
+{
+  ClusterName signal-lojix:lib:ClusterName
+  NodeName signal-lojix:lib:NodeName
+  DeployClosure signal-lojix:lib:DeployClosure
+}
+[]
+[]
+{
+  ProductionNode { ClusterName NodeName }
+
+  Deploy DeployRequest
+  DeployRequest { DeployClosure ProductionNode }
+  AcceptedDeploy { DeployClosure ProductionNode }
+
+  Input [(Deploy DeployRequest)]
+  Output [(Deployed AcceptedDeploy)]
+}

@@ -15,9 +15,10 @@
   Description String
   AgentName String
   RecordIdentifier Integer
+  Limit (Optional Integer)
   Rejection Description
-  Entry { Topics * description Description agentName AgentName databaseMarker DatabaseMarker }
-  Query { Topics * limit (Optional Integer) }
-  RecordReceipt { RecordIdentifier * databaseMarker DatabaseMarker commitSequence CommitSequence }
-  RecordSet { records (Vector Entry) byTopic (Map Topic RecordIdentifier) }
+  Entry { Topics Description AgentName DatabaseMarker }
+  Query { Topics Limit }
+  RecordReceipt { RecordIdentifier DatabaseMarker CommitSequence }
+  RecordSet { (Records (Vector Entry)) (ByTopic (Map Topic RecordIdentifier)) }
 }

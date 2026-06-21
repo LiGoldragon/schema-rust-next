@@ -459,10 +459,10 @@ fn inline_private_schema_types_emit_crate_local_rust_boundary() {
     let generated = RustEmitter::default().emit_file_from_schema(&schema);
     let code = generated.code.as_str();
 
-    assert!(code.contains("pub(crate) struct Receipt"));
+    assert!(code.contains("pub(crate) struct Receipts"));
     assert!(code.contains("pub struct Entry"));
-    assert!(code.contains("pub(crate) receipt: Receipt"));
-    assert!(code.contains("pub(crate) later: Receipt"));
+    assert!(code.contains("pub(crate) receipts: Receipts"));
+    assert!(code.contains("pub(crate) later: Receipts"));
 }
 
 #[test]
@@ -1397,10 +1397,16 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     ));
     assert!(!code.contains("impl NotaDecode for Cluster"));
     assert!(!code.contains("impl NotaEncode for Cluster"));
-    // Vec / KeyValue->BTreeMap / Option render at the field positions.
-    assert!(code.contains("pub services: Vec<Service>,"));
-    assert!(code.contains("pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,"));
-    assert!(code.contains("pub cache: Option<NodeConfig>,"));
+    // PascalCase collection fields lower to crate-local schema wrappers at
+    // the field positions, while root payloads keep the plain collection type.
+    assert!(code.contains("pub(crate) struct Services(Vec<Service>);"));
+    assert!(
+        code.contains("pub(crate) struct Nodes(std::collections::BTreeMap<NodeName, NodeConfig>);")
+    );
+    assert!(code.contains("pub(crate) struct Cache(Option<NodeConfig>);"));
+    assert!(code.contains("pub(crate) services: Services,"));
+    assert!(code.contains("pub(crate) nodes: Nodes,"));
+    assert!(code.contains("pub(crate) cache: Cache,"));
     assert!(code.contains("pub healthy: Boolean,"));
     assert!(code.contains("pub config_path: Path,"));
     assert!(code.contains("pub type Path = std::string::String;"));
@@ -1430,10 +1436,10 @@ fn generated_collection_struct_round_trips_through_nota() {
     // Author a Cluster carrying all three collection kinds, encode it
     // to NOTA, parse it back, and confirm the value survives.
     let cluster = collections_generated::Cluster {
-        services: vec![
+        services: collections_generated::Services::new(vec![
             collections_generated::Service::new("dns"),
             collections_generated::Service::new("mail"),
-        ],
+        ]),
         nodes: {
             let mut nodes = std::collections::BTreeMap::new();
             nodes.insert(
@@ -1444,9 +1450,11 @@ fn generated_collection_struct_round_trips_through_nota() {
                 collections_generated::NodeName::new("beta"),
                 collections_generated::NodeConfig::new("replica"),
             );
-            nodes
+            collections_generated::Nodes::new(nodes)
         },
-        cache: Some(collections_generated::NodeConfig::new("warm")),
+        cache: collections_generated::Cache::new(Some(collections_generated::NodeConfig::new(
+            "warm",
+        ))),
         healthy: true,
         config_path: "/tmp/cluster.nota".to_owned(),
         digest: collections_generated::Digest::new(collections_generated::Bytes::new(vec![
@@ -1465,9 +1473,9 @@ fn generated_collection_struct_round_trips_through_nota() {
     assert_eq!(parsed, cluster);
     // The empty / None forms also round-trip.
     let empty = collections_generated::Cluster {
-        services: Vec::new(),
-        nodes: std::collections::BTreeMap::new(),
-        cache: None,
+        services: collections_generated::Services::new(Vec::new()),
+        nodes: collections_generated::Nodes::new(std::collections::BTreeMap::new()),
+        cache: collections_generated::Cache::new(None),
         healthy: false,
         config_path: "/tmp/empty.nota".to_owned(),
         digest: collections_generated::Digest::new(collections_generated::Bytes::new(Vec::new())),

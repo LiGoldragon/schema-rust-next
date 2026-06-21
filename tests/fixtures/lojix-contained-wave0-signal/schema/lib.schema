@@ -1,0 +1,20 @@
+[]
+[]
+{
+  ClusterName String
+  NodeName String
+  FlakeReference String
+
+  NodeProfile { ClusterName NodeName }
+  DeployClosure { NodeProfile flake.FlakeReference }
+
+  VmHostGuestTarget { host.NodeName }
+  ContainedTarget [HermeticVm (VmHostGuest VmHostGuestTarget)]
+
+  DeployContained DeployContainedRequest
+  DeployContainedRequest { DeployClosure ContainedTarget }
+  AcceptedContainedDeploy { DeployClosure ContainedTarget }
+
+  Input [(DeployContained DeployContainedRequest)]
+  Output [(ContainedDeployed AcceptedContainedDeploy)]
+}

@@ -116,10 +116,25 @@ pub struct Fingerprint(FixedBytes<4>);
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Services(Vec<Service>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Nodes(std::collections::BTreeMap<NodeName, NodeConfig>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Cache(Option<NodeConfig>);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Cluster {
-    pub services: Vec<Service>,
-    pub nodes: std::collections::BTreeMap<NodeName, NodeConfig>,
-    pub cache: Option<NodeConfig>,
+    pub(crate) services: Services,
+    pub(crate) nodes: Nodes,
+    pub(crate) cache: Cache,
     pub healthy: Boolean,
     pub config_path: Path,
     pub digest: Digest,
@@ -271,6 +286,63 @@ impl Fingerprint {
 #[rustfmt::skip]
 impl From<FixedBytes<4>> for Fingerprint {
     fn from(payload: FixedBytes<4>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Services {
+    pub fn new(payload: Vec<Service>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Vec<Service> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Vec<Service> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Vec<Service>> for Services {
+    fn from(payload: Vec<Service>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Nodes {
+    pub fn new(payload: std::collections::BTreeMap<NodeName, NodeConfig>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &std::collections::BTreeMap<NodeName, NodeConfig> {
+        &self.0
+    }
+    pub fn into_payload(self) -> std::collections::BTreeMap<NodeName, NodeConfig> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<std::collections::BTreeMap<NodeName, NodeConfig>> for Nodes {
+    fn from(payload: std::collections::BTreeMap<NodeName, NodeConfig>) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Cache {
+    pub fn new(payload: Option<NodeConfig>) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Option<NodeConfig> {
+        &self.0
+    }
+    pub fn into_payload(self) -> Option<NodeConfig> {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Option<NodeConfig>> for Cache {
+    fn from(payload: Option<NodeConfig>) -> Self {
         Self::new(payload)
     }
 }
