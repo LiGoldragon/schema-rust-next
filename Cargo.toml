@@ -16,7 +16,7 @@ path = "src/lib.rs"
 prettyplease = "0.2"
 proc-macro2 = "1"
 quote = "1"
-schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "main" }
+schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", rev = "abae95f9" }
 syn = { version = "2", features = ["full"] }
 thiserror = "2"
 
