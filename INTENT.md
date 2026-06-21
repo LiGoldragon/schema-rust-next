@@ -136,13 +136,17 @@ with `default-features = false` and carries no `nota_next` in its dependency
 closure.
 
 *Generated Help preserves schema nouns and newtyped domain values.* Help
-projection is recursive over schema structure, but parent help shapes do not
-erase ordinary field and payload types down to primitive Rust scalars. Scalar
-backing primitives appear only at scalar-backed leaf boundaries, such as the
-help for a transparent newtype showing its underlying `String` or integer
-shape. Container shapes preserve both the collection constructor and the
-element type at the use site, while the element type's own help remains
-recursively discoverable by name.
+projection is recursive over schema structure, but parent help shapes do
+not erase ordinary field and payload types down to primitive Rust
+scalars. Scalar backing primitives appear only at scalar-backed leaf
+boundaries, such as the help for a transparent newtype showing its
+underlying `String` or integer shape. Container shapes preserve both the
+collection constructor and the element type at the use site, while the
+element type's own help remains recursively discoverable by name. For
+the Spirit pilot, Help is client/text-side contract metadata projected
+into a typed rkyv-serializable help tree, while emitted domain signal
+contracts stay limited to their domain roots rather than reflection
+roots such as `Input::Help` or `Output::HelpReported`.
 
 *Schema aliases and newtypes are separate data shapes.* Bare bindings lower to
 `TypeDeclaration::Alias` and emit as Rust `type` aliases. Brace-body
