@@ -14,7 +14,10 @@ pub type Path = std::string::String;
 pub use nota_next::{NotaDecodeError, NotaEncode, NotaSource};
 
 #[rustfmt::skip]
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[cfg_attr(
+    feature = "nota-text",
+    derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)
+)]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Work<Event, WriteDone, ReadDone, EffectDone> {
     SignalArrived(Event),
@@ -24,7 +27,10 @@ pub enum Work<Event, WriteDone, ReadDone, EffectDone> {
 }
 
 #[rustfmt::skip]
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[cfg_attr(
+    feature = "nota-text",
+    derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)
+)]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Action<Reply, Write, Read, Effect, Continuation> {
     ReplyToSignal(Reply),

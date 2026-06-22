@@ -80,7 +80,7 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
     );
     assert!(
         nexus.contains(
-            "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]"
+            "derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"
         ),
         "nexus runtime support nouns should derive NOTA only behind the feature:\n{nexus}"
     );
@@ -138,7 +138,7 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
     );
     assert!(
         sema.contains(
-            "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]"
+            "derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"
         ),
         "sema runtime support nouns should derive NOTA only behind the feature:\n{sema}"
     );

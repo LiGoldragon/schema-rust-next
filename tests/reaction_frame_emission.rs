@@ -42,7 +42,7 @@ fn reaction_frame_emits_the_two_generic_data_enums() {
     // The Work enum: four direct type parameters, the proven derive stack.
     assert_contains(
         &code,
-        "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]",
+        "derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)",
     );
     assert_contains(
         &code,

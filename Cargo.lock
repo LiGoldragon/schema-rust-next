@@ -331,8 +331,8 @@ dependencies = [
 
 [[package]]
 name = "nota-next"
-version = "0.5.0"
-source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#7105c2be36067cb3d5b8f744aaf628ffdac7a112"
+version = "0.5.1"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=instance-schema#b29dfc7c45d1ef7d7c8b960d8ac3ad47cb9576dc"
 dependencies = [
  "nota-next-derive",
  "rkyv",
@@ -341,7 +341,7 @@ dependencies = [
 [[package]]
 name = "nota-next-derive"
 version = "0.3.0"
-source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#7105c2be36067cb3d5b8f744aaf628ffdac7a112"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=instance-schema#b29dfc7c45d1ef7d7c8b960d8ac3ad47cb9576dc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -493,7 +493,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "schema-cc"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#4b7e830a7001708737a617bd8eedac8002cc1fc6"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=instance-schema#aca86ff4f3f5005264ddf9a0bcbe4bc7678bd9be"
 dependencies = [
  "nota-next",
  "prettyplease",
@@ -506,7 +506,7 @@ dependencies = [
 [[package]]
 name = "schema-next"
 version = "0.2.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#4b7e830a7001708737a617bd8eedac8002cc1fc6"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=instance-schema#aca86ff4f3f5005264ddf9a0bcbe4bc7678bd9be"
 dependencies = [
  "blake3",
  "nota-next",

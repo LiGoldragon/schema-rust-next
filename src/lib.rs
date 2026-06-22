@@ -1720,11 +1720,11 @@ impl RustRenderContext {
         let mut attributes = Vec::new();
         if includes_nota && let NotaSurface::FeatureGated { feature } = &self.nota_surface {
             attributes.push(quote! {
-                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode))]
             });
         }
         let nota_derives = if includes_nota && self.nota_surface.includes_nota_in_derive() {
-            quote! { nota_next::NotaDecode, nota_next::NotaEncode, }
+            quote! { nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode, }
         } else {
             TokenStream::new()
         };
@@ -4595,6 +4595,208 @@ impl<'enumeration, 'context> RustOptionalEnumNotaTokens<'enumeration, 'context> 
             context,
         }
     }
+
+    /// Emit `NotaDecodeTraced` for this optional-leaf enum, mirroring its
+    /// hand-emitted `NotaBodyDecode` exactly so the per-instance schema rides
+    /// the same decode path. The enum-name is the expected reference; the chosen
+    /// variant is read from the value only to select the payload decoder. An
+    /// optional-leaf variant carries an `Optional` body (`None` for a bare
+    /// variant atom, `Some(<leaf>)` for `(Variant Leaf)`); a plain payload
+    /// variant carries the payload's own captured schema.
+    fn traced_tokens(&self) -> TokenStream {
+        let gate = self.context.nota_feature_gate();
+        let name = RustIdentifier::new(self.enumeration.name().as_str());
+        let enum_name = Literal::string(self.enumeration.name().as_str());
+
+        let unit_atom_arms = self
+            .enumeration
+            .variants()
+            .iter()
+            .filter(|variant| variant.payload().is_none())
+            .map(|variant| {
+                let variant_name = RustIdentifier::new(variant.name().as_str());
+                let tag = Literal::string(variant.name().as_str());
+                quote! {
+                    #tag => return Ok(nota_next::DecodedWithSchema::new(
+                        Self::#variant_name,
+                        nota_next::InstanceSchema::new(
+                            <Self as nota_next::NotaDecodeTraced>::instance_reference(),
+                            nota_next::InstanceSchemaBody::EnumPayload(None),
+                        ),
+                    )),
+                }
+            });
+
+        let optional_unit_atom_arms = self
+            .enumeration
+            .variants()
+            .iter()
+            .filter(|variant| matches!(variant.payload(), Some(TypeReference::Optional(_))))
+            .map(|variant| {
+                let variant_name = RustIdentifier::new(variant.name().as_str());
+                let tag = Literal::string(variant.name().as_str());
+                let optional_reference = self.optional_payload_reference(variant);
+                quote! {
+                    #tag => return Ok(nota_next::DecodedWithSchema::new(
+                        Self::#variant_name(None),
+                        nota_next::InstanceSchema::new(
+                            <Self as nota_next::NotaDecodeTraced>::instance_reference(),
+                            nota_next::InstanceSchemaBody::EnumPayload(Some(Box::new(
+                                nota_next::InstanceSchema::new(
+                                    #optional_reference,
+                                    nota_next::InstanceSchemaBody::Optional(None),
+                                ),
+                            ))),
+                        ),
+                    )),
+                }
+            });
+
+        let payload_arms = self.enumeration.variants().iter().filter_map(|variant| {
+            let payload = variant.payload()?;
+            let variant_name = RustIdentifier::new(variant.name().as_str());
+            let tag = Literal::string(variant.name().as_str());
+            match payload {
+                TypeReference::Optional(inner) => {
+                    let inner = RustTypeReferenceTokens::new(inner);
+                    let optional_reference = self.optional_payload_reference(variant);
+                    Some(quote! {
+                        #tag => {
+                            let leaf = <#inner as nota_next::NotaDecodeTraced>::from_nota_block_traced(&children[1])?;
+                            let (leaf_value, leaf_schema) = leaf.into_parts();
+                            Ok(nota_next::DecodedWithSchema::new(
+                                Self::#variant_name(Some(leaf_value)),
+                                nota_next::InstanceSchema::new(
+                                    <Self as nota_next::NotaDecodeTraced>::instance_reference(),
+                                    nota_next::InstanceSchemaBody::EnumPayload(Some(Box::new(
+                                        nota_next::InstanceSchema::new(
+                                            #optional_reference,
+                                            nota_next::InstanceSchemaBody::Optional(Some(Box::new(leaf_schema))),
+                                        ),
+                                    ))),
+                                ),
+                            ))
+                        }
+                    })
+                }
+                _ => {
+                    let payload = RustTypeReferenceTokens::new(payload);
+                    Some(quote! {
+                        #tag => {
+                            let decoded = <#payload as nota_next::NotaDecodeTraced>::from_nota_block_traced(&children[1])?;
+                            let (payload_value, payload_schema) = decoded.into_parts();
+                            Ok(nota_next::DecodedWithSchema::new(
+                                Self::#variant_name(payload_value),
+                                nota_next::InstanceSchema::new(
+                                    <Self as nota_next::NotaDecodeTraced>::instance_reference(),
+                                    nota_next::InstanceSchemaBody::EnumPayload(Some(Box::new(payload_schema))),
+                                ),
+                            ))
+                        }
+                    })
+                }
+            }
+        });
+
+        quote! {
+            #gate
+            impl nota_next::NotaDecodeTraced for #name {
+                fn instance_reference() -> nota_next::TypeReference {
+                    nota_next::TypeReference::named(#enum_name)
+                }
+
+                fn from_nota_block_traced(
+                    block: &nota_next::Block,
+                ) -> Result<nota_next::DecodedWithSchema<Self>, nota_next::NotaDecodeError> {
+                    if let Some(variant) = block.demote_to_string() {
+                        match variant {
+                            #(#unit_atom_arms)*
+                            #(#optional_unit_atom_arms)*
+                            other => return Err(nota_next::NotaDecodeError::UnknownVariant {
+                                enum_name: #enum_name,
+                                variant: other.to_owned(),
+                            }),
+                        }
+                    }
+                    let body = nota_next::NotaBlock::new(block).expect_body(
+                        nota_next::Delimiter::Parenthesis,
+                        #enum_name,
+                    )?;
+                    let children = body.expect_fields(#enum_name, 2)?;
+                    let variant = children[0].demote_to_string().ok_or(
+                        nota_next::NotaDecodeError::ExpectedAtom {
+                            type_name: "enum variant",
+                        },
+                    )?;
+                    match variant {
+                        #(#payload_arms)*
+                        other => Err(nota_next::NotaDecodeError::UnknownVariant {
+                            enum_name: #enum_name,
+                            variant: other.to_owned(),
+                        }),
+                    }
+                }
+            }
+        }
+    }
+
+    /// The `(Optional Leaf)` reference for an optional-leaf variant's payload
+    /// position, lifted into a nota-next `TypeReference` so the trace names the
+    /// optional and its element. Falls back to the enum name if the variant is
+    /// not optional (unreachable for the call sites, which pre-filter).
+    fn optional_payload_reference(&self, variant: &RustEnumVariant) -> TokenStream {
+        match variant.payload() {
+            Some(TypeReference::Optional(inner)) => {
+                let element = self.reference_to_instance(inner);
+                quote! { nota_next::TypeReference::optional(#element) }
+            }
+            _ => {
+                let enum_name = Literal::string(self.enumeration.name().as_str());
+                quote! { nota_next::TypeReference::named(#enum_name) }
+            }
+        }
+    }
+
+    /// Build the nota-next `TypeReference` constructor expression for a schema
+    /// `TypeReference`, matching the projection in schema-next's
+    /// `SourceReference::from_instance_reference`.
+    fn reference_to_instance(&self, reference: &TypeReference) -> TokenStream {
+        match reference {
+            TypeReference::Plain(name) => {
+                let literal = Literal::string(name.as_str());
+                quote! { nota_next::TypeReference::named(#literal) }
+            }
+            TypeReference::String => quote! { nota_next::TypeReference::named("String") },
+            TypeReference::Integer => quote! { nota_next::TypeReference::named("Integer") },
+            TypeReference::Boolean => quote! { nota_next::TypeReference::named("Boolean") },
+            TypeReference::Path => quote! { nota_next::TypeReference::named("Path") },
+            TypeReference::Bytes => quote! { nota_next::TypeReference::named("Bytes") },
+            TypeReference::FixedBytes(width) => {
+                let width = Literal::usize_unsuffixed(*width as usize);
+                quote! { nota_next::TypeReference::FixedBytes(#width) }
+            }
+            TypeReference::Vector(inner) => {
+                let inner = self.reference_to_instance(inner);
+                quote! { nota_next::TypeReference::vector(#inner) }
+            }
+            TypeReference::Optional(inner) => {
+                let inner = self.reference_to_instance(inner);
+                quote! { nota_next::TypeReference::optional(#inner) }
+            }
+            TypeReference::Map(key, value) => {
+                let key = self.reference_to_instance(key);
+                let value = self.reference_to_instance(value);
+                quote! { nota_next::TypeReference::map(#key, #value) }
+            }
+            other => {
+                // Scope and other compound references are not used at optional
+                // leaf positions in the spirit taxonomy; name them by their
+                // rendered form so the trace stays total.
+                let rendered = Literal::string(&format!("{other:?}"));
+                quote! { nota_next::TypeReference::named(#rendered) }
+            }
+        }
+    }
 }
 
 impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
@@ -4669,6 +4871,7 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
                 },
             }
         });
+        let traced = self.traced_tokens();
         quote! {
             #gate
             impl nota_next::NotaBodyDecode for #name {
@@ -4742,6 +4945,8 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
                     }
                 }
             }
+
+            #traced
         }
         .to_tokens(tokens);
     }
@@ -5646,11 +5851,11 @@ impl RustModuleRenderer {
         let nota_gate = match &self.nota_surface {
             NotaSurface::AlwaysEnabled | NotaSurface::Disabled => quote! {},
             NotaSurface::FeatureGated { feature } => quote! {
-                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode))]
             },
         };
         let nota_derives = if self.nota_surface.includes_nota_in_derive() {
-            quote! { nota_next::NotaDecode, nota_next::NotaEncode, }
+            quote! { nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode, }
         } else {
             quote! {}
         };
@@ -5696,11 +5901,11 @@ impl RustModuleRenderer {
         let nota_gate = match &self.nota_surface {
             NotaSurface::AlwaysEnabled | NotaSurface::Disabled => quote! {},
             NotaSurface::FeatureGated { feature } => quote! {
-                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode))]
             },
         };
         let nota_derives = if self.nota_surface.includes_nota_in_derive() {
-            quote! { nota_next::NotaDecode, nota_next::NotaEncode, }
+            quote! { nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode, }
         } else {
             quote! {}
         };

@@ -410,9 +410,7 @@ fn emission_can_gate_nota_surface_behind_text_client_feature() {
     .emit_code_from_schema(&schema);
     let code = generated.as_str();
 
-    assert!(code.contains(
-        "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]"
-    ));
+    assert!(code.contains("derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"));
     assert!(code.contains("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize"));
     assert!(code.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"));
     assert!(code.contains("#[cfg(feature = \"nota-text\")]\nimpl std::str::FromStr for Input"));
@@ -1399,9 +1397,7 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     // `nota-text` feature.
     assert!(code.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"));
     assert!(!code.contains("pub struct NotaCollection"));
-    assert!(code.contains(
-        "#[cfg_attr(feature = \"nota-text\", derive(nota_next::NotaDecode, nota_next::NotaEncode))]"
-    ));
+    assert!(code.contains("derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"));
     assert!(!code.contains("impl NotaDecode for Cluster"));
     assert!(!code.contains("impl NotaEncode for Cluster"));
     // Vec / KeyValue->BTreeMap / Option render at the field positions. The new
