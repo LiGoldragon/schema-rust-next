@@ -16,7 +16,11 @@ fn lower(fixture: &str) -> schema_next::Schema {
 }
 
 fn module(fixture: &str) -> RustModule {
-    RustModule::from_schema(&lower(fixture), "schema-rust-next", RustEmissionOptions::binary_only())
+    RustModule::from_schema(
+        &lower(fixture),
+        "schema-rust-next",
+        RustEmissionOptions::binary_only(),
+    )
 }
 
 fn emit(fixture: &str) -> String {
@@ -53,8 +57,7 @@ fn recognized_markers_emit_bodies_and_derives() {
         "Display marker drives the payload-delegating body:\n{code}"
     );
     assert!(
-        code.contains("PartialOrd, Ord")
-            && code.contains("pub struct RecordIdentifier(String)"),
+        code.contains("PartialOrd, Ord") && code.contains("pub struct RecordIdentifier(String)"),
         "Ord marker folds into the derive set:\n{code}"
     );
 }
@@ -99,7 +102,11 @@ fn transitive_scalar_emits_display() {
 #[test]
 fn emitted_surface_verifies_recognized_subset() {
     let schema = lower("fused-markers");
-    let module = RustModule::from_schema(&schema, "schema-rust-next", RustEmissionOptions::binary_only());
+    let module = RustModule::from_schema(
+        &schema,
+        "schema-rust-next",
+        RustEmissionOptions::binary_only(),
+    );
     module
         .verify_catalog(&schema)
         .expect("the recognized subset verifies against the generated surface");

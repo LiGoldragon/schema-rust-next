@@ -493,7 +493,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "schema-cc"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#9219e32995bc63bb5261493feb9c12ffe7a45642"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#c5644ee49f2b1de130094e150ef1abfad2019d3a"
 dependencies = [
  "nota-next",
  "prettyplease",
@@ -506,7 +506,7 @@ dependencies = [
 [[package]]
 name = "schema-next"
 version = "0.2.0"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#9219e32995bc63bb5261493feb9c12ffe7a45642"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#c5644ee49f2b1de130094e150ef1abfad2019d3a"
 dependencies = [
  "blake3",
  "nota-next",

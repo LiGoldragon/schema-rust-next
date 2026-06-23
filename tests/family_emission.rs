@@ -1,4 +1,4 @@
-use schema_next::{SchemaEngine, SchemaIdentity};
+use schema_next::{SchemaEngine, SchemaIdentity, SpecifiedSchema};
 use schema_rust_next::{RustEmissionOptions, RustEmitter, RustModule};
 
 mod support;
@@ -76,6 +76,28 @@ fn family_declarations_emit_the_version_control_surface() {
     );
 
     assert_generated_fixture("families_generated.rs", generated.as_str());
+}
+
+#[test]
+fn family_identity_emission_uses_specified_schema_closure() {
+    let schema = family_schema();
+    let specified = SpecifiedSchema::from(&schema);
+    let schema_module =
+        RustModule::from_schema(&schema, "schema-rust-next", RustEmissionOptions::default());
+    let specified_module = RustModule::from_specified_schema(
+        &specified,
+        "schema-rust-next",
+        RustEmissionOptions::default(),
+    );
+
+    assert_eq!(
+        schema_module.versioned_store(),
+        specified_module.versioned_store()
+    );
+    assert_eq!(
+        RustEmitter::default().emit_code_from_schema(&schema),
+        RustEmitter::default().emit_code_from_specified_schema(&specified)
+    );
 }
 
 #[test]

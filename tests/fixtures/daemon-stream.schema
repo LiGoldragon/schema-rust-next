@@ -19,5 +19,5 @@
   IntentSubscription { SubscriptionToken }
   IntentRecorded { Entry RecordIdentifier }
   IntentEvent [(IntentRecorded IntentRecorded belongs IntentEventStream)]
-  IntentEventStream (Stream { token SubscriptionToken opened SubscriptionStarted event IntentEvent close SubscriptionToken })
+  IntentEventStream (Stream { token.SubscriptionToken opened.SubscriptionStarted event.IntentEvent close.SubscriptionToken })
 }

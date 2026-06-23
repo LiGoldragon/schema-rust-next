@@ -1,4 +1,4 @@
-use schema_next::{SchemaEngine, SchemaIdentity, SchemaSourceArtifact};
+use schema_next::{SchemaEngine, SchemaIdentity, SchemaSourceArtifact, SpecifiedSchema};
 use schema_rust_next::{
     LowerToRust, NotaSurface, RustEmissionOptions, RustEmissionTarget, RustEmitter,
     RustLoweringContext, RustSchemaLowering, RustTypeDeclaration,
@@ -273,6 +273,26 @@ fn schema_object_lowers_itself_into_rust_through_emitter_policy() {
 }
 
 #[test]
+fn rust_lowering_uses_specified_schema_as_the_canonical_entrypoint() {
+    let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
+    let specified = SpecifiedSchema::from(&schema);
+    let emitter = RustEmitter::default();
+
+    assert_eq!(
+        emitter.emit_code_from_schema(&schema),
+        emitter.emit_code_from_specified_schema(&specified)
+    );
+    assert_eq!(
+        emitter.emit_module_from_schema(&schema),
+        emitter.emit_module_from_specified_schema(&specified)
+    );
+    assert_eq!(
+        emitter.emit_file_from_schema(&schema),
+        emitter.emit_file_from_specified_schema(&specified)
+    );
+}
+
+#[test]
 fn schema_subobjects_lower_themselves_into_rust_model_nouns() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let context = RustLoweringContext::from_emitter(&RustEmitter::default());
@@ -410,7 +430,9 @@ fn emission_can_gate_nota_surface_behind_text_client_feature() {
     .emit_code_from_schema(&schema);
     let code = generated.as_str();
 
-    assert!(code.contains("derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"));
+    assert!(code.contains(
+        "derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"
+    ));
     assert!(code.contains("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize"));
     assert!(code.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"));
     assert!(code.contains("#[cfg(feature = \"nota-text\")]\nimpl std::str::FromStr for Input"));
@@ -1397,7 +1419,9 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     // `nota-text` feature.
     assert!(code.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"));
     assert!(!code.contains("pub struct NotaCollection"));
-    assert!(code.contains("derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"));
+    assert!(code.contains(
+        "derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"
+    ));
     assert!(!code.contains("impl NotaDecode for Cluster"));
     assert!(!code.contains("impl NotaEncode for Cluster"));
     // Vec / KeyValue->BTreeMap / Option render at the field positions. The new
