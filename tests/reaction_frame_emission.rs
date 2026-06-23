@@ -7,7 +7,7 @@
 //! impls). The emitted module is written to `tests/fixtures/reaction_frame_generated.rs`,
 //! `include!`d below, and a `Work<concrete>` value round-trips through rkyv.
 
-use schema_rust_next::{RustEmissionOptions, RustEmissionTarget, RustEmitter};
+use schema_rust::{RustEmissionOptions, RustEmissionTarget, RustEmitter};
 
 mod support;
 
@@ -42,7 +42,7 @@ fn reaction_frame_emits_the_two_generic_data_enums() {
     // The Work enum: four direct type parameters, the proven derive stack.
     assert_contains(
         &code,
-        "derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)",
+        "derive(nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode)",
     );
     assert_contains(
         &code,
@@ -73,7 +73,7 @@ fn reaction_frame_emits_the_two_generic_data_enums() {
 fn reaction_frame_emits_no_bound_attributes_or_runtime_support() {
     let code = emit_reaction_frame();
 
-    // rkyv 0.8 + nota-next auto-synthesise per-parameter bounds: no
+    // rkyv 0.8 + nota auto-synthesise per-parameter bounds: no
     // omit_bounds, no archive bound attributes, no explicit where.
     assert!(
         !code.contains("omit_bounds"),
@@ -104,7 +104,7 @@ fn write_reaction_frame_fixture() {
     // Materialise the emitted frame as the compiled fixture below. Guarded so
     // an accidental run does not silently rewrite the checked-in artifact; the
     // committed fixture is what `reaction_frame_generated` compiles.
-    if std::env::var_os("SCHEMA_RUST_NEXT_UPDATE_FIXTURES").is_none() {
+    if std::env::var_os("SCHEMA_RUST_UPDATE_FIXTURES").is_none() {
         return;
     }
     let code = emit_reaction_frame();

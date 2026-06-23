@@ -1,5 +1,5 @@
-use schema_next::{SchemaEngine, SchemaIdentity};
-use schema_rust_next::RustEmitter;
+use schema::{SchemaEngine, SchemaIdentity};
+use schema_rust::RustEmitter;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source = include_str!("../tests/fixtures/spirit-min.schema");

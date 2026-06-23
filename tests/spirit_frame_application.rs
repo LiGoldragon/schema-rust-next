@@ -16,8 +16,8 @@
 //! concrete `Input`/`Output` enums round-trip through rkyv and NOTA — including
 //! the recursive `Continue(Input)` leg — through the EMITTED constructors.
 
-use schema_next::{ImportResolver, MacroContext, SchemaEngine, SchemaIdentity};
-use schema_rust_next::{RustEmissionOptions, RustEmissionTarget, RustEmitter};
+use schema::{ImportResolver, MacroContext, SchemaEngine, SchemaIdentity};
+use schema_rust::{RustEmissionOptions, RustEmissionTarget, RustEmitter};
 
 mod support;
 
@@ -184,7 +184,7 @@ fn spirit_expands_named_nexus_frame_applications_to_concrete_enums() {
 
 #[test]
 fn write_spirit_nexus_fixture() {
-    if std::env::var_os("SCHEMA_RUST_NEXT_UPDATE_FIXTURES").is_none() {
+    if std::env::var_os("SCHEMA_RUST_UPDATE_FIXTURES").is_none() {
         return;
     }
     let code = emit_spirit_nexus();
@@ -202,10 +202,7 @@ fn write_spirit_nexus_fixture() {
 mod reaction {
     pub mod schema {
         pub mod reaction {
-            #[cfg_attr(
-                feature = "nota-text",
-                derive(nota_next::NotaDecode, nota_next::NotaEncode)
-            )]
+            #[cfg_attr(feature = "nota-text", derive(nota::NotaDecode, nota::NotaEncode))]
             #[derive(
                 rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq,
             )]
@@ -216,10 +213,7 @@ mod reaction {
                 EffectCompleted(Effect),
             }
 
-            #[cfg_attr(
-                feature = "nota-text",
-                derive(nota_next::NotaDecode, nota_next::NotaEncode)
-            )]
+            #[cfg_attr(feature = "nota-text", derive(nota::NotaDecode, nota::NotaEncode))]
             #[derive(
                 rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq,
             )]
@@ -286,7 +280,7 @@ fn generated_output_recursive_continue_round_trips_through_rkyv() {
 #[cfg(feature = "nota-text")]
 #[test]
 fn generated_input_output_round_trip_through_nota() {
-    use nota_next::{NotaEncode, NotaSource};
+    use nota::{NotaEncode, NotaSource};
     use spirit_nexus_generated::{Input, Output, SignalInput};
 
     // Input round-trips through NOTA text via the derived NotaEncode/NotaDecode

@@ -1,4 +1,4 @@
-use schema_rust_next::build::{
+use schema_rust::build::{
     ContractCrateBuild, DependencySchema, GenerationDriver, GenerationPlan, ModuleEmission,
 };
 
@@ -41,7 +41,7 @@ impl DriverFixture {
             ))
     }
 
-    fn generated_runtime(&self) -> schema_rust_next::build::GeneratedPackage {
+    fn generated_runtime(&self) -> schema_rust::build::GeneratedPackage {
         GenerationDriver::new(self.runtime_plan())
             .generate()
             .expect("driver emits runtime package")
@@ -75,13 +75,11 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
         "nexus runtime target should emit NexusEngine:\n{nexus}"
     );
     assert!(
-        nexus.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"),
+        nexus.contains("#[cfg(feature = \"nota-text\")]\npub use nota::{"),
         "nexus runtime target should keep its NOTA surface feature-gated:\n{nexus}"
     );
     assert!(
-        nexus.contains(
-            "derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"
-        ),
+        nexus.contains("derive(nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode)"),
         "nexus runtime support nouns should derive NOTA only behind the feature:\n{nexus}"
     );
     assert!(
@@ -133,13 +131,11 @@ fn daemon_runtime_driver_emits_nexus_and_sema_files_with_plane_targets() {
         "sema runtime target should mark its local read input root with the runtime role trait:\n{sema}"
     );
     assert!(
-        sema.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"),
+        sema.contains("#[cfg(feature = \"nota-text\")]\npub use nota::{"),
         "sema runtime target should keep its NOTA surface feature-gated:\n{sema}"
     );
     assert!(
-        sema.contains(
-            "derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"
-        ),
+        sema.contains("derive(nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode)"),
         "sema runtime support nouns should derive NOTA only behind the feature:\n{sema}"
     );
     assert!(

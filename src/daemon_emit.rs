@@ -1,7 +1,7 @@
 //! Daemon-module emission — the source-visible `src/schema/daemon.rs`.
 //!
 //! This is the `triad_main!` emitter from designer report 542: instead of a
-//! literal macro, schema-rust-next emits a per-component, source-visible
+//! literal macro, schema-rust emits a per-component, source-visible
 //! `src/schema/daemon.rs` carrying the uniform daemon skeleton (the
 //! `ComponentDaemon` hook trait, `DaemonCommand` argv parsing, the generated
 //! runtime struct + its async decode -> execute -> encode connection spine, and
@@ -27,7 +27,7 @@
 
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
-use schema_next::Schema;
+use schema::Schema;
 
 use crate::{GeneratedFile, RustCode, RustfmtSkippedItems};
 

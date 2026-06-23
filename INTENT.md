@@ -1,6 +1,6 @@
-# INTENT — schema-rust-next
+# INTENT — schema-rust
 
-`schema-rust-next` emits Rust interface source from typed schema data and
+`schema-rust` emits Rust interface source from typed schema data and
 powers the shared build-driver orchestrator for generated schema modules.
 
 Load-bearing constraints:
@@ -85,9 +85,9 @@ publishes the crate's `schema/` directory through Cargo metadata so daemon
 schemas can import the contract roots.
 
 *Rust lowering is a trait surface on the typed schema objects and their
-subobjects.* `schema-next` owns schema semantics and must not depend on Rust
-emission, so the trait lives here and is implemented for `schema_next::Schema`,
-`schema_next::SchemaSource`, and the schema nouns that project into Rust-model
+subobjects.* `schema` owns schema semantics and must not depend on Rust
+emission, so the trait lives here and is implemented for `schema::Schema`,
+`schema::SchemaSource`, and the schema nouns that project into Rust-model
 nouns: declarations, imports, type declarations, aliases, newtypes, structs,
 fields, enums, variants, and support metadata. `RustEmitter` supplies emission
 policy; the deserialized schema structure owns the lowering calls recursively
@@ -129,10 +129,10 @@ Context-carrying token wrappers are the correct bridge: each wrapper implements
 clean model of its own syntax.
 
 *NOTA text projection is opted into per-emission target.* Generated binaries
-always carry rkyv support. `nota_next::NotaDecode` and
-`nota_next::NotaEncode` are feature-gated (`nota-text`) or omitted for
+always carry rkyv support. `nota::NotaDecode` and
+`nota::NotaEncode` are feature-gated (`nota-text`) or omitted for
 binary-only daemon consumers. A binary-only daemon crate builds dependencies
-with `default-features = false` and carries no `nota_next` in its dependency
+with `default-features = false` and carries no `nota` in its dependency
 closure.
 
 *Schema aliases and newtypes are separate data shapes.* Bare bindings lower to
@@ -164,7 +164,7 @@ Generated paths reference the real `sema_engine` crate on the signal-frame
 precedent; a schema that declares no families emits none of this. Per Spirit
 v0n6 (Clarification): [Everything reading NOTA-shaped structure above the raw
 structural parser must go through typed structural macro nodes] — the family
-metadata reaches this emitter only as typed `schema_next::FamilyDeclaration`
+metadata reaches this emitter only as typed `schema::FamilyDeclaration`
 data on the semantic `Schema` value, never as re-parsed schema text.
 
 This repository owns the Rust code-generation step and the shared build-driver

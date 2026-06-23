@@ -1,5 +1,5 @@
-use schema_next::{ImportResolver, MacroContext, SchemaEngine, SchemaIdentity};
-use schema_rust_next::RustEmitter;
+use schema::{ImportResolver, MacroContext, SchemaEngine, SchemaIdentity};
+use schema_rust::RustEmitter;
 
 mod support;
 

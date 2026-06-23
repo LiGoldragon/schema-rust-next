@@ -1,20 +1,20 @@
 # Architecture
 
-`schema-rust-next` emits Rust interface source from typed schema data. Its
-source-facing input is `schema-next::SchemaSource`, the schema-in-Rust value
+`schema-rust` emits Rust interface source from typed schema data. Its
+source-facing input is `schema::SchemaSource`, the schema-in-Rust value
 produced when authored `.schema` deserializes into Rust datatypes that fully
 define the schema and serialize through rkyv. Its semantic emission input is
-`schema-next::Schema`; there is no older assembled-schema artifact or path API
+`schema::Schema`; there is no older assembled-schema artifact or path API
 beside that typed source/schema pipeline.
 
 ## Interfaces
 
 - `RustEmitter` is the code-generation engine.
-- `RustSchemaLowering` is the entry trait implemented for `schema-next::Schema`.
+- `RustSchemaLowering` is the entry trait implemented for `schema::Schema`.
   The deserialized semantic schema object owns the lowering call; the emitter
   supplies policy such as target, NOTA surface, and generator name.
 - `RustSchemaSourceLowering` is the trait implemented for
-  `schema-next::SchemaSource`. It lowers typed source through `SchemaEngine`
+  `schema::SchemaSource`. It lowers typed source through `SchemaEngine`
   and then through `RustSchemaLowering`.
 - `LowerToRust<Target>` is the recursive projection trait implemented for the
   schema subobjects that own each piece of the Rust model: imports,
@@ -144,7 +144,7 @@ same-named data-carrying variants use self-tagged records such as `(Record)`,
 and explicit `(Variant PayloadType)` records are reserved for intentionally
 different names. Root headers should prefer exported operation names or shallow
 inline operation payloads. This emitter sees the typed source/schema data from
-`schema-next` and must not grow a second parser for the authored form.
+`schema` and must not grow a second parser for the authored form.
 
 ## Constraints
 
@@ -220,7 +220,7 @@ inline operation payloads. This emitter sees the typed source/schema data from
   that carry a local Signal runtime module add
   `ModuleEmission::signal_runtime_module("signal")` explicitly. The shared
   runtime module builders use the same feature-gated `nota-text` surface as
-  contracts: normal binary daemon builds keep `nota-next` absent, while
+  contracts: normal binary daemon builds keep `nota` absent, while
   all-feature trace/testing builds can round-trip generated runtime support
   nouns such as `NexusObjectName` and `SemaObjectName`. An unsplit bootstrap
   schema uses
@@ -253,7 +253,7 @@ inline operation payloads. This emitter sees the typed source/schema data from
   schema path `spirit-next:nexus:Mail` becomes a module/type path under
   `src/schema/` without inventing a second naming system.
 - Cross-crate schema imports are emitted as Rust aliases, not local
-  re-declarations. If `schema-next` resolves `DatabaseMarker` from
+  re-declarations. If `schema` resolves `DatabaseMarker` from
   `marker-core:mail:DatabaseMarker`, this emitter writes a `pub use
   marker_core::schema::mail::DatabaseMarker as DatabaseMarker;` line and local
   fields or variants reference that alias. The dependency crate owns the
@@ -294,7 +294,7 @@ inline operation payloads. This emitter sees the typed source/schema data from
   `Frame = signal_frame::StreamingFrame<Input, Output, Event>` when semantic
   `Schema::streams()` is non-empty and the stream event type is the payload of
   `Output.Event`; only then does the event payload get
-  `into_subscription_frame`. This path reads schema-next stream metadata; it
+  `into_subscription_frame`. This path reads schema stream metadata; it
   does not infer streaming from names alone and it does not route through the
   retired `signal_channel!` macro.
 - Bootstrap all-in-one runtime emission emits mail-event nouns.
@@ -417,8 +417,8 @@ inline operation payloads. This emitter sees the typed source/schema data from
   `Map` → `std::collections::BTreeMap<key, value>` (fully qualified, so no
   `use` and a deterministic key order for rkyv + NOTA), `Optional` →
   `Option<inner>`.
-- Generated code can import `nota-next`'s shared codec surface and derive
-  `nota_next::NotaDecode` / `nota_next::NotaEncode` for generated nouns, but
+- Generated code can import `nota`'s shared codec surface and derive
+  `nota::NotaDecode` / `nota::NotaEncode` for generated nouns, but
   that surface is selected by `RustEmissionOptions`: always enabled,
   feature-gated for text clients, or disabled for binary-only consumers. When
   NOTA is selected, small inherent bridge methods (`from_nota_block`,
@@ -438,7 +438,7 @@ inline operation payloads. This emitter sees the typed source/schema data from
   `RustEmissionOptions::default()` and `RustEmitter::default()` both pick
   `NotaSurface::FeatureGated { feature: "nota-text" }` plus
   `ComponentRuntime`. `NotaSurface::Disabled` removes the
-  NOTA surface entirely: no derives, no `use nota_next::*` items, no
+  NOTA surface entirely: no derives, no `use nota::*` items, no
   `from_nota_block` / `to_nota` bridges, no root `FromStr` / `Display`
   impls. `NotaSurface::AlwaysEnabled` keeps the older unconditional emission
   for callers (mostly tests) that always want NOTA on.

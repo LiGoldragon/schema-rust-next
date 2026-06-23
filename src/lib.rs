@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{ToTokens, quote};
-use schema_next::{
+use schema::{
     Declaration, EnumDeclaration, EnumVariant, FamilyDeclaration, FamilyKey, FieldDeclaration,
     ImplFact, ImplReference, ImportResolver, MethodParameter, MethodSignature, Name,
     NewtypeDeclaration, ReferencedImpl, RelationDeclaration, RelationValue, ResolvedImport,
@@ -68,7 +68,7 @@ pub struct RustEmitter {
 impl Default for RustEmitter {
     fn default() -> Self {
         Self {
-            generator_name: "schema-rust-next",
+            generator_name: "schema-rust",
             options: RustEmissionOptions::default(),
         }
     }
@@ -77,7 +77,7 @@ impl Default for RustEmitter {
 impl RustEmitter {
     pub fn new(options: RustEmissionOptions) -> Self {
         Self {
-            generator_name: "schema-rust-next",
+            generator_name: "schema-rust",
             options,
         }
     }
@@ -530,7 +530,7 @@ impl RustModule {
 
     /// Verify the `{| … |}` catalog against the Rust surface this module
     /// ACTUALLY emits. This is the half that turns
-    /// [`schema_next::RustSurface::verify_catalog`] from a test-only check into
+    /// [`schema::RustSurface::verify_catalog`] from a test-only check into
     /// a build invariant: the facts come from [`EmittedRustSurface::from`]
     /// walking `self` (the standard impls Move 3 emitted, the intrinsic newtype
     /// inherents, and the ordering-class derives), not a hand-built test vector.
@@ -741,7 +741,7 @@ impl LowerToRust<RustModule> for SpecifiedSchema {
 /// opt-in surface that text-facing clients (CLIs, launchers, REPLs)
 /// enable through a cargo feature. Binary-only consumers (daemons,
 /// future binary-only clients) build the contract crate with the
-/// default features off and carry no `nota-next` in their dependency
+/// default features off and carry no `nota` in their dependency
 /// closure. The default target is [`RustEmissionTarget::ComponentRuntime`]
 /// so existing all-in-one runtime consumers keep their generated engine traits.
 /// New signal and meta-signal contract repos should opt into
@@ -762,9 +762,9 @@ impl Default for RustEmissionOptions {
 }
 
 impl RustEmissionOptions {
-    /// Always emit `nota_next::NotaDecode` / `nota_next::NotaEncode`
+    /// Always emit `nota::NotaDecode` / `nota::NotaEncode`
     /// derives, the root `FromStr` / `Display` impls, and the `use
-    /// nota_next::*` pull-in — without any cargo-feature gate.
+    /// nota::*` pull-in — without any cargo-feature gate.
     pub fn always_enabled_nota() -> Self {
         Self {
             nota_surface: NotaSurface::AlwaysEnabled,
@@ -774,9 +774,9 @@ impl RustEmissionOptions {
 
     /// Emit the NOTA surface guarded by `#[cfg_attr(feature = "<feature>",
     /// derive(...))]` on data types and `#[cfg(feature = "<feature>")]`
-    /// on FromStr/Display impls and the `use nota_next::*` items.
+    /// on FromStr/Display impls and the `use nota::*` items.
     /// Consumers enable the feature only in text-facing crates (CLI,
-    /// launcher) and leave it off in daemon-only crates so `nota-next`
+    /// launcher) and leave it off in daemon-only crates so `nota`
     /// stays out of the binary-only dependency closure.
     pub fn feature_gated_nota(feature: impl Into<String>) -> Self {
         Self {
@@ -788,9 +788,9 @@ impl RustEmissionOptions {
     }
 
     /// Emit no NOTA surface at all. The generated source contains no
-    /// `nota_next::*` references, no `FromStr` / `Display` impls
+    /// `nota::*` references, no `FromStr` / `Display` impls
     /// (since both depend on `NotaDecode` / `NotaEncode`). The resulting
-    /// Rust file compiles without `nota-next` in the dependency closure.
+    /// Rust file compiles without `nota` in the dependency closure.
     /// This is the daemon-only / binary-only shape.
     pub fn binary_only() -> Self {
         Self {
@@ -1637,7 +1637,7 @@ impl LowerToRust<RustAppliedRoot> for SpecifiedRootApplication {
     }
 }
 
-/// An owned mirror of one [`schema_next::ReferencedImpl`] — an entry from the
+/// An owned mirror of one [`schema::ReferencedImpl`] — an entry from the
 /// schema-wide `{| … |}` impl catalog, paired with the type it targets. The
 /// borrowed `ReferencedImpl<'schema>` cannot cross into the owned
 /// [`RustModule`], so lowering clones it into this noun. The catalog carries
@@ -1699,9 +1699,9 @@ impl<'schema> SpecifiedReferencedImpls<'schema> {
     }
 }
 
-/// The owned lowering of one [`schema_next::ImplReference`]: a bare trait
+/// The owned lowering of one [`schema::ImplReference`]: a bare trait
 /// marker, a body-bearing trait impl with its required method signatures, or a
-/// single inherent method signature. Mirrors the schema-next enum shape so the
+/// single inherent method signature. Mirrors the schema enum shape so the
 /// module owns its catalog without borrowing the source schema.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RustImplEntry {
@@ -1721,7 +1721,7 @@ impl RustImplEntry {
 
     /// The method signatures this entry references — none for a marker, the
     /// required methods for a trait impl, exactly itself for an inherent
-    /// method. Mirrors [`schema_next::ImplReference::methods`].
+    /// method. Mirrors [`schema::ImplReference::methods`].
     pub fn methods(&self) -> &[RustMethodSignature] {
         match self {
             Self::Marker(_) => &[],
@@ -1749,9 +1749,9 @@ impl LowerToRust<RustImplEntry> for ImplReference {
     }
 }
 
-/// The owned lowering of one [`schema_next::MethodSignature`]: a method name,
+/// The owned lowering of one [`schema::MethodSignature`]: a method name,
 /// its parameters, and its return type reference. It re-derives the canonical
-/// rendering schema-next uses for duplicate detection and unverified-reference
+/// rendering schema uses for duplicate detection and unverified-reference
 /// errors so an emitted [`ImplFact`] and the source catalog entry match
 /// signature-for-signature.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1789,8 +1789,8 @@ impl LowerToRust<RustMethodSignature> for MethodSignature {
     }
 }
 
-/// The schema-next [`MethodSignature`] this owned signature corresponds to —
-/// the bridge back into a [`schema_next::ImplFact`] for the emitted surface.
+/// The schema [`MethodSignature`] this owned signature corresponds to —
+/// the bridge back into a [`schema::ImplFact`] for the emitted surface.
 /// Reconstructs the source-side parameter and return types so the surface fact
 /// renders the exact canonical signature `RustSurface::verify_catalog` matches.
 impl From<&RustMethodSignature> for MethodSignature {
@@ -1807,7 +1807,7 @@ impl From<&RustMethodSignature> for MethodSignature {
     }
 }
 
-/// The owned lowering of one [`schema_next::MethodParameter`]: a parameter name
+/// The owned lowering of one [`schema::MethodParameter`]: a parameter name
 /// and its resolved type reference.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustMethodParameter {
@@ -1961,11 +1961,11 @@ impl RustRenderContext {
         let mut attributes = Vec::new();
         if includes_nota && let NotaSurface::FeatureGated { feature } = &self.nota_surface {
             attributes.push(quote! {
-                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode))]
+                #[cfg_attr(feature = #feature, derive(nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode))]
             });
         }
         let nota_derives = if includes_nota && self.nota_surface.includes_nota_in_derive() {
-            quote! { nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode, }
+            quote! { nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode, }
         } else {
             TokenStream::new()
         };
@@ -2879,9 +2879,9 @@ impl StandardImplRecipe {
 }
 
 /// The Rust impl surface a [`RustModule`] genuinely emits, expressed as a
-/// [`schema_next::ImplFact`] set — the producer that makes
-/// [`schema_next::RustSurface::verify_catalog`] meaningful on a GENERATED
-/// surface rather than the hand-built facts in schema-next's tests. The
+/// [`schema::ImplFact`] set — the producer that makes
+/// [`schema::RustSurface::verify_catalog`] meaningful on a GENERATED
+/// surface rather than the hand-built facts in schema's tests. The
 /// [`From<&RustModule>`] form carries only what the generator emits/derives;
 /// [`Self::for_schema`] additionally trusts the unrecognized references through,
 /// so the trust boundary verifies the recognized subset and passes the rest.
@@ -2927,7 +2927,7 @@ impl EmittedRustSurface {
 
 /// The bare emitted surface — every [`ImplFact`] the module's own emission and
 /// derives produce, with no trusted passthrough. This is the honest record of
-/// what schema-rust-next ITSELF generates.
+/// what schema-rust ITSELF generates.
 impl From<&RustModule> for EmittedRustSurface {
     fn from(module: &RustModule) -> Self {
         Self {
@@ -4860,11 +4860,11 @@ impl<'enumeration, 'context> RustOptionalEnumNotaTokens<'enumeration, 'context> 
                 let variant_name = RustIdentifier::new(variant.name().as_str());
                 let tag = Literal::string(variant.name().as_str());
                 quote! {
-                    #tag => return Ok(nota_next::DecodedWithSchema::new(
+                    #tag => return Ok(nota::DecodedWithSchema::new(
                         Self::#variant_name,
-                        nota_next::InstanceSchema::new(
-                            <Self as nota_next::NotaDecodeTraced>::instance_reference(),
-                            nota_next::InstanceSchemaBody::EnumPayload(None),
+                        nota::InstanceSchema::new(
+                            <Self as nota::NotaDecodeTraced>::instance_reference(),
+                            nota::InstanceSchemaBody::EnumPayload(None),
                         ),
                     )),
                 }
@@ -4880,14 +4880,14 @@ impl<'enumeration, 'context> RustOptionalEnumNotaTokens<'enumeration, 'context> 
                 let tag = Literal::string(variant.name().as_str());
                 let optional_reference = self.optional_payload_reference(variant);
                 quote! {
-                    #tag => return Ok(nota_next::DecodedWithSchema::new(
+                    #tag => return Ok(nota::DecodedWithSchema::new(
                         Self::#variant_name(None),
-                        nota_next::InstanceSchema::new(
-                            <Self as nota_next::NotaDecodeTraced>::instance_reference(),
-                            nota_next::InstanceSchemaBody::EnumPayload(Some(Box::new(
-                                nota_next::InstanceSchema::new(
+                        nota::InstanceSchema::new(
+                            <Self as nota::NotaDecodeTraced>::instance_reference(),
+                            nota::InstanceSchemaBody::EnumPayload(Some(Box::new(
+                                nota::InstanceSchema::new(
                                     #optional_reference,
-                                    nota_next::InstanceSchemaBody::Optional(None),
+                                    nota::InstanceSchemaBody::Optional(None),
                                 ),
                             ))),
                         ),
@@ -4905,16 +4905,16 @@ impl<'enumeration, 'context> RustOptionalEnumNotaTokens<'enumeration, 'context> 
                     let optional_reference = self.optional_payload_reference(variant);
                     Some(quote! {
                         #tag => {
-                            let leaf = <#inner as nota_next::NotaDecodeTraced>::from_nota_block_traced(&children[1])?;
+                            let leaf = <#inner as nota::NotaDecodeTraced>::from_nota_block_traced(&children[1])?;
                             let (leaf_value, leaf_schema) = leaf.into_parts();
-                            Ok(nota_next::DecodedWithSchema::new(
+                            Ok(nota::DecodedWithSchema::new(
                                 Self::#variant_name(Some(leaf_value)),
-                                nota_next::InstanceSchema::new(
-                                    <Self as nota_next::NotaDecodeTraced>::instance_reference(),
-                                    nota_next::InstanceSchemaBody::EnumPayload(Some(Box::new(
-                                        nota_next::InstanceSchema::new(
+                                nota::InstanceSchema::new(
+                                    <Self as nota::NotaDecodeTraced>::instance_reference(),
+                                    nota::InstanceSchemaBody::EnumPayload(Some(Box::new(
+                                        nota::InstanceSchema::new(
                                             #optional_reference,
-                                            nota_next::InstanceSchemaBody::Optional(Some(Box::new(leaf_schema))),
+                                            nota::InstanceSchemaBody::Optional(Some(Box::new(leaf_schema))),
                                         ),
                                     ))),
                                 ),
@@ -4926,13 +4926,13 @@ impl<'enumeration, 'context> RustOptionalEnumNotaTokens<'enumeration, 'context> 
                     let payload = RustTypeReferenceTokens::new(payload);
                     Some(quote! {
                         #tag => {
-                            let decoded = <#payload as nota_next::NotaDecodeTraced>::from_nota_block_traced(&children[1])?;
+                            let decoded = <#payload as nota::NotaDecodeTraced>::from_nota_block_traced(&children[1])?;
                             let (payload_value, payload_schema) = decoded.into_parts();
-                            Ok(nota_next::DecodedWithSchema::new(
+                            Ok(nota::DecodedWithSchema::new(
                                 Self::#variant_name(payload_value),
-                                nota_next::InstanceSchema::new(
-                                    <Self as nota_next::NotaDecodeTraced>::instance_reference(),
-                                    nota_next::InstanceSchemaBody::EnumPayload(Some(Box::new(payload_schema))),
+                                nota::InstanceSchema::new(
+                                    <Self as nota::NotaDecodeTraced>::instance_reference(),
+                                    nota::InstanceSchemaBody::EnumPayload(Some(Box::new(payload_schema))),
                                 ),
                             ))
                         }
@@ -4943,37 +4943,37 @@ impl<'enumeration, 'context> RustOptionalEnumNotaTokens<'enumeration, 'context> 
 
         quote! {
             #gate
-            impl nota_next::NotaDecodeTraced for #name {
-                fn instance_reference() -> nota_next::TypeReference {
-                    nota_next::TypeReference::named(#enum_name)
+            impl nota::NotaDecodeTraced for #name {
+                fn instance_reference() -> nota::TypeReference {
+                    nota::TypeReference::named(#enum_name)
                 }
 
                 fn from_nota_block_traced(
-                    block: &nota_next::Block,
-                ) -> Result<nota_next::DecodedWithSchema<Self>, nota_next::NotaDecodeError> {
+                    block: &nota::Block,
+                ) -> Result<nota::DecodedWithSchema<Self>, nota::NotaDecodeError> {
                     if let Some(variant) = block.demote_to_string() {
                         match variant {
                             #(#unit_atom_arms)*
                             #(#optional_unit_atom_arms)*
-                            other => return Err(nota_next::NotaDecodeError::UnknownVariant {
+                            other => return Err(nota::NotaDecodeError::UnknownVariant {
                                 enum_name: #enum_name,
                                 variant: other.to_owned(),
                             }),
                         }
                     }
-                    let body = nota_next::NotaBlock::new(block).expect_body(
-                        nota_next::Delimiter::Parenthesis,
+                    let body = nota::NotaBlock::new(block).expect_body(
+                        nota::Delimiter::Parenthesis,
                         #enum_name,
                     )?;
                     let children = body.expect_fields(#enum_name, 2)?;
                     let variant = children[0].demote_to_string().ok_or(
-                        nota_next::NotaDecodeError::ExpectedAtom {
+                        nota::NotaDecodeError::ExpectedAtom {
                             type_name: "enum variant",
                         },
                     )?;
                     match variant {
                         #(#payload_arms)*
-                        other => Err(nota_next::NotaDecodeError::UnknownVariant {
+                        other => Err(nota::NotaDecodeError::UnknownVariant {
                             enum_name: #enum_name,
                             variant: other.to_owned(),
                         }),
@@ -4984,59 +4984,59 @@ impl<'enumeration, 'context> RustOptionalEnumNotaTokens<'enumeration, 'context> 
     }
 
     /// The `(Optional Leaf)` reference for an optional-leaf variant's payload
-    /// position, lifted into a nota-next `TypeReference` so the trace names the
+    /// position, lifted into a nota `TypeReference` so the trace names the
     /// optional and its element. Falls back to the enum name if the variant is
     /// not optional (unreachable for the call sites, which pre-filter).
     fn optional_payload_reference(&self, variant: &RustEnumVariant) -> TokenStream {
         match variant.payload() {
             Some(TypeReference::Optional(inner)) => {
                 let element = self.reference_to_instance(inner);
-                quote! { nota_next::TypeReference::optional(#element) }
+                quote! { nota::TypeReference::optional(#element) }
             }
             _ => {
                 let enum_name = Literal::string(self.enumeration.name().as_str());
-                quote! { nota_next::TypeReference::named(#enum_name) }
+                quote! { nota::TypeReference::named(#enum_name) }
             }
         }
     }
 
-    /// Build the nota-next `TypeReference` constructor expression for a schema
-    /// `TypeReference`, matching the projection in schema-next's
+    /// Build the nota `TypeReference` constructor expression for a schema
+    /// `TypeReference`, matching the projection in schema's
     /// `SourceReference::from_instance_reference`.
     fn reference_to_instance(&self, reference: &TypeReference) -> TokenStream {
         match reference {
             TypeReference::Plain(name) => {
                 let literal = Literal::string(name.as_str());
-                quote! { nota_next::TypeReference::named(#literal) }
+                quote! { nota::TypeReference::named(#literal) }
             }
-            TypeReference::String => quote! { nota_next::TypeReference::named("String") },
-            TypeReference::Integer => quote! { nota_next::TypeReference::named("Integer") },
-            TypeReference::Boolean => quote! { nota_next::TypeReference::named("Boolean") },
-            TypeReference::Path => quote! { nota_next::TypeReference::named("Path") },
-            TypeReference::Bytes => quote! { nota_next::TypeReference::named("Bytes") },
+            TypeReference::String => quote! { nota::TypeReference::named("String") },
+            TypeReference::Integer => quote! { nota::TypeReference::named("Integer") },
+            TypeReference::Boolean => quote! { nota::TypeReference::named("Boolean") },
+            TypeReference::Path => quote! { nota::TypeReference::named("Path") },
+            TypeReference::Bytes => quote! { nota::TypeReference::named("Bytes") },
             TypeReference::FixedBytes(width) => {
                 let width = Literal::usize_unsuffixed(*width as usize);
-                quote! { nota_next::TypeReference::FixedBytes(#width) }
+                quote! { nota::TypeReference::FixedBytes(#width) }
             }
             TypeReference::Vector(inner) => {
                 let inner = self.reference_to_instance(inner);
-                quote! { nota_next::TypeReference::vector(#inner) }
+                quote! { nota::TypeReference::vector(#inner) }
             }
             TypeReference::Optional(inner) => {
                 let inner = self.reference_to_instance(inner);
-                quote! { nota_next::TypeReference::optional(#inner) }
+                quote! { nota::TypeReference::optional(#inner) }
             }
             TypeReference::Map(key, value) => {
                 let key = self.reference_to_instance(key);
                 let value = self.reference_to_instance(value);
-                quote! { nota_next::TypeReference::map(#key, #value) }
+                quote! { nota::TypeReference::map(#key, #value) }
             }
             other => {
                 // Scope and other compound references are not used at optional
                 // leaf positions in the spirit taxonomy; name them by their
                 // rendered form so the trace stays total.
                 let rendered = Literal::string(&format!("{other:?}"));
-                quote! { nota_next::TypeReference::named(#rendered) }
+                quote! { nota::TypeReference::named(#rendered) }
             }
         }
     }
@@ -5076,7 +5076,7 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
                     let inner = RustTypeReferenceTokens::new(inner);
                     Some(quote! {
                         #tag => Ok(Self::#variant_name(Some(
-                            <#inner as nota_next::NotaDecode>::from_nota_block(&children[1])?
+                            <#inner as nota::NotaDecode>::from_nota_block(&children[1])?
                         ))),
                     })
                 }
@@ -5084,7 +5084,7 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
                     let payload = RustTypeReferenceTokens::new(payload);
                     Some(quote! {
                         #tag => Ok(Self::#variant_name(
-                            <#payload as nota_next::NotaDecode>::from_nota_block(&children[1])?
+                            <#payload as nota::NotaDecode>::from_nota_block(&children[1])?
                         )),
                     })
                 }
@@ -5095,21 +5095,21 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
             let tag = Literal::string(variant.name().as_str());
             match variant.payload() {
                 None => quote! {
-                    Self::#variant_name => nota_next::NotaBodyEncoding::new(vec![#tag.to_owned()]),
+                    Self::#variant_name => nota::NotaBodyEncoding::new(vec![#tag.to_owned()]),
                 },
                 Some(TypeReference::Optional(_)) => quote! {
                     Self::#variant_name(payload) => {
                         let mut fields = vec![#tag.to_owned()];
                         if let Some(payload) = payload {
-                            fields.push(nota_next::NotaEncode::to_nota(payload));
+                            fields.push(nota::NotaEncode::to_nota(payload));
                         }
-                        nota_next::NotaBodyEncoding::new(fields)
+                        nota::NotaBodyEncoding::new(fields)
                     },
                 },
                 Some(_) => quote! {
-                    Self::#variant_name(payload) => nota_next::NotaBodyEncoding::new(vec![
+                    Self::#variant_name(payload) => nota::NotaBodyEncoding::new(vec![
                         #tag.to_owned(),
-                        nota_next::NotaEncode::to_nota(payload),
+                        nota::NotaEncode::to_nota(payload),
                     ]),
                 },
             }
@@ -5117,10 +5117,10 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
         let traced = self.traced_tokens();
         quote! {
             #gate
-            impl nota_next::NotaBodyDecode for #name {
+            impl nota::NotaBodyDecode for #name {
                 fn from_nota_body(
-                    body: &nota_next::NotaBody<'_>,
-                ) -> Result<Self, nota_next::NotaDecodeError> {
+                    body: &nota::NotaBody<'_>,
+                ) -> Result<Self, nota::NotaDecodeError> {
                     let root_objects = body.root_objects();
                     if root_objects.len() == 1
                         && let Some(variant) = root_objects[0].demote_to_string()
@@ -5128,7 +5128,7 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
                         return match variant {
                             #(#unit_arms)*
                             #(#optional_unit_arms)*
-                            other => Err(nota_next::NotaDecodeError::UnknownVariant {
+                            other => Err(nota::NotaDecodeError::UnknownVariant {
                                 enum_name: #enum_name,
                                 variant: other.to_owned(),
                             }),
@@ -5136,13 +5136,13 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
                     }
                     let children = body.expect_fields(#enum_name, 2)?;
                     let variant = children[0].demote_to_string().ok_or(
-                        nota_next::NotaDecodeError::ExpectedAtom {
+                        nota::NotaDecodeError::ExpectedAtom {
                             type_name: "enum variant",
                         },
                     )?;
                     match variant {
                         #(#payload_arms)*
-                        other => Err(nota_next::NotaDecodeError::UnknownVariant {
+                        other => Err(nota::NotaDecodeError::UnknownVariant {
                             enum_name: #enum_name,
                             variant: other.to_owned(),
                         }),
@@ -5151,26 +5151,26 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
             }
 
             #gate
-            impl nota_next::NotaDecode for #name {
+            impl nota::NotaDecode for #name {
                 fn from_nota_block(
-                    block: &nota_next::Block,
-                ) -> Result<Self, nota_next::NotaDecodeError> {
+                    block: &nota::Block,
+                ) -> Result<Self, nota::NotaDecodeError> {
                     if block.demote_to_string().is_some() {
                         let root_objects = std::slice::from_ref(block);
-                        let body = nota_next::NotaBody::new(root_objects);
-                        return <Self as nota_next::NotaBodyDecode>::from_nota_body(&body);
+                        let body = nota::NotaBody::new(root_objects);
+                        return <Self as nota::NotaBodyDecode>::from_nota_body(&body);
                     }
-                    let body = nota_next::NotaBlock::new(block).expect_body(
-                        nota_next::Delimiter::Parenthesis,
+                    let body = nota::NotaBlock::new(block).expect_body(
+                        nota::Delimiter::Parenthesis,
                         #enum_name,
                     )?;
-                    <Self as nota_next::NotaBodyDecode>::from_nota_body(&body)
+                    <Self as nota::NotaBodyDecode>::from_nota_body(&body)
                 }
             }
 
             #gate
-            impl nota_next::NotaBodyEncode for #name {
-                fn to_nota_body(&self) -> nota_next::NotaBodyEncoding {
+            impl nota::NotaBodyEncode for #name {
+                fn to_nota_body(&self) -> nota::NotaBodyEncoding {
                     match self {
                         #(#encode_arms)*
                     }
@@ -5178,13 +5178,13 @@ impl ToTokens for RustOptionalEnumNotaTokens<'_, '_> {
             }
 
             #gate
-            impl nota_next::NotaEncode for #name {
+            impl nota::NotaEncode for #name {
                 fn to_nota(&self) -> String {
-                    let body = <Self as nota_next::NotaBodyEncode>::to_nota_body(self);
+                    let body = <Self as nota::NotaBodyEncode>::to_nota_body(self);
                     if body.fields().len() == 1 {
                         body.to_nota()
                     } else {
-                        body.to_delimited_nota(nota_next::Delimiter::Parenthesis)
+                        body.to_delimited_nota(nota::Delimiter::Parenthesis)
                     }
                 }
             }
@@ -6078,17 +6078,17 @@ impl RustModuleRenderer {
     }
 
     /// Emits the `Bytes` scalar as a local storage newtype over `Vec<u8>`.
-    /// The inner value is nota-next's byte scalar, so the generated type can
+    /// The inner value is nota's byte scalar, so the generated type can
     /// derive NOTA codecs instead of emitting a local implementation.
     fn emit_bytes_scalar(&mut self) {
         let nota_gate = match &self.nota_surface {
             NotaSurface::AlwaysEnabled | NotaSurface::Disabled => quote! {},
             NotaSurface::FeatureGated { feature } => quote! {
-                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode))]
+                #[cfg_attr(feature = #feature, derive(nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode))]
             },
         };
         let nota_derives = if self.nota_surface.includes_nota_in_derive() {
-            quote! { nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode, }
+            quote! { nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode, }
         } else {
             quote! {}
         };
@@ -6107,11 +6107,11 @@ impl RustModuleRenderer {
                 Ord,
                 Hash,
             )]
-            pub struct Bytes(nota_next::ByteSequence);
+            pub struct Bytes(nota::ByteSequence);
 
             impl Bytes {
                 pub fn new(payload: Vec<u8>) -> Self {
-                    Self(nota_next::ByteSequence::new(payload))
+                    Self(nota::ByteSequence::new(payload))
                 }
 
                 pub fn payload(&self) -> &[u8] {
@@ -6127,18 +6127,18 @@ impl RustModuleRenderer {
 
     /// Emits the generic fixed-size `FixedBytes<const WIDTH: usize>([u8; WIDTH])`
     /// that `(Bytes N)` references lower to (`FixedBytes<N>`). One generic type
-    /// serves every width; the inner value is nota-next's fixed byte scalar, so
+    /// serves every width; the inner value is nota's fixed byte scalar, so
     /// the generated type can derive NOTA codecs instead of emitting a local
     /// implementation.
     fn emit_fixed_bytes_scalar(&mut self) {
         let nota_gate = match &self.nota_surface {
             NotaSurface::AlwaysEnabled | NotaSurface::Disabled => quote! {},
             NotaSurface::FeatureGated { feature } => quote! {
-                #[cfg_attr(feature = #feature, derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode))]
+                #[cfg_attr(feature = #feature, derive(nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode))]
             },
         };
         let nota_derives = if self.nota_surface.includes_nota_in_derive() {
-            quote! { nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode, }
+            quote! { nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode, }
         } else {
             quote! {}
         };
@@ -6157,11 +6157,11 @@ impl RustModuleRenderer {
                 Ord,
                 Hash,
             )]
-            pub struct FixedBytes<const WIDTH: usize>(nota_next::FixedByteSequence<WIDTH>);
+            pub struct FixedBytes<const WIDTH: usize>(nota::FixedByteSequence<WIDTH>);
 
             impl<const WIDTH: usize> FixedBytes<WIDTH> {
                 pub fn new(payload: [u8; WIDTH]) -> Self {
-                    Self(nota_next::FixedByteSequence::new(payload))
+                    Self(nota::FixedByteSequence::new(payload))
                 }
 
                 pub fn payload(&self) -> &[u8; WIDTH] {
@@ -6209,7 +6209,7 @@ impl RustModuleRenderer {
         let gate = context.nota_feature_gate();
         self.emit_item_tokens(quote! {
             #gate
-            pub use nota_next::{
+            pub use nota::{
                 NotaDecodeError, NotaEncode, NotaSource,
             };
         });

@@ -16,10 +16,10 @@
 
 use std::{fs, path::PathBuf};
 
-use schema_next::{
+use schema::{
     DefaultValue, FieldMigration, Name, SchemaEdit, SchemaIdentity, TypeReference, UpgradeObject,
 };
-use schema_rust_next::MigrationEmitter;
+use schema_rust::MigrationEmitter;
 
 fn pilot_upgrade() -> UpgradeObject {
     UpgradeObject::new(

@@ -1,4 +1,4 @@
-use schema_rust_next::{RustEmissionOptions, RustEmitter};
+use schema_rust::{RustEmissionOptions, RustEmitter};
 
 mod support;
 
@@ -19,7 +19,7 @@ fn emit_standard_newtype_impls() -> String {
 
 #[test]
 fn write_standard_newtype_impl_fixture() {
-    if std::env::var_os("SCHEMA_RUST_NEXT_UPDATE_FIXTURES").is_none() {
+    if std::env::var_os("SCHEMA_RUST_UPDATE_FIXTURES").is_none() {
         return;
     }
     let code = emit_standard_newtype_impls();

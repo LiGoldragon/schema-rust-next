@@ -1,4 +1,4 @@
-use schema_rust_next::{
+use schema_rust::{
     DaemonModule, MetaListenerTier, NexusDaemonShape, SocketModeBits, TcpListenerTier,
     UpgradeListenerTier, WorkingListenerTier,
 };
@@ -77,7 +77,7 @@ fn meta_plus_tcp_shape() -> NexusDaemonShape {
 fn daemon_module_emits_the_component_daemon_hook_trait() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
-        DaemonModule::new(single_listener_shape(), &schema, "schema-rust-next").to_generated_file();
+        DaemonModule::new(single_listener_shape(), &schema, "schema-rust").to_generated_file();
 
     assert_eq!(generated.path, "src/schema/daemon.rs");
     let code = generated.code.as_str();
@@ -103,7 +103,7 @@ fn daemon_module_emits_the_component_daemon_hook_trait() {
 fn daemon_module_emits_the_command_and_exit_entry() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
-        DaemonModule::new(single_listener_shape(), &schema, "schema-rust-next").to_generated_file();
+        DaemonModule::new(single_listener_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     assert_code_contains(code, "pub struct DaemonCommand<Daemon: ComponentDaemon>");
@@ -119,7 +119,7 @@ fn daemon_module_emits_the_command_and_exit_entry() {
 fn single_listener_daemon_emits_the_async_single_listener_spine() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
-        DaemonModule::new(single_listener_shape(), &schema, "schema-rust-next").to_generated_file();
+        DaemonModule::new(single_listener_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     assert_code_contains(code, "AsyncSingleListenerDaemon::new(");
@@ -170,7 +170,7 @@ fn single_listener_daemon_emits_the_async_single_listener_spine() {
 fn meta_listener_tier_emits_the_async_multi_listener_spine() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
-        DaemonModule::new(multi_listener_shape(), &schema, "schema-rust-next").to_generated_file();
+        DaemonModule::new(multi_listener_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     assert_code_contains(code, "pub enum ListenerTier");
@@ -224,7 +224,7 @@ fn meta_listener_tier_emits_the_async_multi_listener_spine() {
 #[test]
 fn tcp_listener_tier_emits_a_sibling_tcp_working_ingress() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
-    let generated = DaemonModule::new(tcp_shape(), &schema, "schema-rust-next").to_generated_file();
+    let generated = DaemonModule::new(tcp_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     assert_code_contains(code, "use triad_runtime::TcpListenerDaemon");
@@ -245,7 +245,7 @@ fn tcp_listener_tier_emits_a_sibling_tcp_working_ingress() {
 fn tcp_listener_tier_composes_with_meta_and_keeps_meta_socket_mode() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
-        DaemonModule::new(meta_plus_tcp_shape(), &schema, "schema-rust-next").to_generated_file();
+        DaemonModule::new(meta_plus_tcp_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     assert_code_contains(code, "GeneratedMultiAndTcpDaemon<Self>");
@@ -260,8 +260,8 @@ fn tcp_listener_tier_composes_with_meta_and_keeps_meta_socket_mode() {
 #[test]
 fn component_decoded_working_tier_delegates_frame_decode_to_component() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
-    let generated = DaemonModule::new(component_decoded_shape(), &schema, "schema-rust-next")
-        .to_generated_file();
+    let generated =
+        DaemonModule::new(component_decoded_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     assert_code_contains(code, "pub enum ListenerTier");
@@ -292,7 +292,7 @@ fn component_decoded_working_tier_delegates_frame_decode_to_component() {
 fn declared_stream_emits_async_subscription_support() {
     let schema = FixtureSchema::new("daemon-stream.schema").lower("test:signal");
     let generated =
-        DaemonModule::new(single_listener_shape(), &schema, "schema-rust-next").to_generated_file();
+        DaemonModule::new(single_listener_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     assert_code_contains(code, "type SubscriptionToken:");
@@ -386,7 +386,7 @@ fn declared_stream_emits_async_subscription_support() {
 #[test]
 fn tcp_listener_tier_composes_with_stream_subscriptions() {
     let schema = FixtureSchema::new("daemon-stream.schema").lower("test:signal");
-    let generated = DaemonModule::new(tcp_shape(), &schema, "schema-rust-next").to_generated_file();
+    let generated = DaemonModule::new(tcp_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     assert_code_contains(code, "GeneratedSingleAndTcpDaemon<Self>");
@@ -420,7 +420,7 @@ fn tcp_listener_tier_composes_with_stream_subscriptions() {
 fn schema_without_a_stream_emits_no_subscription_plumbing() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
-        DaemonModule::new(single_listener_shape(), &schema, "schema-rust-next").to_generated_file();
+        DaemonModule::new(single_listener_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     assert_code_excludes(code, "EmittedSubscriptions");
@@ -435,7 +435,7 @@ fn schema_without_a_stream_emits_no_subscription_plumbing() {
 fn upgrade_listener_tier_emits_the_third_listener_alongside_meta() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
-        DaemonModule::new(upgrade_tier_shape(), &schema, "schema-rust-next").to_generated_file();
+        DaemonModule::new(upgrade_tier_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     // The listener-tier enum gains the third `Upgrade` identity alongside Meta.
@@ -508,7 +508,7 @@ fn upgrade_listener_tier_emits_the_third_listener_alongside_meta() {
 fn upgrade_tier_without_meta_emits_a_two_listener_multi_daemon() {
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated =
-        DaemonModule::new(upgrade_only_shape(), &schema, "schema-rust-next").to_generated_file();
+        DaemonModule::new(upgrade_only_shape(), &schema, "schema-rust").to_generated_file();
     let code = generated.code.as_str();
 
     // The enum carries Working + Upgrade only; the Meta tier is absent.

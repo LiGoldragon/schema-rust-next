@@ -1,24 +1,24 @@
-//! The `{| … |}` impl-reference catalog, consumed on the schema-rust-next side.
+//! The `{| … |}` impl-reference catalog, consumed on the schema-rust side.
 //!
-//! Report 703.3: schema-rust-next reads `Schema::referenced_impls()`, DRIVES
+//! Report 703.3: schema-rust reads `Schema::referenced_impls()`, DRIVES
 //! standard-impl emission from it (replacing the `scalar_like()` flag trigger),
 //! and verifies the recognized subset against the surface it actually emits.
 
-use schema_next::{ImplFact, Name, RustSurface};
-use schema_rust_next::{RustEmissionOptions, RustEmitter, RustModule};
+use schema::{ImplFact, Name, RustSurface};
+use schema_rust::{RustEmissionOptions, RustEmitter, RustModule};
 
 mod support;
 
 use support::FixtureSchema;
 
-fn lower(fixture: &str) -> schema_next::Schema {
+fn lower(fixture: &str) -> schema::Schema {
     FixtureSchema::new(format!("impl-catalog/{fixture}.schema")).lower("impl-catalog:lib")
 }
 
 fn module(fixture: &str) -> RustModule {
     RustModule::from_schema(
         &lower(fixture),
-        "schema-rust-next",
+        "schema-rust",
         RustEmissionOptions::binary_only(),
     )
 }
@@ -102,11 +102,8 @@ fn transitive_scalar_emits_display() {
 #[test]
 fn emitted_surface_verifies_recognized_subset() {
     let schema = lower("fused-markers");
-    let module = RustModule::from_schema(
-        &schema,
-        "schema-rust-next",
-        RustEmissionOptions::binary_only(),
-    );
+    let module =
+        RustModule::from_schema(&schema, "schema-rust", RustEmissionOptions::binary_only());
     module
         .verify_catalog(&schema)
         .expect("the recognized subset verifies against the generated surface");
@@ -114,7 +111,7 @@ fn emitted_surface_verifies_recognized_subset() {
 
 /// The falsifiable half: a recognized reference whose body the generator did
 /// NOT emit fails verification with the typed error naming the exact target —
-/// mirror of schema-next/tests/impl_catalog.rs, now on a generated surface.
+/// mirror of schema/tests/impl_catalog.rs, now on a generated surface.
 /// Here a hand-built surface drops the `Display` fact for `RecordIdentifier`,
 /// so the recognized `Display` reference is unverified.
 #[test]
@@ -128,7 +125,7 @@ fn absent_recognized_impl_fails_verification() {
     let error = surface
         .verify_catalog(&schema)
         .expect_err("a missing recognized impl must fail verification");
-    let schema_next::SchemaError::UnverifiedImplReference {
+    let schema::SchemaError::UnverifiedImplReference {
         target, signature, ..
     } = &error
     else {

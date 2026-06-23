@@ -1,5 +1,5 @@
-use schema_next::{SchemaEngine, SchemaIdentity, SpecifiedSchema};
-use schema_rust_next::{RustEmissionOptions, RustEmitter, RustModule};
+use schema::{SchemaEngine, SchemaIdentity, SpecifiedSchema};
+use schema_rust::{RustEmissionOptions, RustEmitter, RustModule};
 
 mod support;
 
@@ -22,7 +22,7 @@ fn generated_fixture_path(file_name: &str) -> std::path::PathBuf {
 
 fn assert_generated_fixture(file_name: &str, generated: &str) {
     let path = generated_fixture_path(file_name);
-    if std::env::var_os("SCHEMA_RUST_NEXT_UPDATE_FIXTURES").is_some() {
+    if std::env::var_os("SCHEMA_RUST_UPDATE_FIXTURES").is_some() {
         std::fs::write(&path, generated).expect("write generated fixture");
     }
     let expected = std::fs::read_to_string(path).expect("read generated fixture");
@@ -41,7 +41,7 @@ fn assert_code_contains(code: &str, expected: &str) {
     );
 }
 
-fn family_schema() -> schema_next::Schema {
+fn family_schema() -> schema::Schema {
     FixtureSchema::new("record-families.schema").lower("example:lib")
 }
 
@@ -83,10 +83,10 @@ fn family_identity_emission_uses_specified_schema_closure() {
     let schema = family_schema();
     let specified = SpecifiedSchema::from(&schema);
     let schema_module =
-        RustModule::from_schema(&schema, "schema-rust-next", RustEmissionOptions::default());
+        RustModule::from_schema(&schema, "schema-rust", RustEmissionOptions::default());
     let specified_module = RustModule::from_specified_schema(
         &specified,
-        "schema-rust-next",
+        "schema-rust",
         RustEmissionOptions::default(),
     );
 
@@ -121,13 +121,10 @@ fn schema_field_change_moves_the_emitted_family_constant() {
         .lower_source(&edited_source, SchemaIdentity::new("example:lib", "0.1.0"))
         .expect("edited schema lowers");
 
-    let original_module = RustModule::from_schema(
-        &original,
-        "schema-rust-next",
-        RustEmissionOptions::default(),
-    );
+    let original_module =
+        RustModule::from_schema(&original, "schema-rust", RustEmissionOptions::default());
     let edited_module =
-        RustModule::from_schema(&edited, "schema-rust-next", RustEmissionOptions::default());
+        RustModule::from_schema(&edited, "schema-rust", RustEmissionOptions::default());
 
     let family = |module: &RustModule, name: &str| {
         module

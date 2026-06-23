@@ -1,22 +1,22 @@
 [package]
-name         = "schema-rust-next"
+name         = "schema-rust"
 version      = "0.5.3"
 edition      = "2024"
 rust-version = "1.88"
 license      = "MIT OR Apache-2.0"
-repository   = "https://github.com/LiGoldragon/schema-rust-next"
-description  = "Rust source emitter for schema-next typed schema data."
+repository   = "https://github.com/LiGoldragon/schema-rust"
+description  = "Rust source emitter for schema typed schema data."
 publish      = false
 
 [lib]
-name = "schema_rust_next"
+name = "schema_rust"
 path = "src/lib.rs"
 
 [dependencies]
 prettyplease = "0.2"
 proc-macro2 = "1"
 quote = "1"
-schema-next = { git = "https://github.com/LiGoldragon/schema-next.git", branch = "main" }
+schema = { package = "schema", git = "https://github.com/LiGoldragon/schema-next.git", branch = "main" }
 syn = { version = "2", features = ["full"] }
 thiserror = "2"
 
@@ -27,12 +27,12 @@ thiserror = "2"
 # controls whether the included generated source carries its NOTA
 # bridges. Defaulting it on keeps the existing test paths
 # (`generated::Input::from_str`, `generated::*::to_nota`, the
-# `nota_next::*` re-exports) live without per-test cargo flags.
+# `nota::*` re-exports) live without per-test cargo flags.
 default   = ["nota-text"]
 nota-text = []
 
 [dev-dependencies]
-nota-next = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }
+nota = { package = "nota", git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }
 rkyv = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }
 sema-engine = { git = "https://github.com/LiGoldragon/sema-engine.git", branch = "main" }
 signal-frame = { git = "https://github.com/LiGoldragon/signal-frame.git", branch = "main" }

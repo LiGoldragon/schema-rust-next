@@ -1,5 +1,5 @@
-use schema_next::{SchemaEngine, SchemaIdentity, SchemaSourceArtifact, SpecifiedSchema};
-use schema_rust_next::{
+use schema::{SchemaEngine, SchemaIdentity, SchemaSourceArtifact, SpecifiedSchema};
+use schema_rust::{
     LowerToRust, NotaSurface, RustEmissionOptions, RustEmissionTarget, RustEmitter,
     RustLoweringContext, RustSchemaLowering, RustTypeDeclaration,
 };
@@ -18,7 +18,7 @@ fn generated_fixture_path(file_name: &str) -> PathBuf {
 
 fn assert_generated_fixture(file_name: &str, generated: &str) {
     let path = generated_fixture_path(file_name);
-    if std::env::var_os("SCHEMA_RUST_NEXT_UPDATE_FIXTURES").is_some() {
+    if std::env::var_os("SCHEMA_RUST_UPDATE_FIXTURES").is_some() {
         std::fs::write(&path, generated).expect("write generated fixture");
     }
     let expected = std::fs::read_to_string(path).expect("read generated fixture");
@@ -200,8 +200,8 @@ fn emits_domain_scope_equivalence_expansion_from_relations() {
         generated.as_str(),
         "pub fn contains_domain(&self, domain: &Domain) -> bool",
     );
-    assert_code_contains(generated.as_str(), "nota_next::NotaDecode");
-    assert_code_contains(generated.as_str(), "nota_next::NotaEncode");
+    assert_code_contains(generated.as_str(), "nota::NotaDecode");
+    assert_code_contains(generated.as_str(), "nota::NotaEncode");
     assert_code_excludes(generated.as_str(), "fn to_nota(&self) -> String");
     assert_code_excludes(generated.as_str(), "from_nota_block");
     assert_code_excludes(generated.as_str(), "fn nota_path_from_block");
@@ -313,7 +313,7 @@ fn schema_subobjects_lower_themselves_into_rust_model_nouns() {
         .input_and_output()
         .into_iter()
         .find(|root| root.name().as_str() == "Input")
-        .and_then(schema_next::Root::as_enum)
+        .and_then(schema::Root::as_enum)
         .expect("schema input root enum");
     let rust_input = input.lower_to_rust(&context);
     assert_eq!(rust_input.name().as_str(), "Input");
@@ -381,10 +381,10 @@ fn generated_objects_expose_named_constructors_and_newtype_payload_accessors() {
 #[test]
 fn emission_can_disable_nota_surface_for_binary_only_consumers() {
     // Binary-only shape — daemons and other binary-only consumers
-    // ship zero NOTA derives and zero `nota_next::*` references.
+    // ship zero NOTA derives and zero `nota::*` references.
     // The emitted source carries only the `rkyv` + signal-frame
     // surface, so the generated module compiles when the consumer
-    // does not depend on `nota-next` at all.
+    // does not depend on `nota` at all.
     let schema = FixtureSchema::new("spirit-min.schema").lower("spirit:lib");
     let generated = RustEmitter::new(RustEmissionOptions {
         nota_surface: NotaSurface::Disabled,
@@ -396,7 +396,7 @@ fn emission_can_disable_nota_surface_for_binary_only_consumers() {
     assert!(code.contains("rkyv::Archive"));
     assert!(code.contains("pub fn encode_signal_frame"));
     assert!(code.contains("pub fn decode_signal_frame"));
-    assert!(!code.contains("nota_next"));
+    assert!(!code.contains("nota"));
     assert!(!code.contains("NotaDecode"));
     assert!(!code.contains("NotaEncode"));
     assert!(!code.contains("from_nota_block"));
@@ -430,11 +430,9 @@ fn emission_can_gate_nota_surface_behind_text_client_feature() {
     .emit_code_from_schema(&schema);
     let code = generated.as_str();
 
-    assert!(code.contains(
-        "derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"
-    ));
+    assert!(code.contains("derive(nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode)"));
     assert!(code.contains("#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize"));
-    assert!(code.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"));
+    assert!(code.contains("#[cfg(feature = \"nota-text\")]\npub use nota::{"));
     assert!(code.contains("#[cfg(feature = \"nota-text\")]\nimpl std::str::FromStr for Input"));
     assert!(code.contains("#[cfg(feature = \"nota-text\")]\nimpl std::fmt::Display for Output"));
     assert!(code.contains("pub fn encode_signal_frame"));
@@ -1415,13 +1413,11 @@ fn emits_vec_map_and_option_collection_types_with_shared_codec_traits() {
     // The generated code imports the shared NOTA codec instead of
     // emitting a local collection-support runtime block. Under the
     // default `feature_gated_nota("nota-text")` shape, the `use
-    // nota_next::*` and `cfg_attr(...)` derives sit behind the
+    // nota::*` and `cfg_attr(...)` derives sit behind the
     // `nota-text` feature.
-    assert!(code.contains("#[cfg(feature = \"nota-text\")]\npub use nota_next::{"));
+    assert!(code.contains("#[cfg(feature = \"nota-text\")]\npub use nota::{"));
     assert!(!code.contains("pub struct NotaCollection"));
-    assert!(code.contains(
-        "derive(nota_next::NotaDecode, nota_next::NotaDecodeTraced, nota_next::NotaEncode)"
-    ));
+    assert!(code.contains("derive(nota::NotaDecode, nota::NotaDecodeTraced, nota::NotaEncode)"));
     assert!(!code.contains("impl NotaDecode for Cluster"));
     assert!(!code.contains("impl NotaEncode for Cluster"));
     // Vec / KeyValue->BTreeMap / Option render at the field positions. The new

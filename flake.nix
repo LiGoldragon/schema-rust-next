@@ -1,5 +1,5 @@
 {
-  description = "schema-rust-next — Rust source emitter for assembled schemas";
+  description = "schema-rust — Rust source emitter for assembled schemas";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -37,21 +37,21 @@
         checks = {
           build = craneLib.cargoBuild (commonArguments // { inherit cargoArtifacts; });
           test = craneLib.cargoTest (commonArguments // { inherit cargoArtifacts; });
-          no-old-signal-macro = pkgs.runCommand "schema-rust-next-no-old-signal-macro" { } ''
+          no-old-signal-macro = pkgs.runCommand "schema-rust-no-old-signal-macro" { } ''
             if grep -R "signal_channel!" ${src}; then
-              echo "schema-rust-next must not use the old signal_channel macro" >&2
+              echo "schema-rust must not use the old signal_channel macro" >&2
               exit 1
             fi
             touch $out
           '';
-          no-rust-macro-surface = pkgs.runCommand "schema-rust-next-no-rust-macro-surface" { } ''
+          no-rust-macro-surface = pkgs.runCommand "schema-rust-no-rust-macro-surface" { } ''
             if grep -R -n -E 'macro_rules!|#\[(proc_macro|proc_macro_derive|proc_macro_attribute)\]|proc_macro::' ${src}/src; then
               echo "Rust emission must stay separate from Rust macros in src/" >&2
               exit 1
             fi
             touch $out
           '';
-          generated-rkyv-boundary = pkgs.runCommand "schema-rust-next-generated-rkyv-boundary" { } ''
+          generated-rkyv-boundary = pkgs.runCommand "schema-rust-generated-rkyv-boundary" { } ''
             grep -R "encode_signal_frame" ${src}/tests/emission.rs >/dev/null
             grep -R "decode_signal_frame" ${src}/tests/emission.rs >/dev/null
             grep -R "rkyv::Archive" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
@@ -60,7 +60,7 @@
             grep -R "pub fn encode_signal_frame" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             touch $out
           '';
-          generated-nexus-traits = pkgs.runCommand "schema-rust-next-generated-nexus-traits" { } ''
+          generated-nexus-traits = pkgs.runCommand "schema-rust-generated-nexus-traits" { } ''
             grep -R "emits_schema_plane_engine_traits_for_declared_signal_nexus_and_sema_languages" ${src}/tests/emission.rs >/dev/null
             grep -R "fn on_start(&mut self) -> Result<(), EngineStartFailure>" ${src}/tests/emission.rs >/dev/null
             grep -R "fn on_stop(&mut self) -> Result<(), EngineStopFailure>" ${src}/tests/emission.rs >/dev/null
@@ -72,7 +72,7 @@
             ! grep -R "generated::InputNexus for SpiritNexus" ${src}/tests/emission.rs
             touch $out
           '';
-          generated-mail-events = pkgs.runCommand "schema-rust-next-generated-mail-events" { } ''
+          generated-mail-events = pkgs.runCommand "schema-rust-generated-mail-events" { } ''
             grep -R "pub struct MessageIdentifier(Integer)" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "impl MessageIdentifier" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub struct OriginRoute(Integer)" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
@@ -93,39 +93,39 @@
             grep -R "event.push_to" ${src}/tests/emission.rs >/dev/null
             touch $out
           '';
-          generated-upgrade-traits = pkgs.runCommand "schema-rust-next-generated-upgrade-traits" { } ''
+          generated-upgrade-traits = pkgs.runCommand "schema-rust-generated-upgrade-traits" { } ''
             grep -R "pub trait UpgradeFrom<Previous>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "pub trait AcceptPrevious<Previous>" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "UpgradeFrom<PreviousEntry> for generated::Entry" ${src}/tests/emission.rs >/dev/null
             grep -R "accepted previous Entry as" ${src}/tests/emission.rs >/dev/null
             touch $out
           '';
-          generated-nota-boundary = pkgs.runCommand "schema-rust-next-generated-nota-boundary" { } ''
+          generated-nota-boundary = pkgs.runCommand "schema-rust-generated-nota-boundary" { } ''
             grep -R "parse::<generated::Input>" ${src}/tests/emission.rs >/dev/null
             grep -R "impl std::str::FromStr for Input" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             grep -R "impl std::fmt::Display for Input" ${src}/tests/fixtures/spirit_generated.rs >/dev/null
             touch $out
           '';
-          generated-schema-module-path = pkgs.runCommand "schema-rust-next-generated-schema-module-path" { } ''
+          generated-schema-module-path = pkgs.runCommand "schema-rust-generated-schema-module-path" { } ''
             grep -R "src/schema/lib.rs" ${src}/tests/emission.rs >/dev/null
             grep -R "src/schema/signal/public.rs" ${src}/tests/emission.rs >/dev/null
             grep -R "struct RustModulePath" ${src}/src/lib.rs >/dev/null
             touch $out
           '';
-          generated-cross-crate-imports = pkgs.runCommand "schema-rust-next-generated-cross-crate-imports" { } ''
+          generated-cross-crate-imports = pkgs.runCommand "schema-rust-generated-cross-crate-imports" { } ''
             grep -R "imported_type_is_referenced_through_a_use_not_redeclared" ${src}/tests/cross_crate_import.rs >/dev/null
             grep -R "pub use marker_core::schema::mail::DatabaseMarker as DatabaseMarker" ${src}/tests/cross_crate_import.rs >/dev/null
             grep -R "Marked(DatabaseMarker)" ${src}/tests/cross_crate_import.rs >/dev/null
             touch $out
           '';
-          no-obsolete-asschema-fixtures = pkgs.runCommand "schema-rust-next-no-obsolete-asschema-fixtures" { } ''
+          no-obsolete-asschema-fixtures = pkgs.runCommand "schema-rust-no-obsolete-asschema-fixtures" { } ''
             grep -R "assert_lowers_to_typed_schema_data" ${src}/tests/big_emission.rs >/dev/null
             if find ${src} -name '*.asschema' -print -quit | grep .; then
-              echo "obsolete .asschema syntax fixtures must not remain in schema-rust-next" >&2
+              echo "obsolete .asschema syntax fixtures must not remain in schema-rust" >&2
               exit 1
             fi
             if find ${src} -name '*.witness.txt' -print -quit | grep .; then
-              echo "line-format .witness.txt goldens must not remain in schema-rust-next" >&2
+              echo "line-format .witness.txt goldens must not remain in schema-rust" >&2
               exit 1
             fi
             if grep -R -n -E '\[Input \[|\[Output \[|\(Struct \[|\(Enum \[|\(Newtype \[|\(Map \[\(Plain|\(Carries \(Plain' ${src}/tests ${src}/src; then
@@ -134,59 +134,59 @@
             fi
             touch $out
           '';
-          no-nested-root-enum-examples = pkgs.runCommand "schema-rust-next-no-nested-root-enum-examples" { } ''
+          no-nested-root-enum-examples = pkgs.runCommand "schema-rust-no-nested-root-enum-examples" { } ''
             if grep -R -n -E '\((Input|Output) \(\(' ${src}/tests; then
               echo "root Input/Output examples must use direct variants, not nested enum bodies" >&2
               exit 1
             fi
             if grep -R -n -E '@(Vec|Option|KeyValue|Bag|HashSet)' ${src}/tests ${src}/src; then
-              echo "schema-rust-next examples must not reintroduce the old @ macro sigil" >&2
+              echo "schema-rust examples must not reintroduce the old @ macro sigil" >&2
               exit 1
             fi
             if grep -R -n -E '\[\[[A-Z]|\((records|kinds|services|Listed) \[[A-Z]|\((byTopic|Projected|nodes) \{[A-Z]' ${src}/tests/fixtures; then
-              echo "schema-rust-next examples must use typed NOTA composite references: (Vec T), (Map (K V)), (Optional T)" >&2
+              echo "schema-rust examples must use typed NOTA composite references: (Vec T), (Map (K V)), (Optional T)" >&2
               exit 1
             fi
             if grep -R -n -E '\((Vec|Option|KeyValue|Map) \[' ${src}/tests; then
-              echo "schema-rust-next examples must not put raw vectors inside composite type constructors" >&2
+              echo "schema-rust examples must not put raw vectors inside composite type constructors" >&2
               exit 1
             fi
             if grep -R -n -E '[A-Za-z][A-Za-z0-9]*\*' ${src}/tests/fixtures; then
-              echo "schema-rust-next examples must not reintroduce star-suffix same-name payload sugar" >&2
+              echo "schema-rust examples must not reintroduce star-suffix same-name payload sugar" >&2
               exit 1
             fi
             touch $out
           '';
-          no-production-free-functions = pkgs.runCommand "schema-rust-next-no-production-free-functions" { } ''
+          no-production-free-functions = pkgs.runCommand "schema-rust-no-production-free-functions" { } ''
             if grep -R -n -E '^(pub(\([^)]*\))? )?fn ' ${src}/src; then
               echo "production Rust must not use module-level free functions" >&2
               exit 1
             fi
             touch $out
           '';
-          no-production-unit-structs = pkgs.runCommand "schema-rust-next-no-production-unit-structs" { } ''
+          no-production-unit-structs = pkgs.runCommand "schema-rust-no-production-unit-structs" { } ''
             if grep -R -n -E '^struct [A-Za-z][A-Za-z0-9_]*;' ${src}/src; then
               echo "production Rust must not use unit structs as namespace/method holders" >&2
               exit 1
             fi
             touch $out
           '';
-          generated-no-free-functions = pkgs.runCommand "schema-rust-next-generated-no-free-functions" { } ''
+          generated-no-free-functions = pkgs.runCommand "schema-rust-generated-no-free-functions" { } ''
             if grep -R -n --include='*.generated.rs' -E '^(pub(\([^)]*\))? )?fn ' ${src}/tests/fixtures; then
               echo "generated Rust fixture must not use module-level free functions" >&2
               exit 1
             fi
             touch $out
           '';
-          generated-no-legacy-helper-surface = pkgs.runCommand "schema-rust-next-generated-no-legacy-helper-surface" { } ''
+          generated-no-legacy-helper-surface = pkgs.runCommand "schema-rust-generated-no-legacy-helper-surface" { } ''
             ! grep -R --include='*.generated.rs' "parse_nota_root" ${src}/tests/fixtures
             ! grep -R --include='*.generated.rs' "UnknownHeader { surface" ${src}/tests/fixtures
             ! grep -R "pub struct RustEmitter;" ${src}/src
             ! grep -R --include='*.generated.rs' "pub struct NotaSource" ${src}/tests/fixtures
             ! grep -R --include='*.generated.rs' "pub struct NotaBlock" ${src}/tests/fixtures
             ! grep -R --include='*.generated.rs' "pub struct NotaCollection" ${src}/tests/fixtures
-            grep -R --include='*.generated.rs' "pub use nota_next" ${src}/tests/fixtures >/dev/null
-            grep -R --include='*.generated.rs' "derive(nota_next::NotaDecode, nota_next::NotaEncode" ${src}/tests/fixtures >/dev/null
+            grep -R --include='*.generated.rs' "pub use nota" ${src}/tests/fixtures >/dev/null
+            grep -R --include='*.generated.rs' "derive(nota::NotaDecode, nota::NotaEncode" ${src}/tests/fixtures >/dev/null
             ! grep -R --include='*.generated.rs' "impl NotaDecode for Input" ${src}/tests/fixtures
             ! grep -R --include='*.generated.rs' "impl NotaEncode for Input" ${src}/tests/fixtures
             touch $out
@@ -202,7 +202,7 @@
           });
         };
         devShells.default = pkgs.mkShell {
-          name = "schema-rust-next";
+          name = "schema-rust";
           packages = [ pkgs.jujutsu pkgs.pkg-config toolchain ];
         };
       });

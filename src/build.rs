@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use schema_next::{
+use schema::{
     ImportResolver, Name, SchemaEngine, SchemaError, SchemaPackage, SchemaSourceArtifact,
 };
 
@@ -533,8 +533,7 @@ impl GeneratedModule {
                     source.identity().clone(),
                     resolver,
                 )?;
-                DaemonModule::new(daemon_shape.clone(), &schema, "schema-rust-next")
-                    .to_generated_file()
+                DaemonModule::new(daemon_shape.clone(), &schema, "schema-rust").to_generated_file()
             }
             None => RustEmitter::new(emission.options().clone()).emit_file_from_schema_source(
                 &schema_source,

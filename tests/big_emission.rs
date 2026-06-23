@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
-use schema_next::{
+use schema::{
     Declaration, EnumDeclaration, ImportResolver, MacroContext, Schema, SchemaEngine,
     SchemaIdentity, SchemaSourceArtifact, TypeDeclaration,
 };
-use schema_rust_next::RustEmitter;
+use schema_rust::RustEmitter;
 
 mod support;
 
@@ -188,7 +188,7 @@ impl<'fixture> BigRustFixture<'fixture> {
         assert!(found, "missing namespace type {name}");
     }
 
-    fn root_enum(root: &schema_next::Root) -> &EnumDeclaration {
+    fn root_enum(root: &schema::Root) -> &EnumDeclaration {
         root.as_enum().expect("root lowers to an enum body")
     }
 
@@ -205,7 +205,7 @@ impl<'fixture> BigRustFixture<'fixture> {
 
     fn assert_matches_checked_in_rust(&self) {
         let generated = self.generate_rust();
-        if std::env::var_os("SCHEMA_RUST_NEXT_UPDATE_BIG_EXAMPLES").is_some() {
+        if std::env::var_os("SCHEMA_RUST_UPDATE_BIG_EXAMPLES").is_some() {
             std::fs::write(&self.rust_path, &generated).expect("write generated Rust fixture");
         }
         let expected = std::fs::read_to_string(&self.rust_path).expect("read generated Rust");

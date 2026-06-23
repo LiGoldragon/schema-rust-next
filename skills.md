@@ -1,4 +1,4 @@
-# Skills — schema-rust-next
+# Skills — schema-rust
 
 Read the workspace Rust and schema skills before editing this repo:
 
@@ -28,7 +28,7 @@ per-plane runtime schemas import contract roots where needed.
 `RustEmissionTarget::ComponentRuntime` is the compatibility/bootstrap target
 for unsplit all-in-one schemas, not the canonical daemon shape.
 
-Component `build.rs` files should use `schema_rust_next::build` rather than
+Component `build.rs` files should use `schema_rust::build` rather than
 hand-rolling package loading, lowering, emission, or checked-in freshness
 logic. Use `GenerationPlan::wire_contract` for contract crates,
 `GenerationPlan::daemon_runtime` for daemon `nexus.schema` + `sema.schema`,
