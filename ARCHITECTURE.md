@@ -70,6 +70,11 @@ beside that typed source/schema pipeline.
   source-visible generated schema modules. It owns the per-crate
   load/lower/emit/freshness sequence so component `build.rs` files do not
   hand-roll it.
+- `src/bin/schema-rust.rs` is the thin command surface over the same driver.
+  It accepts exactly one NOTA request, loads the selected modules through
+  `SchemaEnvironment`, calls
+  `GenerationDriver::generate_from_environment`, and prints typed generation
+  feedback over the selected canonical source and generated Rust artifacts.
 - `build::GenerationPlan` names the crate package, target modules, and
   dependency schema directories. `build::ModuleEmission` selects the
   Rust-emission target for each schema module.
