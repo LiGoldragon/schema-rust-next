@@ -5,7 +5,8 @@ use std::{
 };
 
 use schema::{
-    ImportResolver, Name, SchemaEngine, SchemaError, SchemaPackage, SchemaSourceArtifact,
+    ImportResolver, Name, SchemaEngine, SchemaEnvironmentManifest, SchemaEnvironmentModule,
+    SchemaEnvironmentResult, SchemaError, SchemaPackage, SchemaSourceArtifact,
 };
 
 use crate::{
@@ -102,6 +103,15 @@ impl GenerationPlan {
         self.dependencies.iter().fold(
             ImportResolver::new().with_package(self.package.clone()),
             |resolver, dependency| dependency.register(resolver),
+        )
+    }
+
+    pub fn environment_manifest(&self) -> SchemaEnvironmentManifest {
+        SchemaEnvironmentManifest::new(
+            self.modules
+                .iter()
+                .map(|module| module.module().clone())
+                .collect(),
         )
     }
 }
@@ -333,6 +343,45 @@ impl GenerationDriver {
             modules,
         ))
     }
+
+    pub fn generate_from_environment(
+        &self,
+        environment: &SchemaEnvironmentResult,
+    ) -> Result<GeneratedPackage, BuildError> {
+        let mut modules = Vec::new();
+        for emission in self.plan.modules() {
+            let environment_module = environment
+                .modules()
+                .iter()
+                .find(|module| self.environment_module_matches_emission(module, emission))
+                .ok_or_else(|| BuildError::MissingEnvironmentModule {
+                    module: emission.module().as_str().to_owned(),
+                })?;
+            modules.push(GeneratedModule::from_environment_module(
+                environment_module,
+                emission,
+            )?);
+        }
+        Ok(GeneratedPackage::new(
+            self.plan.package().root().to_path_buf(),
+            modules,
+        ))
+    }
+
+    fn environment_module_matches_emission(
+        &self,
+        module: &SchemaEnvironmentModule,
+        emission: &ModuleEmission,
+    ) -> bool {
+        let prefix = format!("{}:", self.plan.package().crate_name().as_str());
+        module
+            .source()
+            .identity()
+            .component()
+            .as_str()
+            .strip_prefix(&prefix)
+            .is_some_and(|selected| selected == emission.module().as_str())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -472,6 +521,10 @@ impl GeneratedPackage {
             .find(|file| file.path == path)
     }
 
+    pub fn feedback(&self) -> GenerationFeedback {
+        GenerationFeedback::from_package(self)
+    }
+
     pub fn assert_checked_in(&self) -> Result<(), BuildError> {
         self.check_with(FreshnessCheck::check_only())
     }
@@ -490,6 +543,74 @@ impl GeneratedPackage {
             module.check_generated_artifacts(&self.crate_root, &check)?;
         }
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GenerationFeedback {
+    crate_root: PathBuf,
+    modules: Vec<ModuleFeedback>,
+}
+
+impl GenerationFeedback {
+    pub fn crate_root(&self) -> &Path {
+        &self.crate_root
+    }
+
+    pub fn modules(&self) -> &[ModuleFeedback] {
+        &self.modules
+    }
+
+    fn from_package(package: &GeneratedPackage) -> Self {
+        Self {
+            crate_root: package.crate_root.clone(),
+            modules: package
+                .modules
+                .iter()
+                .map(ModuleFeedback::from_module)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModuleFeedback {
+    module: Name,
+    source_path: PathBuf,
+    source_text: String,
+    rust_path: String,
+    rust_byte_count: usize,
+}
+
+impl ModuleFeedback {
+    pub fn module(&self) -> &Name {
+        &self.module
+    }
+
+    pub fn source_path(&self) -> &Path {
+        &self.source_path
+    }
+
+    pub fn source_text(&self) -> &str {
+        &self.source_text
+    }
+
+    pub fn rust_path(&self) -> &str {
+        &self.rust_path
+    }
+
+    pub fn rust_byte_count(&self) -> usize {
+        self.rust_byte_count
+    }
+
+    fn from_module(module: &GeneratedModule) -> Self {
+        Self {
+            module: module.module.clone(),
+            source_path: module.source_artifact.path.clone(),
+            source_text: module.source_artifact.content.clone(),
+            rust_path: module.rust_file.path.clone(),
+            rust_byte_count: module.rust_file.code.as_str().len(),
+        }
     }
 }
 
@@ -541,6 +662,38 @@ impl GeneratedModule {
                 engine,
                 resolver,
             )?,
+        };
+        Ok(Self {
+            module: emission.module().clone(),
+            source_artifact,
+            rust_file,
+        })
+    }
+
+    fn from_environment_module(
+        environment: &SchemaEnvironmentModule,
+        emission: &ModuleEmission,
+    ) -> Result<Self, BuildError> {
+        let source_artifact = SourceArtifactRoundTrip::new(
+            environment.source().path().to_path_buf(),
+            environment.artifact().clone(),
+        )
+        .validate()?;
+        let rust_file = match emission.daemon_shape() {
+            Some(daemon_shape) => {
+                DaemonModule::new(daemon_shape.clone(), environment.schema(), "schema-rust")
+                    .to_generated_file()
+            }
+            None => {
+                let module = RustEmitter::new(emission.options().clone())
+                    .emit_module_from_specified_schema(environment.specified());
+                module.verify_names()?;
+                module.verify_catalog(environment.schema())?;
+                GeneratedFile {
+                    path: module.file_path().to_owned(),
+                    code: module.render(),
+                }
+            }
         };
         Ok(Self {
             module: emission.module().clone(),
@@ -712,4 +865,6 @@ pub enum BuildError {
         "schema source artifact did not round-trip through generated binary archive at {path:?}"
     )]
     SchemaSourceArchiveRoundTrip { path: PathBuf },
+    #[error("environment result did not include requested module {module}")]
+    MissingEnvironmentModule { module: String },
 }

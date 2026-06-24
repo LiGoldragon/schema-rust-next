@@ -1,3 +1,4 @@
+use schema::{ImportResolver, SchemaEnvironment};
 use schema_rust::build::{
     ContractCrateBuild, DependencySchema, GenerationDriver, GenerationPlan, ModuleEmission,
 };
@@ -45,6 +46,16 @@ impl DriverFixture {
         GenerationDriver::new(self.runtime_plan())
             .generate()
             .expect("driver emits runtime package")
+    }
+
+    fn environment(&self) -> schema::SchemaEnvironmentResult {
+        let plan = self.runtime_plan();
+        let resolver =
+            ImportResolver::new().with_dependency("driver-contract", self.contract.path(), "0.1.0");
+        SchemaEnvironment::new(plan.package().clone())
+            .with_resolver(resolver)
+            .load(&plan.environment_manifest())
+            .expect("driver environment loads")
     }
 }
 
@@ -177,6 +188,82 @@ fn generated_package_carries_source_and_rust_artifacts() {
             .as_str()
             .contains("pub trait NexusEngine"),
         "driver should emit Rust from the typed schema source value"
+    );
+}
+
+#[test]
+fn generated_package_feedback_summarizes_source_and_rust_outputs() {
+    let fixture = DriverFixture::new();
+    let generated = fixture.generated_runtime();
+    let feedback = generated.feedback();
+
+    assert_eq!(feedback.crate_root(), fixture.runtime.crate_root());
+    let nexus = feedback
+        .modules()
+        .iter()
+        .find(|module| module.module().as_str() == "nexus")
+        .expect("nexus feedback");
+
+    assert_eq!(
+        nexus.source_path(),
+        fixture.runtime.path().join("nexus.schema")
+    );
+    assert!(
+        nexus
+            .source_text()
+            .contains("ContractInput driver-contract:lib:Input"),
+        "feedback should expose canonical source text for fast inspection"
+    );
+    assert_eq!(nexus.rust_path(), "src/schema/nexus.rs");
+    assert!(
+        nexus.rust_byte_count() > nexus.source_text().len(),
+        "feedback should expose the generated Rust artifact size"
+    );
+}
+
+#[test]
+fn generation_plan_derives_environment_manifest_from_selected_modules() {
+    let manifest = DriverFixture::new().runtime_plan().environment_manifest();
+
+    assert_eq!(
+        manifest
+            .module_names()
+            .iter()
+            .map(|name| name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["nexus", "sema"]
+    );
+}
+
+#[test]
+fn driver_regenerates_rust_from_environment_specified_schemas() {
+    let fixture = DriverFixture::new();
+    let driver = GenerationDriver::new(fixture.runtime_plan());
+    let generated_from_environment = driver
+        .generate_from_environment(&fixture.environment())
+        .expect("driver emits from environment result");
+    let generated_from_package = driver.generate().expect("driver emits from package");
+
+    let environment_nexus = generated_from_environment
+        .rust_file_named("src/schema/nexus.rs")
+        .expect("environment nexus file");
+    let package_nexus = generated_from_package
+        .rust_file_named("src/schema/nexus.rs")
+        .expect("package nexus file");
+
+    assert_eq!(environment_nexus.code, package_nexus.code);
+
+    let feedback = generated_from_environment.feedback();
+    let nexus = feedback
+        .modules()
+        .iter()
+        .find(|module| module.module().as_str() == "nexus")
+        .expect("nexus feedback");
+    assert!(
+        nexus
+            .source_text()
+            .contains("ContractOutput driver-contract:lib:Output"),
+        "environment-backed feedback keeps canonical selected source"
     );
 }
 
